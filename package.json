@@ -5,11 +5,22 @@
   "scripts": {
     "serve": "vue-cli-service serve",
     "build": "vue-cli-service build",
-    "lint": "vue-cli-service lint"
+    "lint": "vue-cli-service lint",
+    "deploy": "vue-cli-service build && surge dist/"
   },
   "dependencies": {
+    "@popperjs/core": "^2.11.8",
+    "axios": "^1.3.2",
+    "bootstrap": "^5.2.3",
+    "bootstrap-icons": "^1.10.3",
     "core-js": "^3.8.3",
+    "firebase": "^9.22.2",
+    "lodash": "^4.17.21",
+    "uuid": "^9.0.0",
+    "v-calendar": "^3.0.3",
     "vue": "^3.2.13",
+    "vue-router": "^4.2.2",
+    "vue3-google-login": "^2.0.12",
     "vuex": "^4.0.0"
   },
   "devDependencies": {
@@ -24,7 +35,9 @@
     "eslint-plugin-import": "^2.25.3",
     "eslint-plugin-node": "^11.1.0",
     "eslint-plugin-promise": "^5.1.0",
-    "eslint-plugin-vue": "^8.0.3"
+    "eslint-plugin-vue": "^8.0.3",
+    "sass": "^1.58.0",
+    "sass-loader": "^13.2.0"
   },
   "eslintConfig": {
     "root": true,
@@ -38,7 +51,30 @@
     "parserOptions": {
       "parser": "@babel/eslint-parser"
     },
-    "rules": {}
+    "rules": {
+      "vue/multi-word-component-names": "off",
+      "no-trailing-spaces": "warn",
+      "eol-last": "off",
+      "quotes": [
+        "off",
+        "double"
+      ],
+      "semi": "off",
+      "comma-dangle": "off",
+      "space-before-function-paren": "warn",
+      "indent": "warn",
+      "no-undef": "warn",
+      "padded-blocks": "warn",
+      "object-curly-spacing": "warn",
+      "array-bracket-spacing": "warn",
+      "no-unused-vars": "warn",
+      "no-empty": "warn",
+      "prefer-const": "warn",
+      "no-multiple-empty-lines": "warn",
+      "no-useless-return": "off",
+      "no-debugger": "warn",
+      "no-unmodified-loop-condition": "off"
+    }
   },
   "browserslist": [
     "> 1%",

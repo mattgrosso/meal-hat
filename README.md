@@ -1,7 +1,5 @@
 # meal-hat
 
-Readmen change
-
 ## Project setup
 ```
 yarn install
