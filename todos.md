@@ -1,0 +1,2 @@
+- Meals should only be drawn from the hat at appropriate intervals
+- I should add google auth
