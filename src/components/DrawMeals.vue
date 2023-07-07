@@ -16,6 +16,7 @@
 
 <script>
 export default {
+  name: 'DrawMeals',
   data () {
     return {
       dateRange: {
@@ -88,7 +89,6 @@ export default {
   },
   methods: {
     drawMeals () {
-      // TODO: How do I keep meals from coming up too often?
       this.allDatesInRange.forEach(async (date) => {
         const randomMeal = await this.$store.dispatch('getRandomMeal');
 
@@ -100,8 +100,17 @@ export default {
           }
         }
 
+        const drawnMealForUpdate = {
+          path: `meals/${randomMeal.id}`,
+          value: {
+            ...randomMeal,
+            lastDrawn: date
+          }
+        }
+
+        this.$store.dispatch('updateDBValue', drawnMealForUpdate);
         this.$store.dispatch('setDBValue', dbEntry);
-        this.$router.push('/');
+        // this.$router.push('/');
       });
     }
   },

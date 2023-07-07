@@ -1,6 +1,6 @@
 <template>
-  <div class="add-meal">
-    <h1 class="mb-5">Add Meal</h1>
+  <div class="edit-meal">
+    <h1 class="mb-5">Edit Meal</h1>
     <div class="row col-6 mx-auto g-2 mb-3">
       <div class="form-floating col-9">
         <input type="text" class="form-control" id="recipe-title" v-model="name">
@@ -28,12 +28,12 @@
     </div>
   </div>
   <button type="button" class="btn btn-info" @click="addIngredient">Add More</button>
-  <button type="button" class="btn btn-success mx-3" @click="submitMeal">Add To Hat</button>
+  <button type="button" class="btn btn-success mx-3" @click="submitMeal">Edit Meal</button>
 </template>
 
 <script>
 export default {
-  name: 'AddMeals',
+  name: 'EditMeals',
   data () {
     return {
       name: null,
@@ -58,6 +58,12 @@ export default {
       ],
     }
   },
+  mounted () {
+    const meal = this.$store.state.meals.find(meal => meal.id === this.$route.params.id);
+    this.name = meal.name;
+    this.minDaysBetween = meal.minDaysBetween;
+    this.ingredients = meal.ingredients;
+  },
   methods: {
     addIngredient () {
       this.ingredients.push({
@@ -71,17 +77,18 @@ export default {
     },
     async submitMeal () {
       const meal = {
+        id: this.$route.params.id,
         name: this.name,
         minDaysBetween: this.minDaysBetween,
         ingredients: this.ingredients
       };
 
       const dbEntry = {
-        path: "meals",
+        path: `meals/${this.$route.params.id}`,
         value: meal
       }
 
-      this.$store.dispatch('setDBValue', dbEntry);
+      this.$store.dispatch('updateDBValue', dbEntry);
       this.$router.push('/');
     }
   },

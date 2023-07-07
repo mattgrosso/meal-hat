@@ -1,0 +1,62 @@
+<template>
+  <div class="show-meals">
+    <h1 class="my-3">Show Meals</h1>
+    <div class="meals d-flex flex-wrap justify-content-start">
+      <div v-for="(meal, index) in meals" :key="index" class="meal col-4 p-3">
+        <div class="card">
+          <div class="card-body">
+            <h5 class="card-title">{{meal.name}}</h5>
+            <p class="card-text">Days before repeating: {{meal.minDaysBetween}}</p>
+            <ul class="list-group list-group-flush border my-3">
+              <li v-for="(ingredient, index) in meal.ingredients" :key="index" class="list-group-item text-start col-12">
+                {{ingredient.name}}
+              </li>
+            </ul>
+            <button class="btn btn-warning mx-2" @click="removeMeal(meal)">
+              Remove Meal
+            </button>
+            <button class="btn btn-primary mx-2" @click="editMeal(meal)">
+              Edit Meal
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+export default {
+  name: 'ShowMeals',
+  computed: {
+    meals () {
+      return this.$store.state.meals;
+    }
+  },
+  methods: {
+    editMeal (meal) {
+      this.$router.push({
+        name: 'EditMeal',
+        params: {
+          id: meal.id
+        }
+      });
+    },
+    removeMeal (meal) {
+      const dbEntry = {
+        path: `meals/${meal.id}`,
+        value: null
+      }
+
+      this.$store.dispatch('updateDBValue', dbEntry);
+    }
+  },
+}
+</script>
+
+<style lang="scss">
+  .show-meals {
+    max-width: 80%;
+    margin: 0 auto;
+  }
+</style>

@@ -11,6 +11,7 @@
 
 <script>
 export default {
+  name: 'DrawnMealSchedule',
   computed: {
     drawnMeals () {
       return this.$store.state.drawnMeals;

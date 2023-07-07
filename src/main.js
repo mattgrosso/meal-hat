@@ -10,6 +10,8 @@ import 'v-calendar/style.css';
 import Home from './components/Home.vue';
 import AddMeal from './components/AddMeal.vue';
 import DrawMeals from './components/DrawMeals.vue';
+import ShowMeals from './components/ShowMeals.vue';
+import EditMeal from './components/EditMeal.vue';
 
 const app = createApp(App);
 
@@ -28,6 +30,15 @@ const routes = [
   {
     path: '/draw-meals',
     component: DrawMeals
+  },
+  {
+    path: '/show-meals',
+    component: ShowMeals
+  },
+  {
+    name: 'EditMeal',
+    path: '/edit-meal/:id',
+    component: EditMeal
   }
 ];
 

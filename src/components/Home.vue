@@ -7,6 +7,12 @@
       Add Meal
     </router-link>
     <router-link
+      to="/show-meals"
+      class="btn btn-primary col-4 my-2"
+    >
+      Show Meals In The Hat
+    </router-link>
+    <router-link
       to="/draw-meals"
       class="btn btn-success col-4 my-2"
     >
@@ -20,6 +26,7 @@
 import DrawnMealSchedule from '@/components/DrawnMealSchedule.vue';
 
 export default {
+  name: 'Home',
   components: {
     DrawnMealSchedule
   },

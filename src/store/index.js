@@ -15,6 +15,17 @@ const firebaseConfig = {
 
 const db = getDatabase(initializeApp(firebaseConfig));
 
+const mealDrawnTooRecently = (meal, date) => {
+  if (!meal.lastDrawn) {
+    return false;
+  }
+
+  const lastDrawn = new Date(meal.lastDrawn);
+  const daysSinceLastDrawn = Math.floor((date - lastDrawn) / (1000 * 60 * 60 * 24));
+
+  return daysSinceLastDrawn < meal.minDaysBetween;
+}
+
 export default createStore({
   state: {
     meals: null,
@@ -40,6 +51,7 @@ export default createStore({
 
       onValue(ref(db, 'drawnMeals'), (snapshot) => {
         const data = snapshot.val();
+
         const drawnMealsArray = Object.keys(data).map((key) => data[key]);
         const futureDates = drawnMealsArray.filter((meal) => {
           const mealDate = new Date(meal.assignedDate).getTime();
@@ -57,12 +69,29 @@ export default createStore({
       });
     },
     setDBValue (context, dbEntry) {
-      set(ref(db, `${dbEntry.path}/${uuidv4()}`), dbEntry.value);
+      const uuid = uuidv4();
+      const valueWithId = { ...dbEntry.value, id: uuid };
+      console.log('dbEntry for set: ', dbEntry);
+      set(ref(db, `${dbEntry.path}/${uuid}`), valueWithId);
     },
-    getRandomMeal (context) {
-      const meals = context.state.meals;
-      const randomIndex = Math.floor(Math.random() * meals.length);
-      return meals[randomIndex];
+    updateDBValue (context, dbEntry) {
+      console.log('dbEntry for update: ', dbEntry);
+      set(ref(db, `${dbEntry.path}`), dbEntry.value);
+    },
+    getRandomMeal (context, reducedMeals) {
+      console.error('1');
+      const meals = reducedMeals || { ...context.state.meals };
+      const mealsArray = Object.keys(meals).map((key) => meals[key]);
+      const randomIndex = Math.floor(Math.random() * mealsArray.length);
+
+      if (mealDrawnTooRecently(mealsArray[randomIndex])) {
+        console.error('2');
+        return context.dispatch('getRandomMeal', mealsArray);
+      }
+
+      const randomMeal = meals[randomIndex];
+
+      return randomMeal;
     }
   },
   modules: {
