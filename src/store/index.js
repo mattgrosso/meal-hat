@@ -15,23 +15,15 @@ const firebaseConfig = {
 
 const db = getDatabase(initializeApp(firebaseConfig));
 
-const mealDrawnTooRecently = (meal, date) => {
-  if (!meal.lastDrawn) {
-    return false;
-  }
-
-  const lastDrawn = new Date(meal.lastDrawn);
-  const daysSinceLastDrawn = Math.floor((date - lastDrawn) / (1000 * 60 * 60 * 24));
-
-  return daysSinceLastDrawn < meal.minDaysBetween;
-}
-
 export default createStore({
   state: {
     meals: null,
     drawnMeals: null
   },
   getters: {
+    getMeal: (state) => (id) => {
+      return state.meals.find((meal) => meal.id === id);
+    }
   },
   mutations: {
     setMeals (state, meals) {
@@ -71,27 +63,10 @@ export default createStore({
     setDBValue (context, dbEntry) {
       const uuid = uuidv4();
       const valueWithId = { ...dbEntry.value, id: uuid };
-      console.log('dbEntry for set: ', dbEntry);
       set(ref(db, `${dbEntry.path}/${uuid}`), valueWithId);
     },
     updateDBValue (context, dbEntry) {
-      console.log('dbEntry for update: ', dbEntry);
       set(ref(db, `${dbEntry.path}`), dbEntry.value);
-    },
-    getRandomMeal (context, reducedMeals) {
-      console.error('1');
-      const meals = reducedMeals || { ...context.state.meals };
-      const mealsArray = Object.keys(meals).map((key) => meals[key]);
-      const randomIndex = Math.floor(Math.random() * mealsArray.length);
-
-      if (mealDrawnTooRecently(mealsArray[randomIndex])) {
-        console.error('2');
-        return context.dispatch('getRandomMeal', mealsArray);
-      }
-
-      const randomMeal = meals[randomIndex];
-
-      return randomMeal;
     }
   },
   modules: {

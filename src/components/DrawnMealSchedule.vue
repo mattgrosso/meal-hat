@@ -14,9 +14,18 @@ export default {
   name: 'DrawnMealSchedule',
   computed: {
     drawnMeals () {
-      return this.$store.state.drawnMeals;
+      if (!this.$store.state.drawnMeals || !this.$store.state.drawnMeals.length) {
+        return [];
+      } else {
+        return this.$store.state.drawnMeals.map((drawnMeal) => {
+          return {
+            ...drawnMeal,
+            meal: this.$store.getters.getMeal(drawnMeal.mealId)
+          }
+        });
+      }
     }
-  },
+  }
 };
 </script>
 

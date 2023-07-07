@@ -11,6 +11,7 @@
       </div>
       <button class="btn btn-primary my-3" @click="drawMeals">Draw Meals</button>
     </div>
+    <div v-if="message" class="messages">{{ message }}</div>
   </div>
 </template>
 
@@ -19,6 +20,7 @@ export default {
   name: 'DrawMeals',
   data () {
     return {
+      message: null,
       dateRange: {
         start: null,
         end: null
@@ -69,7 +71,7 @@ export default {
             fillMode: 'outline',
           },
           popover: {
-            label: meal.meal.name,
+            label: this.getMeal(meal.mealId).name,
             visibility: 'click'
           },
           dates: [new Date(meal.assignedDate)]
@@ -90,28 +92,65 @@ export default {
   methods: {
     drawMeals () {
       this.allDatesInRange.forEach(async (date) => {
-        const randomMeal = await this.$store.dispatch('getRandomMeal');
+        const randomMeal = this.getRandomMealForDate(date);
+
+        if (!randomMeal) {
+          this.message = `No meals available for ${date.toDateString()}`;
+          return;
+        }
+        // TODO: If more than one copy of the same meal is drawn in one call of drawMeals, we may have trouble because the DB entries might not update in time.
 
         const dbEntry = {
           path: "drawnMeals",
           value: {
-            meal: randomMeal,
+            mealId: randomMeal.id,
             assignedDate: date.toDateString()
           }
         }
+
+        this.$store.dispatch('setDBValue', dbEntry);
 
         const drawnMealForUpdate = {
           path: `meals/${randomMeal.id}`,
           value: {
             ...randomMeal,
-            lastDrawn: date
+            lastDrawn: date.getTime()
           }
         }
 
         this.$store.dispatch('updateDBValue', drawnMealForUpdate);
-        this.$store.dispatch('setDBValue', dbEntry);
-        // this.$router.push('/');
+        this.$router.push('/');
       });
+    },
+    mealDrawnTooRecently (meal, date) {
+      if (!meal.lastDrawn) {
+        return false;
+      }
+
+      const lastDrawnNum = new Date(meal.lastDrawn).getTime();
+      const dateNum = new Date(date).getTime();
+      const daysSinceLastDrawn = Math.floor((dateNum - lastDrawnNum) / (1000 * 60 * 60 * 24));
+
+      return daysSinceLastDrawn < meal.minDaysBetween;
+    },
+    getRandomMealForDate (date) {
+      const allMeals = this.$store.state.meals;
+      const allMealsArray = Object.keys(allMeals).map((key) => allMeals[key]);
+      const filteredMealsArray = allMealsArray.filter((meal) => {
+        return !this.mealDrawnTooRecently(meal, date);
+      });
+
+      if (!filteredMealsArray.length) {
+        return null;
+      }
+      
+      const randomIndex = Math.floor(Math.random() * filteredMealsArray.length);
+      const randomMeal = filteredMealsArray[randomIndex];
+
+      return randomMeal;
+    },
+    getMeal (id) {
+      return this.$store.getters.getMeal(id);
     }
   },
 }

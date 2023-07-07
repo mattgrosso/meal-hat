@@ -1,2 +1,2 @@
-- Meals should only be drawn from the hat at appropriate intervals
 - I should add google auth
+- I should show a grocery list after you draw meals from the hat
