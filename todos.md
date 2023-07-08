@@ -1,2 +1,3 @@
 - I should add google auth
-- I should show a grocery list after you draw meals from the hat
+- I should be able to delete a drawn meal from the calendar
+- We should not clear meals off the calendar after they pass

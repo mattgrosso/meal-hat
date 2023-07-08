@@ -22,6 +22,8 @@ export default {
             ...drawnMeal,
             meal: this.$store.getters.getMeal(drawnMeal.mealId)
           }
+        }).filter((drawnMeal) => {
+          return drawnMeal.meal;
         });
       }
     }

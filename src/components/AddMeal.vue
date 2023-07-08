@@ -17,13 +17,17 @@
       v-for="(ingredient, index) in ingredients"
       :key="index"
     >
-      <div class="form-floating col-9">
+      <div class="form-floating col-7">
         <input type="text" class="form-control " :id="`ingredient-${index}-name`" v-model="ingredient.name" :ref="`ingredient-${index}-name`">
         <label :for="`ingredient-${index}-name`">Ingredient #{{index + 1}}</label>
       </div>
-      <div class="form-floating col-3">
-        <input type="text" class="form-control " :id="`ingredient-${index}-quantity`" v-model="ingredient.quantity">
+      <div class="form-floating col-2">
+        <input type="number" class="form-control " :id="`ingredient-${index}-quantity`" v-model="ingredient.quantity">
         <label :for="`ingredient-${index}-quantity`">Quantity</label>
+      </div>
+      <div class="form-floating col-3">
+        <input type="text" class="form-control " :id="`ingredient-${index}-units`" v-model="ingredient.units">
+        <label :for="`ingredient-${index}-units`">Units</label>
       </div>
     </div>
   </div>
@@ -41,19 +45,23 @@ export default {
       ingredients: [
         {
           name: null,
-          quantity: null
+          quantity: null,
+          units: null
         },
         {
           name: null,
-          quantity: null
+          quantity: null,
+          units: null
         },
         {
           name: null,
-          quantity: null
+          quantity: null,
+          units: null
         },
         {
           name: null,
-          quantity: null
+          quantity: null,
+          units: null
         },
       ],
     }

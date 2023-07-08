@@ -18,7 +18,8 @@ const db = getDatabase(initializeApp(firebaseConfig));
 export default createStore({
   state: {
     meals: null,
-    drawnMeals: null
+    drawnMeals: null,
+    shoppingList: null
   },
   getters: {
     getMeal: (state) => (id) => {
@@ -31,6 +32,9 @@ export default createStore({
     },
     setDrawnMeals (state, drawnMeals) {
       state.drawnMeals = drawnMeals;
+    },
+    setShoppingList (state, shoppingList) {
+      state.shoppingList = shoppingList;
     }
   },
   actions: {
@@ -59,6 +63,11 @@ export default createStore({
 
         context.commit('setDrawnMeals', sortedByDate);
       });
+
+      onValue(ref(db, 'shopping-list'), (snapshot) => {
+        const data = snapshot.val();
+        context.commit('setShoppingList', data);
+      });
     },
     setDBValue (context, dbEntry) {
       const uuid = uuidv4();
@@ -68,7 +77,5 @@ export default createStore({
     updateDBValue (context, dbEntry) {
       set(ref(db, `${dbEntry.path}`), dbEntry.value);
     }
-  },
-  modules: {
   }
 })

@@ -18,6 +18,12 @@
     >
       Draw Meals
     </router-link>
+    <router-link
+      to="/shopping-list"
+      class="btn btn-success col-4 my-2"
+    >
+      Shopping List
+    </router-link>
     <DrawnMealSchedule />
   </div>
 </template>

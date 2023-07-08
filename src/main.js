@@ -12,6 +12,7 @@ import AddMeal from './components/AddMeal.vue';
 import DrawMeals from './components/DrawMeals.vue';
 import ShowMeals from './components/ShowMeals.vue';
 import EditMeal from './components/EditMeal.vue';
+import ShoppingList from './components/ShoppingList.vue';
 
 const app = createApp(App);
 
@@ -34,6 +35,11 @@ const routes = [
   {
     path: '/show-meals',
     component: ShowMeals
+  },
+  {
+    path: '/shopping-list',
+    name: 'ShoppingList',
+    component: ShoppingList,
   },
   {
     name: 'EditMeal',

@@ -129,8 +129,7 @@ export default {
 
       const lastDrawnNum = new Date(meal.lastDrawn).getTime();
       const dateNum = new Date(date).getTime();
-      const daysSinceLastDrawn = Math.floor((dateNum - lastDrawnNum) / (1000 * 60 * 60 * 24));
-
+      const daysSinceLastDrawn = Math.abs(Math.floor((dateNum - lastDrawnNum) / (1000 * 60 * 60 * 24)));
       return daysSinceLastDrawn < meal.minDaysBetween;
     },
     getRandomMealForDate (date) {
@@ -150,7 +149,11 @@ export default {
       return randomMeal;
     },
     getMeal (id) {
-      return this.$store.getters.getMeal(id);
+      if (!id) {
+        return { name: 'No meal found' };
+      }
+
+      return this.$store.getters.getMeal(id) ? this.$store.getters.getMeal(id) : { name: 'No meal found' };
     }
   },
 }
