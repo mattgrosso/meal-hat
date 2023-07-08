@@ -1,5 +1,5 @@
 <template>
-  <div class="drawn-meals-schedule my-5 col-8">
+  <div class="drawn-meals-schedule my-5 md-col-8">
     <h3>Drawn Meals</h3>
     <ul v-if="drawnMeals.length">
       <li v-for="(drawnMeal, index) in drawnMeals" :key="index">
@@ -52,6 +52,9 @@ export default {
 
 <style lang="scss">
   .drawn-meals-schedule {
+    text-align: center;
+    margin: 0 auto;
+
     ul {
       list-style: none;
       padding: 0;
