@@ -51,10 +51,10 @@ export default {
       return dates;
     },
     datesWithMeals () {
-      if (!this.$store.state.drawnMeals) {
+      if (!this.$store.state.drawnMealsWithHistory) {
         return [];
       } else {
-        return this.$store.state.drawnMeals.map((drawnMeal) => {
+        return this.$store.state.drawnMealsWithHistory.map((drawnMeal) => {
           return new Date(drawnMeal.assignedDate);
         });
       }
@@ -64,7 +64,7 @@ export default {
         return [];
       }
 
-      const assignedMeals = this.$store.state.drawnMeals.map((meal) => {
+      const assignedMeals = this.$store.state.drawnMealsWithHistory.map((meal) => {
         return {
           highlight: {
             color: 'green',
@@ -77,12 +77,13 @@ export default {
           dates: [new Date(meal.assignedDate)]
         }
       });
+      
       return [
         ...assignedMeals,
         {
           key: 'today',
           highlight: {
-            fillMode: 'solid',
+            fillMode: 'light',
           },
           dates: [new Date()]
         }
@@ -142,7 +143,7 @@ export default {
       if (!filteredMealsArray.length) {
         return null;
       }
-      
+
       const randomIndex = Math.floor(Math.random() * filteredMealsArray.length);
       const randomMeal = filteredMealsArray[randomIndex];
 

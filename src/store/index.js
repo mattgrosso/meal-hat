@@ -18,6 +18,7 @@ const db = getDatabase(initializeApp(firebaseConfig));
 export default createStore({
   state: {
     meals: null,
+    drawnMealsWithHistory: null,
     drawnMeals: null,
     shoppingList: null
   },
@@ -29,6 +30,9 @@ export default createStore({
   mutations: {
     setMeals (state, meals) {
       state.meals = meals;
+    },
+    setDrawnMealsWithHistory (state, drawnMealsWithHistory) {
+      state.drawnMealsWithHistory = drawnMealsWithHistory;
     },
     setDrawnMeals (state, drawnMeals) {
       state.drawnMeals = drawnMeals;
@@ -49,7 +53,12 @@ export default createStore({
         const data = snapshot.val();
 
         const drawnMealsArray = Object.keys(data).map((key) => data[key]);
-        const futureDates = drawnMealsArray.filter((meal) => {
+
+        const sortedByDate = drawnMealsArray.sort((a, b) => {
+          return new Date(a.assignedDate) - new Date(b.assignedDate);
+        });
+
+        const futureDates = sortedByDate.filter((meal) => {
           const mealDate = new Date(meal.assignedDate).getTime();
           const today = new Date().getTime();
           const difference = mealDate - today;
@@ -57,11 +66,10 @@ export default createStore({
 
           return difference > oneDayAgo;
         });
-        const sortedByDate = futureDates.sort((a, b) => {
-          return new Date(a.assignedDate) - new Date(b.assignedDate);
-        });
+        
 
-        context.commit('setDrawnMeals', sortedByDate);
+        context.commit('setDrawnMealsWithHistory', sortedByDate);
+        context.commit('setDrawnMeals', futureDates);
       });
 
       onValue(ref(db, 'shopping-list'), (snapshot) => {

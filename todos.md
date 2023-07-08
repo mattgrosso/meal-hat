@@ -1,3 +1,1 @@
 - I should add google auth
-- I should be able to delete a drawn meal from the calendar
-- We should not clear meals off the calendar after they pass

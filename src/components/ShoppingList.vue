@@ -67,12 +67,12 @@ export default {
           if (!drawnMeal.meal || !drawnMeal.meal.ingredients || !drawnMeal.meal.ingredients.length) {
             return;
           }
-  
+
           drawnMeal.meal.ingredients.forEach((ingredient) => {
             const existingIngredient = ingredientsList.find((existingIngredient) => {
               return existingIngredient.name === ingredient.name;
             });
-  
+
             if (existingIngredient) {
               existingIngredient.quantity += ingredient.quantity;
             } else {
@@ -159,7 +159,7 @@ export default {
             }
           }
         }
-        
+
       }
     }
   }
