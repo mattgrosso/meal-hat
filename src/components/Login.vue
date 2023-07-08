@@ -1,8 +1,10 @@
 <template>
   <div class="login">
-    <h1 class="col-12 text-center">Welcome to Movie Log</h1>
+    <h1 class="col-12 text-center">Welcome to Meal Hat</h1>
     <h2 class="col-12 text-center fs-6 mb-5">Please sign in with Google</h2>
-    <GoogleLogin :callback="login" prompt auto-login/>
+    <div class="login-prompt d-flex justify-content-center">
+      <GoogleLogin :callback="login" prompt auto-login/>
+    </div>
   </div>
 </template>
 
@@ -18,10 +20,4 @@ export default {
 </script>
 
 <style lang="scss">
-  .login {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    margin: 30vh 24px;
-  }
 </style>

@@ -21,7 +21,7 @@ const app = createApp(App);
 app.use(store);
 
 app.use(vue3GoogleLogin, {
-  clientId: '495603923646-j49hr3l4m6l9grbvrnp7fr652hon2um3.apps.googleusercontent.com'
+  clientId: '871807065045-mo4955ma7sf3etvkrqbrqn6j1vmkghca.apps.googleusercontent.com'
 });
 
 const loggedIn = () => {
