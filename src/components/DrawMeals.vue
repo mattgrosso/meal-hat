@@ -77,7 +77,7 @@ export default {
           dates: [new Date(meal.assignedDate)]
         }
       });
-      
+
       return [
         ...assignedMeals,
         {
@@ -99,7 +99,8 @@ export default {
           this.message = `No meals available for ${date.toDateString()}`;
           return;
         }
-        // TODO: If more than one copy of the same meal is drawn in one call of drawMeals, we may have trouble because the DB entries might not update in time.
+        // TODO: If more than one copy of the same meal is drawn in one call of drawMeals,
+        // we may have trouble because the DB entries might not update in time.
 
         const dbEntry = {
           path: "drawnMeals",

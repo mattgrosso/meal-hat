@@ -1,6 +1,7 @@
 import { createStore } from 'vuex';
 import { initializeApp } from "firebase/app";
 import { getDatabase, onValue, ref, set } from "firebase/database";
+import { decodeCredential } from 'vue3-google-login'
 import { v4 as uuidv4 } from 'uuid';
 
 const firebaseConfig = {
@@ -17,6 +18,8 @@ const db = getDatabase(initializeApp(firebaseConfig));
 
 export default createStore({
   state: {
+    googleLogin: null,
+    databaseTopKey: null,
     meals: null,
     drawnMealsWithHistory: null,
     drawnMeals: null,
@@ -25,9 +28,18 @@ export default createStore({
   getters: {
     getMeal: (state) => (id) => {
       return state.meals.find((meal) => meal.id === id);
+    },
+    databaseTopKey (state) {
+      return state.databaseTopKey;
     }
   },
   mutations: {
+    setGoogleLogin (state, value) {
+      state.googleLogin = value;
+    },
+    setDatabaseTopKey (state, value) {
+      state.databaseTopKey = value.replaceAll(/[-!$%@^&*()_+|~=`{}[\]:";'<>?,./]/g, "-");
+    },
     setMeals (state, meals) {
       state.meals = meals;
     },
@@ -42,48 +54,73 @@ export default createStore({
     }
   },
   actions: {
+    async login (context, resp) {
+      const userData = decodeCredential(resp.credential);
+
+      context.commit('setGoogleLogin', userData.email);
+
+      if (context.state.googleLogin) {
+        context.commit('setDatabaseTopKey', context.state.googleLogin);
+        window.localStorage.setItem('mealHatDatabaseTopKey', context.state.databaseTopKey);
+        context.dispatch('initializeDB');
+      } else {
+        console.error("Login attempted but the user data didn't work");
+      }
+    },
     initializeDB (context) {
-      onValue(ref(db, 'meals'), (snapshot) => {
+      onValue(ref(db, `${context.state.databaseTopKey}/meals`), (snapshot) => {
         const data = snapshot.val();
-        const mealsArray = Object.keys(data).map((key) => data[key]);
+
+        let mealsArray = [];
+
+        if (data && typeof data === 'object') {
+          mealsArray = Object.keys(data).map((key) => data[key]);
+        }
+
         context.commit('setMeals', mealsArray);
       });
 
-      onValue(ref(db, 'drawnMeals'), (snapshot) => {
+      console.log('test: ', `${context.state.databaseTopKey}/drawnMeals`);
+      onValue(ref(db, `${context.state.databaseTopKey}/drawnMeals`), (snapshot) => {
         const data = snapshot.val();
 
-        const drawnMealsArray = Object.keys(data).map((key) => data[key]);
+        let sortedByDate = [];
+        let futureDates = [];
 
-        const sortedByDate = drawnMealsArray.sort((a, b) => {
-          return new Date(a.assignedDate) - new Date(b.assignedDate);
-        });
+        if (data && typeof data === 'object') {
+          const drawnMealsArray = Object.keys(data).map((key) => data[key]);
 
-        const futureDates = sortedByDate.filter((meal) => {
-          const mealDate = new Date(meal.assignedDate).getTime();
-          const today = new Date().getTime();
-          const difference = mealDate - today;
-          const oneDayAgo = -86400000;
+          sortedByDate = drawnMealsArray.sort((a, b) => {
+            return new Date(a.assignedDate) - new Date(b.assignedDate);
+          });
 
-          return difference > oneDayAgo;
-        });
-        
+          futureDates = sortedByDate.filter((meal) => {
+            const mealDate = new Date(meal.assignedDate).getTime();
+            const today = new Date().getTime();
+            const difference = mealDate - today;
+            const oneDayAgo = -86400000;
+
+            return difference > oneDayAgo;
+          });
+        }
 
         context.commit('setDrawnMealsWithHistory', sortedByDate);
         context.commit('setDrawnMeals', futureDates);
       });
 
-      onValue(ref(db, 'shopping-list'), (snapshot) => {
+      onValue(ref(db, `${context.state.databaseTopKey}/shopping-list`), (snapshot) => {
         const data = snapshot.val();
+
         context.commit('setShoppingList', data);
       });
     },
     setDBValue (context, dbEntry) {
       const uuid = uuidv4();
       const valueWithId = { ...dbEntry.value, id: uuid };
-      set(ref(db, `${dbEntry.path}/${uuid}`), valueWithId);
+      set(ref(db, `${context.state.databaseTopKey}/${dbEntry.path}/${uuid}`), valueWithId);
     },
     updateDBValue (context, dbEntry) {
-      set(ref(db, `${dbEntry.path}`), dbEntry.value);
+      set(ref(db, `${context.state.databaseTopKey}/${dbEntry.path}`), dbEntry.value);
     }
   }
 })

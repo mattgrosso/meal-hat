@@ -1,7 +1,7 @@
 <template>
   <div class="drawn-meals-schedule my-5 col-8">
     <h3>Drawn Meals</h3>
-    <ul>
+    <ul v-if="drawnMeals.length">
       <li v-for="(drawnMeal, index) in drawnMeals" :key="index">
         <span>
           {{ drawnMeal.assignedDate }} - {{ drawnMeal.meal.name }}
@@ -14,6 +14,7 @@
         </span>
       </li>
     </ul>
+    <p v-else>No meals have been drawn yet.</p>
   </div>
 </template>
 
