@@ -28,9 +28,11 @@ const loggedIn = () => {
   const databaseTopKeyFromLocalStorage = window.localStorage.getItem('mealHatDatabaseTopKey');
 
   if (store.getters.databaseTopKey) {
+    store.dispatch('initializeDB');
     return true;
   } else if (databaseTopKeyFromLocalStorage) {
     store.commit('setDatabaseTopKey', databaseTopKeyFromLocalStorage);
+    store.dispatch('initializeDB');
     return true;
   } else {
     return false;

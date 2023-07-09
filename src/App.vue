@@ -6,10 +6,7 @@
 
 <script>
 export default {
-  name: 'meal-hat',
-  mounted () {
-    this.$store.dispatch('initializeDB');
-  },
+  name: 'MealHat'
 }
 </script>
 

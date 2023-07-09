@@ -66,53 +66,64 @@ export default createStore({
       } else {
         console.error("Login attempted but the user data didn't work");
       }
+
+      return;
     },
     initializeDB (context) {
-      onValue(ref(db, `${context.state.databaseTopKey}/meals`), (snapshot) => {
-        const data = snapshot.val();
+      if (!context.state.databaseTopKey) {
+        return;
+      }
+      
+      if (!context.state.meals) {
+        onValue(ref(db, `${context.state.databaseTopKey}/meals`), (snapshot) => {
+          const data = snapshot.val();
+  
+          let mealsArray = [];
+  
+          if (data && typeof data === 'object') {
+            mealsArray = Object.keys(data).map((key) => data[key]);
+          }
+  
+          context.commit('setMeals', mealsArray);
+        });
+      }
 
-        let mealsArray = [];
+      if (!context.state.drawnMealsWithHistory && !context.state.drawnMeals) {
+        onValue(ref(db, `${context.state.databaseTopKey}/drawnMeals`), (snapshot) => {
+          const data = snapshot.val();
+  
+          let sortedByDate = [];
+          let futureDates = [];
+  
+          if (data && typeof data === 'object') {
+            const drawnMealsArray = Object.keys(data).map((key) => data[key]);
+  
+            sortedByDate = drawnMealsArray.sort((a, b) => {
+              return new Date(a.assignedDate) - new Date(b.assignedDate);
+            });
+  
+            futureDates = sortedByDate.filter((meal) => {
+              const mealDate = new Date(meal.assignedDate).getTime();
+              const today = new Date().getTime();
+              const difference = mealDate - today;
+              const oneDayAgo = -86400000;
+  
+              return difference > oneDayAgo;
+            });
+          }
+  
+          context.commit('setDrawnMealsWithHistory', sortedByDate);
+          context.commit('setDrawnMeals', futureDates);
+        });
+      }
 
-        if (data && typeof data === 'object') {
-          mealsArray = Object.keys(data).map((key) => data[key]);
-        }
-
-        context.commit('setMeals', mealsArray);
-      });
-
-      console.log('test: ', `${context.state.databaseTopKey}/drawnMeals`);
-      onValue(ref(db, `${context.state.databaseTopKey}/drawnMeals`), (snapshot) => {
-        const data = snapshot.val();
-
-        let sortedByDate = [];
-        let futureDates = [];
-
-        if (data && typeof data === 'object') {
-          const drawnMealsArray = Object.keys(data).map((key) => data[key]);
-
-          sortedByDate = drawnMealsArray.sort((a, b) => {
-            return new Date(a.assignedDate) - new Date(b.assignedDate);
-          });
-
-          futureDates = sortedByDate.filter((meal) => {
-            const mealDate = new Date(meal.assignedDate).getTime();
-            const today = new Date().getTime();
-            const difference = mealDate - today;
-            const oneDayAgo = -86400000;
-
-            return difference > oneDayAgo;
-          });
-        }
-
-        context.commit('setDrawnMealsWithHistory', sortedByDate);
-        context.commit('setDrawnMeals', futureDates);
-      });
-
-      onValue(ref(db, `${context.state.databaseTopKey}/shopping-list`), (snapshot) => {
-        const data = snapshot.val();
-
-        context.commit('setShoppingList', data);
-      });
+      if (!context.state.shoppingList) {
+        onValue(ref(db, `${context.state.databaseTopKey}/shopping-list`), (snapshot) => {
+          const data = snapshot.val();
+  
+          context.commit('setShoppingList', data);
+        });
+      }
     },
     setDBValue (context, dbEntry) {
       const uuid = uuidv4();
