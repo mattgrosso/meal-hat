@@ -10,7 +10,7 @@
             <span>&nbsp;{{ pluralizedUnits(ingredient) }}</span>
           </p>
           <div class="ingredient-checkboxes d-flex flex-wrap">
-            <button v-for="n in ingredient.quantity" :key="n" class="btn btn-primary" @click="ingredientChecked(ingredient)">
+            <button v-for="n in parsedIngredientQuantity(ingredient)" :key="n" class="btn btn-primary" @click="ingredientChecked(ingredient)">
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-check2" viewBox="0 0 16 16">
                 <path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z"/>
               </svg>
@@ -119,6 +119,15 @@ export default {
         return pluralize.singular(ingredient.units);
       } else {
         return pluralize.plural(ingredient.units);
+      }
+    },
+    parsedIngredientQuantity (ingredient) {
+      if (typeof ingredient.quantity !== 'number') {
+        return 1;
+      } else if (ingredient.quantity < 1 && ingredient.quantity > 0) {
+        return 1;
+      } else {
+        return ingredient.quantity;
       }
     }
   },

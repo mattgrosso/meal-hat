@@ -12,7 +12,7 @@
           <label for="recipe-title">Frequency</label>
         </div>
       </div>
-      <h2>Shopping List</h2>
+      <h2>Ingredients</h2>
       <div
         class="row md-col-6 mx-auto g-2 mb-3"
         v-for="(ingredient, index) in ingredients"
