@@ -23,16 +23,19 @@ export default {
   name: 'DrawnMealSchedule',
   computed: {
     drawnMeals () {
-      if (!this.$store.state.drawnMeals || !this.$store.state.drawnMeals.length) {
+      if (!this.$store.state.drawnMealsWithHistory || !this.$store.state.drawnMealsWithHistory.length) {
         return [];
       } else {
-        return this.$store.state.drawnMeals.map((drawnMeal) => {
+        const oneWeekAgo = new Date();
+        oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+
+        return this.$store.state.drawnMealsWithHistory.map((drawnMeal) => {
           return {
             ...drawnMeal,
             meal: this.$store.getters.getMeal(drawnMeal.mealId)
           }
         }).filter((drawnMeal) => {
-          return drawnMeal.meal;
+          return drawnMeal.meal && new Date(drawnMeal.assignedDate) >= oneWeekAgo;
         });
       }
     }
