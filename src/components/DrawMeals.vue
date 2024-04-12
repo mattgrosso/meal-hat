@@ -7,7 +7,6 @@
         v-model.range="dateRange"
         :attributes='attributes'
         :disabled-dates="datesWithMeals"
-        :value="currentDate"
         expanded
       />
       <div v-if="hasDateRange" class="date-range my-3">
@@ -28,11 +27,10 @@ export default {
   name: 'DrawMeals',
   data () {
     return {
-      currentDate: new Date().toISOString().slice(0, 10),
       message: null,
       dateRange: {
-        start: null,
-        end: null
+        start: new Date().toISOString().slice(0, 10),
+        end: new Date().toISOString().slice(0, 10)
       }
     }
   },
@@ -41,10 +39,16 @@ export default {
       return this.dateRange.start && this.dateRange.end;
     },
     formattedStartDate () {
-      return this.dateRange.start ? this.dateRange.start.toDateString() : null;
+      return this.dateRange.start ? new Date(this.dateRange.start).toDateString() : null;
     },
     formattedEndDate () {
-      return this.dateRange.end ? this.dateRange.end.toDateString() : null;
+      if (this.dateRange.end) {
+        return new Date(this.dateRange.end).toDateString();
+      } else if (this.dateRange.start) {
+        return new Date(this.dateRange.start).toDateString();
+      } else {
+        return null;
+      }
     },
     allDatesInRange () {
       const dates = [];
