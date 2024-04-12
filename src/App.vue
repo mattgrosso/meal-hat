@@ -11,6 +11,10 @@ export default {
 </script>
 
 <style lang="scss">
+body {
+  touch-action: manipulation;
+}
+
 #app {
   font-family: 'Mulish', sans-serif;
 

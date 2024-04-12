@@ -1,6 +1,6 @@
 <template>
   <div class="add-meal">
-    <h1 class="mb-5">Add Meal</h1>
+    <h1 @click="$router.push('/')" class="mb-5">Add Meal</h1>
     <div class="add-meal-body p-3">
       <div class="row md-col-6 mx-auto g-2 mb-3">
         <div class="form-floating col-9">
@@ -102,6 +102,10 @@ export default {
 
 <style lang="scss">
   .add-meal {
+    h1 {
+      cursor: pointer;
+    }
+    
     .add-meal-body {
       .ctas {
         display: flex;

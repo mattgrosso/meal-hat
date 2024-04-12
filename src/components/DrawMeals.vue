@@ -1,6 +1,6 @@
 <template>
   <div class="draw-meals">
-    <h1>Draw Meals</h1>
+    <h1 @click="$router.push('/')">Draw Meals</h1>
     <div class="draw-meals-body p-3">
       <h3 class="my-2">Pick Days for drawing</h3>
       <VDatePicker
@@ -179,5 +179,9 @@ export default {
     max-width: 600px;
     margin: 0 auto;
     text-align: center;
+
+    h1 {
+      cursor: pointer;
+    }
   }
 </style>

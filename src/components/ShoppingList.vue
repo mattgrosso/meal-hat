@@ -1,6 +1,6 @@
 <template>
   <div class="shopping-list">
-    <h1>Shopping List</h1>
+    <h1 @click="$router.push('/')">Shopping List</h1>
     <div class="shopping-list-body p-3">
       <ul>
         <li v-for="(ingredient, index) in compiledIngredientsList" :key="index" class="d-flex flex-wrap">
@@ -140,6 +140,10 @@ export default {
     max-width: 600px;
     margin: 0 auto 100px;
     text-align: center;
+
+    h1 {
+      cursor: pointer;
+    }
 
     ul {
       list-style: none;
