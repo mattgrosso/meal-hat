@@ -10,7 +10,7 @@
             <span>&nbsp;{{ pluralizedUnits(ingredient) }}</span>
           </p>
           <div class="ingredient-checkboxes d-flex flex-wrap">
-            <button v-for="n in parsedIngredientQuantity(ingredient)" :key="n" class="btn btn-primary" @click="ingredientChecked(ingredient)">
+            <button v-for="n in parsedIngredientQuantity(ingredient)" :key="n" class="btn btn-primary" @click="ingredientChecked(ingredient, n)">
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-check2" viewBox="0 0 16 16">
                 <path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z"/>
               </svg>
@@ -18,8 +18,9 @@
           </div>
         </li>
       </ul>
-      <button class="btn btn-warning" @click="resetShoppingList">
-        Reset List
+      <button class="btn" :class="compiledIngredientsList.length ? 'btn-warning' : 'btn-primary' " @click="resetShoppingList">
+        <span v-if="compiledIngredientsList.length">Reset List</span>
+        <span v-else>Build List</span>
       </button>
     </div>
   </div>
@@ -32,15 +33,15 @@ export default {
   name: 'ShoppingList',
   data () {
     return {
-      compiledIngredientsList: null
+      compiledIngredientsList: []
     }
   },
   mounted () {
-    this.compiledIngredientsList = this.$store.state.shoppingList;
+    this.compiledIngredientsList = this.$store.state.shoppingList || [];
   },
   watch: {
     shoppingList () {
-      this.compiledIngredientsList = this.$store.state.shoppingList;
+      this.compiledIngredientsList = this.$store.state.shoppingList || [];
     }
   },
   computed: {
@@ -86,11 +87,11 @@ export default {
         });
       }
 
-      this.compiledIngredientsList = ingredientsList;
+      this.compiledIngredientsList = ingredientsList || [];
       this.updateShoppingList();
     },
-    ingredientChecked (ingredient) {
-      ingredient.quantity -= 1;
+    ingredientChecked (ingredient, n) {
+      ingredient.quantity -= ingredient.quantity - n + 1;
 
       if (ingredient.quantity < 1) {
         this.compiledIngredientsList = this.compiledIngredientsList.filter((ingredient) => {
