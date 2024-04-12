@@ -3,7 +3,13 @@
     <h1>Draw Meals</h1>
     <div class="draw-meals-body p-3">
       <h3 class="my-2">Pick Days for drawing</h3>
-      <VDatePicker v-model.range="dateRange" :attributes='attributes' :disabled-dates="datesWithMeals" expanded/>
+      <VDatePicker
+        v-model.range="dateRange"
+        :attributes='attributes'
+        :disabled-dates="datesWithMeals"
+        :value="currentDate"
+        expanded
+      />
       <div v-if="hasDateRange" class="date-range my-3">
         <div class="range">
           <span class="mx-2 fw-bold">{{ formattedStartDate }}</span>
@@ -22,6 +28,7 @@ export default {
   name: 'DrawMeals',
   data () {
     return {
+      currentDate: new Date().toISOString().slice(0, 10),
       message: null,
       dateRange: {
         start: null,
