@@ -18,27 +18,34 @@ const db = getDatabase(initializeApp(firebaseConfig));
 
 export default createStore({
   state: {
-    googleLogin: null,
+    userEmail: null,
     databaseTopKey: null,
     meals: null,
     drawnMealsWithHistory: null,
     drawnMeals: null,
-    shoppingList: null
+    shoppingList: null,
+    mealHatsList: null
   },
   getters: {
     getMeal: (state) => (id) => {
       return state.meals.find((meal) => meal.id === id);
     },
+    getUserEmail (state) {
+      return state.userEmail;
+    },
     databaseTopKey (state) {
       return state.databaseTopKey;
+    },
+    primaryDatabaseTopKey (state) {
+      return state.userEmail.replaceAll(/[-!$%@^&*()_+|~=`{}[\]:";'<>?,./]/g, "-");
     }
   },
   mutations: {
-    setGoogleLogin (state, value) {
-      state.googleLogin = value;
+    setUserEmail (state, value) {
+      state.userEmail = value;
     },
-    setDatabaseTopKey (state, value) {
-      state.databaseTopKey = value.replaceAll(/[-!$%@^&*()_+|~=`{}[\]:";'<>?,./]/g, "-");
+    setDatabaseTopKey (state, parsedEmail) {
+      state.databaseTopKey = parsedEmail;
     },
     setMeals (state, meals) {
       state.meals = meals;
@@ -51,17 +58,28 @@ export default createStore({
     },
     setShoppingList (state, shoppingList) {
       state.shoppingList = shoppingList;
+    },
+    setMealHatsList (state, mealHatsList) {
+      state.mealHatsList = mealHatsList;
+    },
+    clearState (state) {
+      state.meals = null;
+      state.drawnMealsWithHistory = null;
+      state.drawnMeals = null;
+      state.shoppingList = null;
+      state.mealHatsList = null;
     }
   },
   actions: {
     async login (context, resp) {
       const userData = decodeCredential(resp.credential);
 
-      context.commit('setGoogleLogin', userData.email);
+      context.commit('setUserEmail', userData.email);
 
-      if (context.state.googleLogin) {
-        context.commit('setDatabaseTopKey', context.state.googleLogin);
+      if (context.state.userEmail) {
+        context.dispatch('updateDatabaseTopKey', context.state.userEmail);
         window.localStorage.setItem('mealHatDatabaseTopKey', context.state.databaseTopKey);
+        window.localStorage.setItem('mealHatUserEmail', context.state.userEmail);
         context.dispatch('initializeDB');
       } else {
         console.error("Login attempted but the user data didn't work");
@@ -69,59 +87,105 @@ export default createStore({
 
       return;
     },
+    updateDatabaseTopKey (context, email) {
+      const parsedEmail = email.replaceAll(/[-!$%@^&*()_+|~=`{}[\]:";'<>?,./]/g, "-");
+
+      if (context.state.databaseTopKey !== parsedEmail) {
+        context.commit('setDatabaseTopKey', parsedEmail);
+        window.localStorage.setItem('mealHatDatabaseTopKey', context.state.databaseTopKey);
+        context.dispatch('initializeDB');
+      }
+    },
+    switchDatabase (context, newDatabaseTopKey) {
+      // Dispatch the updateDatabaseTopKey action with the new key.
+      context.dispatch('updateDatabaseTopKey', newDatabaseTopKey);
+  
+      // Clear the existing state.
+      context.commit('clearState');
+  
+      // Re-initialize the database with the new key.
+      context.dispatch('initializeDB');
+
+      // Update the most-recent-database value in the database.
+      const mostRecentDatabase = {
+        path: `most-recent-database`,
+        value: context.state.databaseTopKey
+      }
+      context.dispatch('updateUserDBValue', mostRecentDatabase);
+    },
     initializeDB (context) {
+      // If there's no databaseTopKey in the state, exit the action.
       if (!context.state.databaseTopKey) {
         return;
       }
-      
+
+      // If there are no meals in the state, fetch them from the database.
       if (!context.state.meals) {
         onValue(ref(db, `${context.state.databaseTopKey}/meals`), (snapshot) => {
           const data = snapshot.val();
-  
+
           let mealsArray = [];
-  
+
+          // If data exists and it's an object, convert it to an array.
           if (data && typeof data === 'object') {
             mealsArray = Object.keys(data).map((key) => data[key]);
           }
-  
+
+          // Commit the fetched meals to the state.
           context.commit('setMeals', mealsArray);
         });
       }
 
+      // If there are no drawnMealsWithHistory and drawnMeals in the state, fetch them from the database.
       if (!context.state.drawnMealsWithHistory && !context.state.drawnMeals) {
         onValue(ref(db, `${context.state.databaseTopKey}/drawnMeals`), (snapshot) => {
           const data = snapshot.val();
-  
+
           let sortedByDate = [];
           let futureDates = [];
-  
+
+          // If data exists and it's an object, convert it to an array and sort it by date.
           if (data && typeof data === 'object') {
             const drawnMealsArray = Object.keys(data).map((key) => data[key]);
-  
+
             sortedByDate = drawnMealsArray.sort((a, b) => {
               return new Date(a.assignedDate) - new Date(b.assignedDate);
             });
-  
+
+            // Filter the sorted array to only include meals with future dates.
             futureDates = sortedByDate.filter((meal) => {
               const mealDate = new Date(meal.assignedDate).getTime();
               const today = new Date().getTime();
               const difference = mealDate - today;
               const oneDayAgo = -86400000;
-  
+
               return difference > oneDayAgo;
             });
           }
-  
+
+          // Commit the fetched drawnMealsWithHistory and drawnMeals to the state.
           context.commit('setDrawnMealsWithHistory', sortedByDate);
           context.commit('setDrawnMeals', futureDates);
         });
       }
 
+      // If there's no shoppingList in the state, fetch it from the database.
       if (!context.state.shoppingList) {
         onValue(ref(db, `${context.state.databaseTopKey}/shopping-list`), (snapshot) => {
           const data = snapshot.val();
-  
+
+          // Commit the fetched shoppingList to the state.
           context.commit('setShoppingList', data);
+        });
+      }
+
+      // If there's no mealHatsList in the state, fetch it from the database.
+      if (!context.state.mealHatsList) {
+        onValue(ref(db, `${context.state.databaseTopKey}/meal-hats-list`), (snapshot) => {
+          const data = snapshot.val();
+
+          // Commit the fetched mealHatsList to the state.
+          context.commit('setMealHatsList', data);
         });
       }
     },
@@ -132,6 +196,10 @@ export default createStore({
     },
     updateDBValue (context, dbEntry) {
       set(ref(db, `${context.state.databaseTopKey}/${dbEntry.path}`), dbEntry.value);
+    },
+    updateUserDBValue (context, dbEntry) {
+      const userDatabaseTopKey = context.getters.primaryDatabaseTopKey;
+      set(ref(db, `${userDatabaseTopKey}/${dbEntry.path}`), dbEntry.value);
     }
   }
 })

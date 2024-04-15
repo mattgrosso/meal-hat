@@ -15,6 +15,7 @@ import DrawMeals from './components/DrawMeals.vue';
 import ShowMeals from './components/ShowMeals.vue';
 import EditMeal from './components/EditMeal.vue';
 import ShoppingList from './components/ShoppingList.vue';
+import MealHats from './components/MealHats.vue';
 
 const app = createApp(App);
 
@@ -26,12 +27,19 @@ app.use(vue3GoogleLogin, {
 
 const loggedIn = () => {
   const databaseTopKeyFromLocalStorage = window.localStorage.getItem('mealHatDatabaseTopKey');
+  const userEmailFromLocalStorage = window.localStorage.getItem('mealHatUserEmail');
 
-  if (store.getters.databaseTopKey) {
+  if (store.getters.databaseTopKey && store.getters.userEmail) {
+    // TODO: Why am I initializing this DB everytime?
     store.dispatch('initializeDB');
     return true;
-  } else if (databaseTopKeyFromLocalStorage) {
-    store.commit('setDatabaseTopKey', databaseTopKeyFromLocalStorage);
+  } else if (databaseTopKeyFromLocalStorage && userEmailFromLocalStorage) {
+    store.dispatch('updateDatabaseTopKey', databaseTopKeyFromLocalStorage);
+    store.commit('setUserEmail', userEmailFromLocalStorage);
+    store.dispatch('initializeDB');
+    return true;
+  } else if (store.getters.userEmail) {
+    store.dispatch('updateDatabaseTopKey', store.getters.userEmail);
     store.dispatch('initializeDB');
     return true;
   } else {
@@ -120,9 +128,24 @@ const routes = [
     }
   },
   {
-    name: 'EditMeal',
     path: '/edit-meal/:id',
+    name: 'EditMeal',
     component: EditMeal,
+    meta: {
+      requiresLogin: true
+    },
+    beforeEnter: (to, from, next) => {
+      if (!loggedIn()) {
+        next('/login');
+      } else {
+        next();
+      }
+    }
+  },
+  {
+    path: '/meal-hats',
+    name: 'MealHats',
+    component: MealHats,
     meta: {
       requiresLogin: true
     },
