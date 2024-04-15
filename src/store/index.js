@@ -21,6 +21,7 @@ export default createStore({
     userEmail: null,
     databaseTopKey: null,
     mostRecentDatabase: null,
+    allHatsList: null,
     meals: null,
     drawnMealsWithHistory: null,
     drawnMeals: null,
@@ -50,6 +51,9 @@ export default createStore({
     },
     setMostRecentDatabase (state, value) {
       state.mostRecentDatabase = value;
+    },
+    setAllHatsList (state, allHatsList) {
+      state.allHatsList = allHatsList;
     },
     setMeals (state, meals) {
       state.meals = meals;
@@ -121,6 +125,16 @@ export default createStore({
       // If there's no databaseTopKey in the state, exit the action.
       if (!context.state.databaseTopKey || !context.state.userEmail) {
         return;
+      }
+
+      // If there are isn't a list of all hats in the state, fetch them from the database.
+      if (!context.state.allHatsList) {
+        onValue(ref(db), (snapshot) => {
+          const keys = Object.keys(snapshot.val());
+        
+          // Commit the list of all hats to the state.
+          context.commit('setAllHatsList', keys);
+        });
       }
 
       // If there are no meals in the state, fetch them from the database.
@@ -214,6 +228,12 @@ export default createStore({
     updateUserDBValue (context, dbEntry) {
       const userDatabaseTopKey = context.getters.primaryDatabaseTopKey;
       set(ref(db, `${userDatabaseTopKey}/${dbEntry.path}`), dbEntry.value);
-    }
+    },
+    createNewHat (context, dBTitle) {
+      if (!dBTitle) {
+        return;
+      }
+      set(ref(db, `${dBTitle}/most-recent-database`), dBTitle)
+    },
   }
 })
