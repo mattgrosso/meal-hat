@@ -20,6 +20,7 @@ export default createStore({
   state: {
     userEmail: null,
     databaseTopKey: null,
+    mostRecentDatabase: null,
     meals: null,
     drawnMealsWithHistory: null,
     drawnMeals: null,
@@ -46,6 +47,9 @@ export default createStore({
     },
     setDatabaseTopKey (state, parsedEmail) {
       state.databaseTopKey = parsedEmail;
+    },
+    setMostRecentDatabase (state, value) {
+      state.mostRecentDatabase = value;
     },
     setMeals (state, meals) {
       state.meals = meals;
@@ -115,7 +119,7 @@ export default createStore({
     },
     initializeDB (context) {
       // If there's no databaseTopKey in the state, exit the action.
-      if (!context.state.databaseTopKey) {
+      if (!context.state.databaseTopKey || !context.state.userEmail) {
         return;
       }
 
@@ -180,12 +184,22 @@ export default createStore({
       }
 
       // If there's no mealHatsList in the state, fetch it from the database.
-      if (!context.state.mealHatsList) {
-        onValue(ref(db, `${context.state.databaseTopKey}/meal-hats-list`), (snapshot) => {
+      if (!context.state.mealHatsList && context.getters.primaryDatabaseTopKey) {
+        onValue(ref(db, `${context.getters.primaryDatabaseTopKey}/meal-hats-list`), (snapshot) => {
           const data = snapshot.val();
 
           // Commit the fetched mealHatsList to the state.
           context.commit('setMealHatsList', data);
+        });
+      }
+
+      // If there's no mostRecentDatabase in the state, fetch it from the database.
+      if (!context.state.mostRecentDatabase) {
+        onValue(ref(db, `${context.state.databaseTopKey}/most-recent-database`), (snapshot) => {
+          const data = snapshot.val();
+
+          // Commit the fetched mealHatsList to the state.
+          context.commit('setMostRecentDatabase', data);
         });
       }
     },

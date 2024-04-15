@@ -6,7 +6,7 @@
         <li v-for="(mealHat, index) in mealHatsList" :key="index" class="col-12 my-2">
           <div class="d-flex justify-content-between align-items-center">
             <button type="button" class="btn btn-secondary flex-grow-1" @click="switchToMealHat(mealHat)">{{mealHat}}</button>
-            <button v-if="showDeleteButton(mealHat)" type="button" class="btn btn-danger ms-2" @click="removeMealhat">Delete</button>
+            <button v-if="showDeleteButton(mealHat)" type="button" class="btn btn-danger ms-2" @click="removeMealhat(mealHat)">Delete</button>
           </div>
         </li>
       </ul>
@@ -28,7 +28,7 @@ export default {
   mounted () {
     if (!this.$store.state.mealHatsList || !this.$store.state.mealHatsList.length) {
       const primaryDatabaseTopKey = this.$store.getters.primaryDatabaseTopKey;
-      console.log('primaryDatabaseTopKey: ', primaryDatabaseTopKey);
+
       const dbEntry = {
         path: `meal-hats-list`,
         value: [primaryDatabaseTopKey]
@@ -46,9 +46,23 @@ export default {
   methods: {
     switchToMealHat (mealHatName) {
       this.$store.dispatch('switchDatabase', mealHatName);
+      this.$router.push('/');
     },
-    removeMealhat () {
+    removeMealhat (mealHatName) {
+      const newHatList = this.mealHatsList.filter((hat) => hat !== mealHatName);
       
+      const dbEntry = {
+        path: `meal-hats-list`,
+        value: newHatList
+      }
+      
+      this.$store.commit('setMealHatsList', newHatList);
+      this.$store.dispatch('updateUserDBValue', dbEntry);
+
+      if (mealHatName === this.$store.getters.databaseTopKey) {
+        this.$store.dispatch('switchDatabase', this.$store.getters.primaryDatabaseTopKey);
+        this.$router.push('/');
+      }
     },
     addHatToList () {
       const newHat = prompt('Enter the email of the hat you want to add to the list').replaceAll(/[-!$%@^&*()_+|~=`{}[\]:";'<>?,./]/g, "-");

@@ -39,7 +39,8 @@ const loggedIn = () => {
     store.dispatch('initializeDB');
     return true;
   } else if (store.getters.userEmail) {
-    store.dispatch('updateDatabaseTopKey', store.getters.userEmail);
+    const topKey = store.state.mostRecentDatabase || store.getters.userEmail;
+    store.dispatch('updateDatabaseTopKey', topKey);
     store.dispatch('initializeDB');
     return true;
   } else {

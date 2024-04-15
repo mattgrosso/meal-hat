@@ -26,12 +26,6 @@
       >
         Shopping List
       </router-link>
-      <router-link
-        to="/meal-hats"
-        class="btn btn-primary col-12 md-col-4 my-3"
-      >
-        Other Meal Hats
-      </router-link>
       <DrawnMealSchedule />
     </div>
   </div>
