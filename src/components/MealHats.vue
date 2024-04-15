@@ -43,7 +43,6 @@
 <script>
 import Header from '@/components/Header.vue';
 import Modal from '@/components/Modal.vue';
-import { create } from 'lodash';
 
 export default {
   name: 'MealHats',
@@ -70,12 +69,12 @@ export default {
     },
     removeMealhat (mealHatName) {
       const newHatList = this.mealHatsList.filter((hat) => hat !== mealHatName);
-      
+
       const dbEntry = {
         path: `meal-hats-list`,
         value: newHatList
       }
-      
+
       this.$store.commit('setMealHatsList', newHatList);
       this.$store.dispatch('updateUserDBValue', dbEntry);
 
@@ -115,7 +114,7 @@ export default {
         path: `meal-hats-list`,
         value: newHatList
       }
-      
+
       this.$store.commit('setMealHatsList', newHatList);
       this.$store.dispatch('updateUserDBValue', dbEntry);
 

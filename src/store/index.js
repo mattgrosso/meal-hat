@@ -107,10 +107,10 @@ export default createStore({
     switchDatabase (context, newDatabaseTopKey) {
       // Dispatch the updateDatabaseTopKey action with the new key.
       context.dispatch('updateDatabaseTopKey', newDatabaseTopKey);
-  
+
       // Clear the existing state.
       context.commit('clearState');
-  
+
       // Re-initialize the database with the new key.
       context.dispatch('initializeDB');
 
@@ -131,7 +131,7 @@ export default createStore({
       if (!context.state.allHatsList) {
         onValue(ref(db), (snapshot) => {
           const keys = Object.keys(snapshot.val());
-        
+
           // Commit the list of all hats to the state.
           context.commit('setAllHatsList', keys);
         });

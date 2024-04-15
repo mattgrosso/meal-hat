@@ -60,7 +60,7 @@ export default {
 </script>
 
 <style lang="scss">
-  .show-meals {    
+  .show-meals {
     @media screen and (min-width: 768px) {
       max-width: 80%;
       margin: 0 auto;
