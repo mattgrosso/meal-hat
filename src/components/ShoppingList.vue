@@ -1,6 +1,6 @@
 <template>
   <div class="shopping-list">
-    <h1 @click="$router.push('/')">Shopping List</h1>
+    <Header headerText="Shopping List"/>
     <div class="shopping-list-body p-3">
       <ul>
         <li v-for="(ingredient, index) in compiledIngredientsList" :key="index" class="d-flex flex-wrap">
@@ -28,9 +28,13 @@
 
 <script>
 import pluralize from 'pluralize';
+import Header from '@/components/Header.vue';
 
 export default {
   name: 'ShoppingList',
+  components: {
+    Header
+  },
   data () {
     return {
       compiledIngredientsList: []
@@ -140,10 +144,6 @@ export default {
     max-width: 600px;
     margin: 0 auto 100px;
     text-align: center;
-
-    h1 {
-      cursor: pointer;
-    }
 
     ul {
       list-style: none;

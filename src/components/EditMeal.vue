@@ -1,6 +1,6 @@
 <template>
   <div class="edit-meal">
-    <h1 @click="$router.push('/')" class="mb-5">Edit Meal</h1>
+    <Header headerText="Edit Meal"/>
     <div class="edit-meal-body p-3">
       <div class="row md-col-6 mx-auto g-2 mb-3">
         <div class="form-floating col-9">
@@ -40,8 +40,13 @@
 </template>
 
 <script>
+import Header from '@/components/Header.vue';
+
 export default {
   name: 'EditMeals',
+  components: {
+    Header
+  },
   data () {
     return {
       name: null,
@@ -109,10 +114,6 @@ export default {
 
 <style lang="scss">
   .edit-meal {
-    h1 {
-      cursor: pointer;
-    }
-    
     .edit-meal-body {
       .ctas {
         display: flex;

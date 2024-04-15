@@ -1,6 +1,6 @@
 <template>
   <div class="draw-meals">
-    <h1 @click="$router.push('/')">Draw Meals</h1>
+    <Header headerText="Draw Meals"/>
     <div class="draw-meals-body p-3">
       <h3 class="my-2">Pick Days for drawing</h3>
       <VDatePicker
@@ -23,8 +23,13 @@
 </template>
 
 <script>
+import Header from '@/components/Header.vue';
+
 export default {
   name: 'DrawMeals',
+  components: {
+    Header
+  },
   data () {
     return {
       message: null,

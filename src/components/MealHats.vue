@@ -1,6 +1,6 @@
 <template>
   <div class="meal-hats-list">
-    <h1 @click="$router.push('/')">Meal Hats</h1>
+    <Header headerText="Meal Hats"/>
     <div class="meal-hats-list-body">
       <ul>
         <li v-for="(mealHat, index) in mealHatsList" :key="index" class="col-12 my-2">
@@ -18,8 +18,13 @@
 </template>
 
 <script>
+import Header from '@/components/Header.vue';
+
 export default {
   name: 'MealHats',
+  components: {
+    Header
+  },
   mounted () {
     if (!this.$store.state.mealHatsList || !this.$store.state.mealHatsList.length) {
       const primaryDatabaseTopKey = this.$store.getters.primaryDatabaseTopKey;
@@ -70,10 +75,6 @@ export default {
 
 <style lang="scss">
   .meal-hats-list {
-    h1 {
-      cursor: pointer;
-    }
-
     ul {
       list-style: none;
       padding: 0 32px;

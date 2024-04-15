@@ -18,15 +18,6 @@ body {
 #app {
   font-family: 'Mulish', sans-serif;
 
-  h1 {
-    font-size: 2.5rem;
-    font-family: 'Playfair Display', serif;
-    text-align: center;
-    background: #274C77;
-    padding: 45px 0;
-    color: white;
-  }
-
   .btn-primary {
     background: #408558;
     border-color: #408558;

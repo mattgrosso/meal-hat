@@ -1,6 +1,6 @@
 <template>
   <div class="home">
-    <h1 class="col-12">Meal Hat</h1>
+    <Header headerText="Meal Hat"/>
     <div class="home-body p-3">
       <router-link
         to="/add-meal"
@@ -38,11 +38,13 @@
 </template>
 
 <script>
+import Header from '@/components/Header.vue';
 import DrawnMealSchedule from '@/components/DrawnMealSchedule.vue';
 
 export default {
   name: 'Home',
   components: {
+    Header,
     DrawnMealSchedule
   },
 };

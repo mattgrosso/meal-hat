@@ -1,6 +1,6 @@
 <template>
   <div class="show-meals">
-    <h1 @click="$router.push('/')" class="mb-3">Show Meals</h1>
+    <Header headerText="Show Meals"/>
     <div class="meals d-flex flex-wrap justify-content-start col-12">
       <div v-for="(meal, index) in meals" :key="index" class="meal col-12 md-col-4 p-3">
         <div class="card">
@@ -26,8 +26,13 @@
 </template>
 
 <script>
+import Header from '@/components/Header.vue';
+
 export default {
   name: 'ShowMeals',
+  components: {
+    Header
+  },
   computed: {
     meals () {
       return this.$store.state.meals;
@@ -55,11 +60,7 @@ export default {
 </script>
 
 <style lang="scss">
-  .show-meals {
-    h1 {
-      cursor: pointer;
-    }
-    
+  .show-meals {    
     @media screen and (min-width: 768px) {
       max-width: 80%;
       margin: 0 auto;
