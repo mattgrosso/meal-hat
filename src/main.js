@@ -16,6 +16,7 @@ import ShowMeals from './components/ShowMeals.vue';
 import EditMeal from './components/EditMeal.vue';
 import ShoppingList from './components/ShoppingList.vue';
 import MealHats from './components/MealHats.vue';
+import './registerServiceWorker'
 
 const app = createApp(App);
 
