@@ -39,6 +39,10 @@ export default createStore({
       return state.databaseTopKey;
     },
     primaryDatabaseTopKey (state) {
+      if (!state.userEmail) {
+        return;
+      }
+
       return state.userEmail.replaceAll(/[-!$%@^&*()_+|~=`{}[\]:";'<>?,./]/g, "-");
     }
   },
