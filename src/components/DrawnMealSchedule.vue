@@ -77,7 +77,7 @@ export default {
   .drawn-meals-schedule {
     text-align: center;
     margin: 0 auto;
-    
+
     ul {
       list-style: none;
       padding: 0;
