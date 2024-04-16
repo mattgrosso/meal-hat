@@ -2,8 +2,8 @@
   <div class="drawn-meals-schedule my-5 md-col-8">
     <h3>Drawn Meals</h3>
     <ul v-if="drawnMeals.length">
-      <li v-for="(drawnMeal, index) in drawnMeals" :key="index">
-        <span>
+      <li v-for="(drawnMeal, index) in drawnMeals" :key="index" :class="{todaysMeal: todaysMeal(drawnMeal)}">
+        <span class="date-and-title">
           {{ drawnMeal.assignedDate }} - {{ drawnMeal.meal.name }}
         </span>
         <span class="delete-meal" @click="deleteMeal(drawnMeal)">
@@ -48,6 +48,26 @@ export default {
       }
 
       this.$store.dispatch('updateDBValue', dbEntry);
+    },
+    todaysMeal (drawnMeal) {
+      const now = new Date();
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+
+      const todayEnd = new Date();
+      todayEnd.setHours(23, 59, 59, 999);
+
+      const evening = new Date();
+      evening.setHours(19, 30, 0, 0); // 7:30 PM
+
+      if (now >= evening) {
+        // If current time is after 7:30 PM, set 'today' to tomorrow's date
+        todayStart.setDate(todayStart.getDate() + 1);
+        todayEnd.setDate(todayEnd.getDate() + 1);
+      }
+
+      const assignedDate = new Date(drawnMeal.assignedDate);
+      return assignedDate >= todayStart && assignedDate <= todayEnd;
     }
   },
 };
@@ -73,8 +93,16 @@ export default {
         align-items: center;
         justify-content: space-between;
 
+        &.todaysMeal {
+          font-weight: bold;
+        }
+        
         &:last-of-type {
           border-bottom: none;
+        }
+
+        .date-and-title {
+          padding-right: 8px;  
         }
 
         .delete-meal {
