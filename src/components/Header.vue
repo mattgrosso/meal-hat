@@ -3,7 +3,7 @@
     <h1>{{headerText}}</h1>
     <div class="user-and-hat col-12">
       <p class="col-6">{{$store.state.userEmail}}</p>
-      <p class="col-6" @click.stop="$router.push('/meal-hats')">{{$store.state.databaseTopKey}}</p>
+      <p class="col-6" @click.stop="$router.push('/meal-hats')">{{hatTitle}}</p>
     </div>
   </div>
 </template>
@@ -15,7 +15,16 @@ export default {
       type: String,
       required: true
     }
-  }
+  },
+  computed: {
+    hatTitle () {
+      if (this.$store.getters.primaryDatabaseTopKey === this.$store.state.databaseTopKey) {
+        return "your default hat";
+      } else {
+        return this.$store.state.databaseTopKey;
+      }
+    }
+  },
 };
 </script>
 
