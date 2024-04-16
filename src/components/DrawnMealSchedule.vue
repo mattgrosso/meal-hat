@@ -1,6 +1,6 @@
 <template>
-  <div class="drawn-meals-schedule my-5 md-col-8">
-    <h3>Drawn Meals</h3>
+  <div class="drawn-meals-schedule my-4 md-col-8">
+    <h3>Meal Schedule</h3>
     <ul v-if="drawnMeals.length">
       <li v-for="(drawnMeal, index) in drawnMeals" :key="index" :class="{todaysMeal: todaysMeal(drawnMeal)}">
         <span class="date-and-title">
@@ -77,24 +77,33 @@ export default {
   .drawn-meals-schedule {
     text-align: center;
     margin: 0 auto;
-
+    
     ul {
       list-style: none;
       padding: 0;
-      border: 1px solid black;
+      border: 1px solid #ccc;
+      border-radius: 6px;
       padding: 0 32px;
+      background-color: #f8f9fa;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
 
       li {
-        border-bottom: 1px solid black;
+        border-bottom: 1px solid #ccc;
         padding: 16px 0;
         text-align: left;
-        font-size: 1.25rem;
+        font-size: 1rem;
         display: flex;
         align-items: center;
         justify-content: space-between;
+        transition: background-color 0.3s ease;
+
+        &:hover {
+          background-color: #e9ecef;
+        }
 
         &.todaysMeal {
           font-weight: bold;
+          color: #408558;
         }
 
         &:last-of-type {
@@ -107,11 +116,12 @@ export default {
 
         .delete-meal {
           cursor: pointer;
-          height: 24px;
-          width: 24px;
+          height: 16px;
+          width: 16px;
           display: flex;
           align-items: center;
           justify-content: center;
+          color: black;
 
           svg {
             height: 24px;

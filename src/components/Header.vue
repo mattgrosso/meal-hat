@@ -1,6 +1,7 @@
 <template>
-  <div @click="$router.push('/')" class="header col-12">
+  <div class="header col-12">
     <h1>{{headerText}}</h1>
+    <img @click="$router.push('/')" :src="require('@/assets/icon.png')" alt="Icon">
     <div class="user-and-hat col-12">
       <p class="col-6">{{$store.state.userEmail}}</p>
       <p class="col-6" @click.stop="$router.push('/meal-hats')">{{hatTitle}}</p>
@@ -38,16 +39,26 @@ export default {
 
     h1 {
       font-size: 2.5rem;
-      font-family: 'Playfair Display', serif;
+      font-family: "Playfair Display", serif;
       margin: 0;
       text-align: center;
+      position: absolute;
+      top: 8px;
+      left: 16px;
+    }
+
+    img {
+      position: absolute;
+      top: 9px;
+      right: 16px;
+      height: 48px;
     }
 
     .user-and-hat {
       display: flex;
       justify-content: space-between;
       position: absolute;
-      bottom: 0;
+      bottom: 6px;
       left: 0;
 
       p {

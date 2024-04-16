@@ -2,30 +2,32 @@
   <div class="home">
     <Header headerText="Meal Hat"/>
     <div class="home-body p-3">
-      <router-link
-        to="/add-meal"
-        class="btn btn-primary col-12 md-col-4 my-3"
-      >
-        Add Meal
-      </router-link>
-      <router-link
-        to="/show-meals"
-        class="btn btn-primary col-12 md-col-4 my-3"
-      >
-        Show Meals In The Hat
-      </router-link>
-      <router-link
-        to="/draw-meals"
-        class="btn btn-primary col-12 md-col-4 my-3"
-      >
-        Draw Meals
-      </router-link>
-      <router-link
-        to="/shopping-list"
-        class="btn btn-primary col-12 md-col-4 my-3"
-      >
-        Shopping List
-      </router-link>
+      <div class="btn-group" role="group" aria-label="Button group with nested dropdown">
+        <router-link
+          to="/add-meal"
+          class="btn btn-tertiary"
+        >
+          Add Meal
+        </router-link>
+        <router-link
+          to="/show-meals"
+          class="btn btn-secondary"
+        >
+          Show Meals In The Hat
+        </router-link>
+        <router-link
+          to="/draw-meals"
+          class="btn btn-primary"
+        >
+          Draw Meals
+        </router-link>
+        <router-link
+          to="/shopping-list"
+          class="btn btn-success"
+        >
+          Shopping List
+        </router-link>
+      </div>
       <DrawnMealSchedule />
     </div>
   </div>
@@ -54,6 +56,14 @@ export default {
 
     @media screen and (min-width: 768px) {
       width: 60%;
+    }
+
+    .home-body {
+      .btn-group {
+        .btn {
+          font-size: 0.75rem;
+        }
+      }
     }
   }
 </style>
