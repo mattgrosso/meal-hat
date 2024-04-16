@@ -4,9 +4,14 @@
     <div class="meal-hats-list-body">
       <ul>
         <li v-for="(mealHat, index) in mealHatsList" :key="index" class="col-12 my-2">
-          <div class="d-flex justify-content-between align-items-center">
-            <button type="button" class="btn btn-secondary flex-grow-1" @click="switchToMealHat(mealHat)">{{mealHat}}</button>
-            <button v-if="showDeleteButton(mealHat)" type="button" class="btn btn-danger ms-2" @click="removeMealhat(mealHat)">Delete</button>
+          <div class="btn-group w-100" role="group">
+            <button type="button" class="btn btn-secondary flex-grow-1" style="width: 70%;" @click="switchToMealHat(mealHat)">{{mealHat}}</button>
+            <button type="button" class="btn btn-primary" @click="shareMealHat(mealHat)" :style="{ width: showDeleteButton(mealHat) ? '15%' : '30%' }">
+              <i class="bi bi-share-fill"></i>
+            </button>
+            <button v-if="showDeleteButton(mealHat)" type="button" class="btn btn-danger" style="width: 15%;" @click="removeMealhat(mealHat)">
+              <i class="bi bi-trash-fill"></i>
+            </button>
           </div>
         </li>
       </ul>
@@ -14,30 +19,30 @@
         <button class="btn btn-primary my-3 col-12" @click="showNewHatPrompt">Add a hat</button>
       </div>
     </div>
+    <Modal
+      :showModal="showJoinHatModal"
+      title="Join a hat"
+      primaryButtonText="Add Hat"
+      secondaryButtonText="Cancel"
+      :closeModalCallback="closeJoinHatModal"
+      :primaryButtonCallback="addHatToList"
+      :secondaryButtonCallback="closeJoinHatModal"
+    >
+      <input type="text" class="form-control" v-model="newHat" placeholder="Enter the name or email of the hat" autocomplete="new-password" name="newHat" @keyup.enter="addHatToList">
+    </Modal>
+    <Modal
+      :showModal="showCreateHatModal"
+      title="Create a hat"
+      primaryButtonText="Create Hat"
+      secondaryButtonText="No Thanks"
+      :closeModalCallback="closeCreateHatModal"
+      :primaryButtonCallback="createHatAndAddToList"
+      :secondaryButtonCallback="closeCreateHatModal"
+    >
+      <p>That hat doesn't exist yet, do you want to create it?</p>
+      <p>After you create it, other users can use it by entering the same name on their device.</p>
+    </Modal>
   </div>
-  <Modal
-    :showModal="showJoinHatModal"
-    title="Join a hat"
-    primaryButtonText="Add Hat"
-    secondaryButtonText="Cancel"
-    :closeModalCallback="closeJoinHatModal"
-    :primaryButtonCallback="addHatToList"
-    :secondaryButtonCallback="closeJoinHatModal"
-  >
-    <input type="text" class="form-control" v-model="newHat" placeholder="Enter the name or email of the hat" autocomplete="new-password" name="newHat" @keyup.enter="addHatToList">
-  </Modal>
-  <Modal
-    :showModal="showCreateHatModal"
-    title="Create a hat"
-    primaryButtonText="Create Hat"
-    secondaryButtonText="No Thanks"
-    :closeModalCallback="closeCreateHatModal"
-    :primaryButtonCallback="createHatAndAddToList"
-    :secondaryButtonCallback="closeCreateHatModal"
-  >
-    <p>That hat doesn't exist yet, do you want to create it?</p>
-    <p>After you create it, other users can use it by entering the same name on their device.</p>
-  </Modal>
 </template>
 
 <script>
@@ -55,6 +60,13 @@ export default {
       showJoinHatModal: false,
       showCreateHatModal: false,
       newHat: ''
+    }
+  },
+  mounted () {
+    if (this.$route.params.sharedMealHatName) {
+      this.newHat = this.$route.params.sharedMealHatName;
+      this.addHatToList();
+      this.switchToMealHat(this.$route.params.sharedMealHatName);
     }
   },
   computed: {
@@ -83,6 +95,23 @@ export default {
         this.$router.push('/');
       }
     },
+    shareMealHat (mealHatName) {
+      const shareUrl = `${window.location.href}/${mealHatName}`;
+
+      if (navigator.share) {
+        navigator.share({
+          title: 'Meal Hat',
+          text: `Join my meal hat: ${mealHatName}`,
+          url: shareUrl
+        });
+      } else {
+        navigator.clipboard.writeText(shareUrl);
+        this.$emit('showToast', {
+          delay: 3000,
+          message: 'Shareable URL copied to clipboard.'
+        });
+      }
+    },
     showNewHatPrompt () {
       this.showJoinHatModal = true;
     },
@@ -109,7 +138,7 @@ export default {
         this.closeCreateHatModal();
       }
 
-      const newHatList = [...this.mealHatsList, newHat];
+      const newHatList = [...new Set([...this.mealHatsList, newHat])];
       const dbEntry = {
         path: `meal-hats-list`,
         value: newHatList
@@ -150,6 +179,10 @@ export default {
     .add-more-hats {
       border-top: 1px solid black;
       padding: 0 32px;
+    }
+
+    .btn-secondary {
+      font-size: 0.8rem;
     }
   }
 </style>

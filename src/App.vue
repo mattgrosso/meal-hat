@@ -1,12 +1,39 @@
 <template>
   <div class="meal-hat">
-    <router-view></router-view>
+    <router-view @showToast="showToast"></router-view>
+    <div class="toast" role="alert" aria-live="assertive" aria-atomic="true" id="myToast">
+      <div class="toast-body">
+        {{toastMessage}}
+      </div>
+    </div>
   </div>
 </template>
 
 <script>
+import { Toast } from 'bootstrap';
+
 export default {
-  name: 'MealHat'
+  name: 'MealHat',
+  data () {
+    return {
+      toastMessage: ""
+    }
+  },
+  methods: {
+    showToast(config) {
+      this.toastMessage = config.message;
+      const toastEl = document.getElementById('myToast');
+      const toast = new Toast(toastEl, {
+        autohide: true,
+        delay: config.delay || 5000
+      });
+      toast.show();
+
+      setTimeout(() => {
+        this.toastMessage = "";
+      }, config.delay + 100 || 5100);
+    },
+  }
 }
 </script>
 
@@ -43,6 +70,14 @@ body {
     background: #F8333C;
     border-color: #F8333C;
     color: white;
+  }
+
+  .toast.show {
+    position: absolute;
+    top: 16px;
+    width: 80%;
+    left: 50%;
+    transform: translateX(-50%);
   }
 }
 </style>

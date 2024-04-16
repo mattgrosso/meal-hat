@@ -144,7 +144,7 @@ const routes = [
     }
   },
   {
-    path: '/meal-hats',
+    path: '/meal-hats/:sharedMealHatName?',
     name: 'MealHats',
     component: MealHats,
     meta: {
