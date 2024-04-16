@@ -96,13 +96,13 @@ export default {
         &.todaysMeal {
           font-weight: bold;
         }
-        
+
         &:last-of-type {
           border-bottom: none;
         }
 
         .date-and-title {
-          padding-right: 8px;  
+          padding-right: 8px;
         }
 
         .delete-meal {

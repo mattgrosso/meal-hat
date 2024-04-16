@@ -20,7 +20,7 @@ export default {
     }
   },
   methods: {
-    showToast(config) {
+    showToast (config) {
       this.toastMessage = config.message;
       const toastEl = document.getElementById('myToast');
       const toast = new Toast(toastEl, {
