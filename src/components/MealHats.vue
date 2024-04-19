@@ -71,7 +71,7 @@ export default {
   },
   computed: {
     mealHatsList () {
-      return this.$store.state.mealHatsList;
+      return this.$store.state.mealHatsList || [];
     }
   },
   methods: {

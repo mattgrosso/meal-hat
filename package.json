@@ -76,7 +76,8 @@
       "no-multiple-empty-lines": "warn",
       "no-useless-return": "off",
       "no-debugger": "warn",
-      "no-unmodified-loop-condition": "off"
+      "no-unmodified-loop-condition": "off",
+      "no-constant-condition": "off"
     }
   },
   "browserslist": [

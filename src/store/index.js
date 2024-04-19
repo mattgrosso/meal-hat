@@ -1,6 +1,6 @@
 import { createStore } from 'vuex';
 import { initializeApp } from "firebase/app";
-import { getDatabase, onValue, ref, set } from "firebase/database";
+import { getDatabase, onValue, ref, set, get } from "firebase/database";
 import { decodeCredential } from 'vue3-google-login'
 import { v4 as uuidv4 } from 'uuid';
 
@@ -99,6 +99,19 @@ export default createStore({
 
       return;
     },
+    logout (context) {
+      context.commit('setUserEmail', null);
+      context.commit('setDatabaseTopKey', null);
+      context.commit('setMostRecentDatabase', null);
+      context.commit('setAllHatsList', null);
+      context.commit('setMeals', null);
+      context.commit('setDrawnMealsWithHistory', null);
+      context.commit('setDrawnMeals', null);
+      context.commit('setShoppingList', null);
+      context.commit('setMealHatsList', null);
+      window.localStorage.removeItem('mealHatDatabaseTopKey');
+      window.localStorage.removeItem('mealHatUserEmail');
+    },
     updateDatabaseTopKey (context, email) {
       const parsedEmail = email.replaceAll(/[-!$%@^&*()_+|~=`{}[\]:";'<>?,./]/g, "-");
 
@@ -125,10 +138,27 @@ export default createStore({
       }
       context.dispatch('updateUserDBValue', mostRecentDatabase);
     },
-    initializeDB (context) {
+    async initializeDB (context) {
       // If there's no databaseTopKey in the state, exit the action.
       if (!context.state.databaseTopKey || !context.state.userEmail) {
         return;
+      }
+
+      // Check if the databaseTopKey exists in the database.
+      try {
+        const snapshot = await get(ref(db, context.state.databaseTopKey));
+        if (!snapshot.exists()) {
+          // If the databaseTopKey doesn't exist, create a new top-level key with an empty object.
+          await set(ref(db, context.state.databaseTopKey), {
+            drawnMeals: {},
+            "meal-hats-list": [context.state.databaseTopKey],
+            meals: {},
+            "most-recent-database": context.state.databaseTopKey,
+            "shopping-list": []
+          });
+        }
+      } catch (error) {
+        console.error('Error checking databaseTopKey: ', error);
       }
 
       // If there are isn't a list of all hats in the state, fetch them from the database.
