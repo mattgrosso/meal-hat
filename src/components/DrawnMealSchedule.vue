@@ -2,7 +2,7 @@
   <div class="drawn-meals-schedule my-4 md-col-8">
     <h3>Meal Schedule</h3>
     <ul v-if="drawnMeals.length">
-      <li v-for="(drawnMeal, index) in drawnMeals" :key="index" :class="{todaysMeal: todaysMeal(drawnMeal)}">
+      <li v-for="(drawnMeal, index) in drawnMeals" :key="index" :class="{'next-meal': nextMeal(drawnMeal)}">
         <span class="date-and-title">
           {{ drawnMeal.assignedDate }} - {{ drawnMeal.meal.name }}
         </span>
@@ -49,25 +49,20 @@ export default {
 
       this.$store.dispatch('updateDBValue', dbEntry);
     },
-    todaysMeal (drawnMeal) {
+    nextMeal (drawnMeal) {
       const now = new Date();
-      const todayStart = new Date();
-      todayStart.setHours(0, 0, 0, 0);
 
-      const todayEnd = new Date();
-      todayEnd.setHours(23, 59, 59, 999);
+      const cutOffTime = new Date();
+      cutOffTime.setHours(18, 0, 0, 0);
 
-      const evening = new Date();
-      evening.setHours(19, 30, 0, 0); // 7:30 PM
+      this.drawnMeals.sort((a, b) => new Date(a.assignedDate) - new Date(b.assignedDate));
 
-      if (now >= evening) {
-        // If current time is after 7:30 PM, set 'today' to tomorrow's date
-        todayStart.setDate(todayStart.getDate() + 1);
-        todayEnd.setDate(todayEnd.getDate() + 1);
-      }
+      const nextMeal = this.drawnMeals.find(meal => {
+        const mealDate = new Date(meal.assignedDate);
+        return mealDate > now || (mealDate.toDateString() === now.toDateString() && now < cutOffTime);
+      });
 
-      const assignedDate = new Date(drawnMeal.assignedDate);
-      return assignedDate >= todayStart && assignedDate <= todayEnd;
+      return drawnMeal === nextMeal;
     }
   },
 };
@@ -101,7 +96,7 @@ export default {
           background-color: #e9ecef;
         }
 
-        &.todaysMeal {
+        &.next-meal {
           font-weight: bold;
           color: #408558;
         }
