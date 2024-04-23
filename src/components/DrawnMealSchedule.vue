@@ -1,26 +1,49 @@
 <template>
   <div class="drawn-meals-schedule my-4 md-col-8">
     <h3>Meal Schedule</h3>
-    <ul v-if="drawnMeals.length">
-      <li v-for="(drawnMeal, index) in drawnMeals" :key="index" :class="{'next-meal': nextMeal(drawnMeal)}">
-        <span class="date-and-title">
-          {{ drawnMeal.assignedDate }} - {{ drawnMeal.meal.name }}
-        </span>
-        <span class="delete-meal" @click="deleteMeal(drawnMeal)">
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-x-circle" viewBox="0 0 16 16">
-            <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/>
-            <path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/>
-          </svg>
-        </span>
-      </li>
-    </ul>
+    <div v-if="drawnMeals.length" class="schedule">
+      <ul class="meals-dates">
+        <li class="schedule-date" v-for="drawnMeal in drawnMeals" :key="drawnMeal.id" :class="{'next-meal': nextMeal(drawnMeal)}">
+          <span>
+            {{ formatDate(drawnMeal.assignedDate) }}
+          </span>
+        </li>
+      </ul>
+      <draggable
+        class="meals-list"
+        v-model="drawnMeals"
+        :item-key="id"
+        tag="ul"
+        @start="startDrag"
+        @end="endDrag"
+      >
+        <template #item="{element}">
+          <li class="schedule-meal" :class="{'next-meal': nextMeal(element)}">
+            <span>
+              {{ element.meal.name }}
+            </span>
+            <i class="bi bi-grip-vertical"/>
+          </li>
+        </template>
+      </draggable>
+    </div>
     <p v-else>No meals have been drawn yet.</p>
   </div>
 </template>
 
 <script>
+import draggable from 'vuedraggable';
+
 export default {
   name: 'DrawnMealSchedule',
+  components: {
+    draggable
+  },
+  data () {
+    return {
+      drag: false
+    }
+  },
   computed: {
     drawnMeals () {
       if (!this.$store.state.drawnMealsWithHistory || !this.$store.state.drawnMealsWithHistory.length) {
@@ -41,6 +64,46 @@ export default {
     }
   },
   methods: {
+    startDrag (event) {
+      this.drag = true;
+    },
+    endDrag (event) {
+      this.drag = false;
+
+      // Get the dragged item and the item at the new index.
+      const draggedItem = this.drawnMeals[event.oldIndex];
+      const itemAtNewIndex = this.drawnMeals[event.newIndex];
+
+      // Swap the meal and mealId of the dragged item and the item at the new index.
+      [draggedItem.meal, itemAtNewIndex.meal] = [itemAtNewIndex.meal, draggedItem.meal];
+      [draggedItem.mealId, itemAtNewIndex.mealId] = [itemAtNewIndex.mealId, draggedItem.mealId];
+
+      const draggedItemDbEntry = {
+        path: `drawnMeals/${draggedItem.id}`,
+        value: {
+          assignedDate: draggedItem.assignedDate,
+          mealId: draggedItem.mealId,
+          id: draggedItem.id
+        }
+      }
+
+      const itemAtNewIndexDbEntry = {
+        path: `drawnMeals/${itemAtNewIndex.id}`,
+        value: {
+          assignedDate: itemAtNewIndex.assignedDate,
+          mealId: itemAtNewIndex.mealId,
+          id: itemAtNewIndex.id
+        }
+      }
+
+      this.$store.dispatch('updateDBValue', draggedItemDbEntry);
+      this.$store.dispatch('updateDBValue', itemAtNewIndexDbEntry);
+    },
+    formatDate (dateString) {
+      const options = { weekday: 'short', month: 'numeric', day: 'numeric' };
+      const date = new Date(dateString);
+      return date.toLocaleDateString('en-US', options);
+    },
     deleteMeal (drawnMeal) {
       const dbEntry = {
         path: `drawnMeals/${drawnMeal.id}`,
@@ -73,54 +136,61 @@ export default {
     text-align: center;
     margin: 0 auto;
 
-    ul {
-      list-style: none;
-      padding: 0;
-      border: 1px solid #ccc;
-      border-radius: 6px;
-      padding: 0 32px;
-      background-color: #f8f9fa;
+    .schedule {
+      display: grid;
+      grid-template-columns: 1fr 2fr;
+      gap: 0;
       box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
 
-      li {
-        border-bottom: 1px solid #ccc;
-        padding: 16px 0;
-        text-align: left;
-        font-size: 1rem;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        transition: background-color 0.3s ease;
+      ul {
+        border-radius: 6px;
+        border: 1px solid #ccc;
+        display: grid;
+        grid-auto-rows: 1fr;
+        list-style: none;
+        margin: 0;
+        padding: 0;
 
-        &:hover {
-          background-color: #e9ecef;
-        }
-
-        &.next-meal {
-          font-weight: bold;
-          color: #408558;
-        }
-
-        &:last-of-type {
-          border-bottom: none;
-        }
-
-        .date-and-title {
-          padding-right: 8px;
-        }
-
-        .delete-meal {
-          cursor: pointer;
-          height: 16px;
-          width: 16px;
-          display: flex;
+        li {
           align-items: center;
-          justify-content: center;
-          color: black;
+          border-bottom: 1px solid #ccc;
+          display: flex;
+          font-size: 1rem;
+          padding: 16px 0;
+          text-align: left;
+          transition: background-color 0.3s ease;
 
-          svg {
-            height: 24px;
-            width: 24px;
+          &.next-meal {
+            font-weight: bold;
+            color: #408558;
+          }
+
+          &:last-of-type {
+            border-bottom: none;
+          }
+        }
+
+        &.meals-dates {
+          border-top-right-radius: 0;
+          border-bottom-right-radius: 0;
+
+          .schedule-date {
+            justify-content: flex-end;
+            padding: 8px 12px 8px 6px;
+          }
+        }
+
+        &.meals-list {
+          border-top-left-radius: 0;
+          border-bottom-left-radius: 0;
+          border-left: none;
+
+          .schedule-meal {
+            cursor: move;
+            justify-content: flex-start;
+            padding: 8px 6px 8px 12px;
+            display: flex;
+            justify-content: space-between;
           }
         }
       }
