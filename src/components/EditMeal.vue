@@ -33,7 +33,7 @@
       </div>
       <div class="ctas p-3">
         <button type="button" class="btn btn-tertiary" @click="addIngredient">Add More Lines</button>
-        <button type="button" class="btn btn-primary mx-3" @click="submitMeal">Edit Meal</button>
+        <button type="button" class="btn btn-primary mx-3" @click="submitMeal">Save Edit</button>
       </div>
     </div>
   </div>
@@ -96,9 +96,12 @@ export default {
       const meal = {
         id: this.$route.params.id,
         name: this.name,
-        minDaysBetween: this.minDaysBetween,
-        ingredients: this.ingredients
+        minDaysBetween: this.minDaysBetween
       };
+
+      if (this.ingredients) {
+        meal.ingredients = this.ingredients;
+      }
 
       const dbEntry = {
         path: `meals/${this.$route.params.id}`,
