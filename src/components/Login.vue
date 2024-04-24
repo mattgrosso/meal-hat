@@ -1,7 +1,7 @@
 <template>
   <div class="login">
     <Header headerText="Meal Hat Login"/>
-    <div class="login-prompt d-flex justify-content-center">
+    <div class="login-prompt d-flex justify-content-center py-5">
       <button @click="login" class="btn btn-primary google-signin-button">
         <i class="bi bi-google me-2"></i>
         Sign in with Google
@@ -25,7 +25,7 @@ export default {
 }
 </script>
 
-<style scoped>
+<style lang="scss" scoped>
 .google-signin-button {
   display: flex;
   align-items: center;
@@ -36,8 +36,4 @@ export default {
   transition: background-color 0.3s, color 0.3s;
 }
 
-.google-signin-button:hover {
-  background-color: #2b78e4;
-  color: white;
-}
 </style>

@@ -36,7 +36,7 @@ export default {
       }, config.delay + 100 || 5100);
     },
   },
-  created() {
+  created () {
     this.handleRedirectResult();
   }
 }

@@ -6,7 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 import router from '@/router';
 
 const firebaseConfig = {
-  apiKey: "AIzaSyAgRwQfTJo00U69by1TXcL5jQU9QNWZLAg",
+  apiKey: process.env.VUE_APP_GOOGLE_API_KEY,
   authDomain: "meal-hat.firebaseapp.com",
   projectId: "meal-hat",
   storageBucket: "meal-hat.appspot.com",
@@ -17,7 +17,7 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
-const auth = getAuth();
+// const auth = getAuth();
 
 export default createStore({
   state: {
@@ -89,14 +89,14 @@ export default createStore({
     async login (context) {
       const auth = getAuth();
       const provider = new GoogleAuthProvider();
-    
+
       try {
         await signInWithRedirect(auth, provider);
       } catch (error) {
         console.error(error);
       }
     },
-    async handleRedirectResult(context) {
+    async handleRedirectResult (context) {
       const auth = getAuth();
 
       try {
