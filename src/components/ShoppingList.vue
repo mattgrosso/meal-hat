@@ -29,6 +29,7 @@
 <script>
 import pluralize from 'pluralize';
 import Header from '@/components/Header.vue';
+import { v4 as uuidv4 } from 'uuid';
 
 export default {
   name: 'ShoppingList',
@@ -92,6 +93,7 @@ export default {
       }
 
       this.compiledIngredientsList = ingredientsList || [];
+      this.updateGroceryItemsList();
       this.updateShoppingList();
     },
     ingredientChecked (ingredient, n) {
@@ -105,10 +107,51 @@ export default {
 
       this.updateShoppingList();
     },
+    updateGroceryItemsList () {
+      const groceryItems = this.$store.state.groceryItems || [];
+      let shoppingListUpdated = false;
+
+      this.compiledIngredientsList = this.compiledIngredientsList.map((ingredient) => {
+        let existingIngredient = groceryItems.find((existingIngredient) => {
+          return existingIngredient.id === ingredient.id;
+        });
+
+        if (!existingIngredient) {
+          const { quantity, ...ingredientWithoutQuantity } = ingredient;
+          const newIngredient = {
+            id: uuidv4(),
+            ...ingredientWithoutQuantity
+          };
+          groceryItems.push(newIngredient);
+          existingIngredient = { ...ingredient, id: newIngredient.id };
+          shoppingListUpdated = true;
+        }
+
+        return existingIngredient;
+      });
+
+      const dbEntry = {
+        path: `grocery-items`,
+        value: groceryItems
+      }
+
+      this.$nextTick(() => {
+        this.$store.dispatch('updateDBValue', dbEntry);
+        if (shoppingListUpdated) {
+          const shoppingListDbEntry = {
+            path: `shopping-list`,
+            value: this.compiledIngredientsList
+          }
+          this.$store.dispatch('updateDBValue', shoppingListDbEntry);
+        }
+      });
+    },
     updateShoppingList () {
       const noEmpties = this.compiledIngredientsList.filter((ingredient) => {
         return ingredient.quantity > 0;
       });
+
+      this.updateGroceryItemsList();
 
       const dbEntry = {
         path: `shopping-list`,

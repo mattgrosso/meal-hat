@@ -1,7 +1,7 @@
 import { createStore } from 'vuex';
 import { initializeApp } from "firebase/app";
 import { getDatabase, onValue, ref, set, get } from "firebase/database";
-import { getAuth, GoogleAuthProvider, signInWithPopup, getRedirectResult } from "firebase/auth";
+import { getAuth, GoogleAuthProvider, signInWithPopup } from "firebase/auth";
 import { v4 as uuidv4 } from 'uuid';
 import router from '@/router';
 
@@ -29,6 +29,7 @@ export default createStore({
     drawnMealsWithHistory: null,
     drawnMeals: null,
     shoppingList: null,
+    groceryItems: null,
     mealHatsList: null
   },
   getters: {
@@ -74,6 +75,9 @@ export default createStore({
     setShoppingList (state, shoppingList) {
       state.shoppingList = shoppingList;
     },
+    setGroceryItems (state, groceryItems) {
+      state.groceryItems = groceryItems;
+    },
     setMealHatsList (state, mealHatsList) {
       state.mealHatsList = mealHatsList;
     },
@@ -82,6 +86,7 @@ export default createStore({
       state.drawnMealsWithHistory = null;
       state.drawnMeals = null;
       state.shoppingList = null;
+      state.groceryItems = null;
       state.mealHatsList = null;
     }
   },
@@ -93,8 +98,8 @@ export default createStore({
 
       try {
         const result = await signInWithPopup(auth, provider);
-        const token = result.user.stsTokenManager.accessToken; // This is the Google API access token.
-        const user = result.user; // The signed-in user info.
+        // const token = result.user.stsTokenManager.accessToken; // This is the Google API access token.
+        // const user = result.user; // The signed-in user info.
 
         // Handle the result.
         if (result) {
@@ -125,6 +130,7 @@ export default createStore({
       context.commit('setDrawnMealsWithHistory', null);
       context.commit('setDrawnMeals', null);
       context.commit('setShoppingList', null);
+      context.commit('setGroceryItems', null);
       context.commit('setMealHatsList', null);
       window.localStorage.removeItem('mealHatDatabaseTopKey');
       window.localStorage.removeItem('mealHatUserEmail');
@@ -245,6 +251,16 @@ export default createStore({
 
           // Commit the fetched shoppingList to the state.
           context.commit('setShoppingList', data);
+        });
+      }
+
+      // If there's no groceryItems in the state, fetch it from the database.
+      if (!context.state.groceryItems) {
+        onValue(ref(db, `${context.state.databaseTopKey}/grocery-items`), (snapshot) => {
+          const data = snapshot.val();
+
+          // Commit the fetched groceryItems to the state.
+          context.commit('setGroceryItems', data);
         });
       }
 
