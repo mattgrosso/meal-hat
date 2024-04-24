@@ -1,8 +1,9 @@
 import { createStore } from 'vuex';
 import { initializeApp } from "firebase/app";
 import { getDatabase, onValue, ref, set, get } from "firebase/database";
-import { decodeCredential } from 'vue3-google-login'
+import { getAuth, GoogleAuthProvider, signInWithRedirect, getRedirectResult } from "firebase/auth";
 import { v4 as uuidv4 } from 'uuid';
+import router from '@/router';
 
 const firebaseConfig = {
   apiKey: "AIzaSyAgRwQfTJo00U69by1TXcL5jQU9QNWZLAg",
@@ -14,7 +15,9 @@ const firebaseConfig = {
   databaseURL: "https://meal-hat-default-rtdb.firebaseio.com",
 }
 
-const db = getDatabase(initializeApp(firebaseConfig));
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+const auth = getAuth();
 
 export default createStore({
   state: {
@@ -83,18 +86,39 @@ export default createStore({
     }
   },
   actions: {
-    async login (context, resp) {
-      const userData = decodeCredential(resp.credential);
+    async login (context) {
+      const auth = getAuth();
+      const provider = new GoogleAuthProvider();
+    
+      try {
+        await signInWithRedirect(auth, provider);
+      } catch (error) {
+        console.error(error);
+      }
+    },
+    async handleRedirectResult(context) {
+      const auth = getAuth();
 
-      context.commit('setUserEmail', userData.email);
+      try {
+        const resp = await getRedirectResult(auth);
 
-      if (context.state.userEmail) {
-        context.dispatch('updateDatabaseTopKey', context.state.userEmail);
-        window.localStorage.setItem('mealHatDatabaseTopKey', context.state.databaseTopKey);
-        window.localStorage.setItem('mealHatUserEmail', context.state.userEmail);
-        context.dispatch('initializeDB');
-      } else {
-        console.error("Login attempted but the user data didn't work");
+        if (resp) {
+          const userData = resp.user;
+
+          context.commit('setUserEmail', userData.email);
+
+          if (context.state.userEmail) {
+            context.dispatch('updateDatabaseTopKey', context.state.userEmail);
+            window.localStorage.setItem('mealHatDatabaseTopKey', context.state.databaseTopKey);
+            window.localStorage.setItem('mealHatUserEmail', context.state.userEmail);
+            context.dispatch('initializeDB');
+            router.push('/');
+          } else {
+            console.error("Login attempted but the user data didn't work");
+          }
+        }
+      } catch (error) {
+        console.error(error);
       }
 
       return;
