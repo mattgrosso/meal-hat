@@ -11,7 +11,6 @@
 
 <script>
 import { Toast } from 'bootstrap';
-import { mapActions } from 'vuex';
 
 export default {
   name: 'MealHat',
@@ -21,7 +20,6 @@ export default {
     }
   },
   methods: {
-    ...mapActions(['handleRedirectResult']),
     showToast (config) {
       this.toastMessage = config.message;
       const toastEl = document.getElementById('myToast');
@@ -36,9 +34,6 @@ export default {
       }, config.delay + 100 || 5100);
     },
   },
-  created () {
-    this.handleRedirectResult();
-  }
 }
 </script>
 

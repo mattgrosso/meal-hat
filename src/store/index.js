@@ -1,7 +1,7 @@
 import { createStore } from 'vuex';
 import { initializeApp } from "firebase/app";
 import { getDatabase, onValue, ref, set, get } from "firebase/database";
-import { getAuth, GoogleAuthProvider, signInWithRedirect, getRedirectResult } from "firebase/auth";
+import { getAuth, GoogleAuthProvider, signInWithPopup, getRedirectResult } from "firebase/auth";
 import { v4 as uuidv4 } from 'uuid';
 import router from '@/router';
 
@@ -89,21 +89,16 @@ export default createStore({
     async login (context) {
       const auth = getAuth();
       const provider = new GoogleAuthProvider();
+      // provider.addScope('https://www.googleapis.com/auth/calendar');
 
       try {
-        await signInWithRedirect(auth, provider);
-      } catch (error) {
-        console.error(error);
-      }
-    },
-    async handleRedirectResult (context) {
-      const auth = getAuth();
+        const result = await signInWithPopup(auth, provider);
+        const token = result.user.stsTokenManager.accessToken; // This is the Google API access token.
+        const user = result.user; // The signed-in user info.
 
-      try {
-        const resp = await getRedirectResult(auth);
-
-        if (resp) {
-          const userData = resp.user;
+        // Handle the result.
+        if (result) {
+          const userData = result.user;
 
           context.commit('setUserEmail', userData.email);
 
@@ -120,8 +115,6 @@ export default createStore({
       } catch (error) {
         console.error(error);
       }
-
-      return;
     },
     logout (context) {
       context.commit('setUserEmail', null);
