@@ -66,10 +66,23 @@ export default {
       this.$store.dispatch('purchaseIngredient', value);
     },
     updateGroceryItemAisle (ingredient) {
-      const dbEntry = {
-        path: `grocery-items/${ingredient.id}/aisle`,
-        value: ingredient.aisle
+      const isGroceryItem = Object.prototype.hasOwnProperty.call(this.$store.state.groceryItems, ingredient.id);
+      const isNonMealGroceryItem = Object.prototype.hasOwnProperty.call(this.$store.state.nonMealGroceryItems, ingredient.id);
+
+      let dbPath;
+      if (isGroceryItem) {
+        dbPath = `grocery-items/${ingredient.id}/aisle`;
+      } else if (isNonMealGroceryItem) {
+        dbPath = `non-meal-grocery-items/${ingredient.id}/aisle`;
+      } else {
+        console.error('Ingredient not found in groceryItems or nonMealGroceryItems');
+        return;
       }
+
+      const dbEntry = {
+        path: dbPath,
+        value: ingredient.aisle
+      };
 
       this.$nextTick(() => {
         this.$store.dispatch('updateDBValue', dbEntry);
