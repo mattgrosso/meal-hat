@@ -25,7 +25,7 @@
 
           <hr v-if="filteredGroceryItems.length" >
           <h3 v-if="filteredGroceryItems.length" >Grocery Items</h3>
-          <ul class="list-group my-3">
+          <ul class="list-group my-3 scrollable-list">
             <li class="list-group-item d-flex justify-content-between align-items-center" v-for="item in filteredGroceryItems" :key="item.id" @click="toggleDeleteButton(item)">
               <span>{{item.name}}</span>
               <div>
@@ -72,7 +72,9 @@ export default {
       if (!this.$store.state.nonMealGroceryItems || !Object.keys(this.$store.state.nonMealGroceryItems).length) {
         return [];
       } else {
-        return Object.keys(this.$store.state.nonMealGroceryItems).map((key) => this.$store.state.nonMealGroceryItems[key]);
+        return Object.keys(this.$store.state.nonMealGroceryItems)
+          .map((key) => this.$store.state.nonMealGroceryItems[key])
+          .sort((a, b) => a.name.localeCompare(b.name));
       }
     },
     nonMealShoppingList () {
@@ -83,7 +85,7 @@ export default {
       }
     },
     filteredGroceryItems () {
-      return this.nonMealGroceryItems.filter(item => item.name.toLowerCase().includes(this.searchText.toLowerCase()));
+      return this.nonMealGroceryItems.filter((item) => item.name.toLowerCase().includes(this.searchText.toLowerCase()));
     },
     sortedShoppingList () {
       return [...this.$store.getters.unpurchasedIngredients].sort((a, b) => {
@@ -214,5 +216,8 @@ export default {
 </script>
 
 <style lang="scss">
-
+.scrollable-list {
+  max-height: 200px;
+  overflow-y: auto;
+}
 </style>
