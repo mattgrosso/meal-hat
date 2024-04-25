@@ -4,7 +4,7 @@
     <div class="container">
       <div class="row">
         <div class="col-12">
-          <div class="my-3">
+          <div class="my-3" data-step="1">
             <div class="input-group mb-1">
               <input type="text" class="form-control" placeholder="New Grocery Item" v-model="newGroceryItemName">
             </div>
@@ -18,14 +18,14 @@
 
           <hr>
 
-          <div class="input-group my-3">
+          <div class="input-group my-3" data-step="2">
             <input type="text" class="form-control" placeholder="Search Existing Items" v-model="searchText">
             <button class="btn btn-secondary" @click="searchText = ''" v-if="searchText">Clear</button>
           </div>
 
           <hr v-if="filteredGroceryItems.length" >
           <h3 v-if="filteredGroceryItems.length" >Grocery Items</h3>
-          <ul class="list-group my-3 scrollable-list">
+          <ul class="list-group my-3 scrollable-list" data-step="3">
             <li class="list-group-item d-flex justify-content-between align-items-center" v-for="item in filteredGroceryItems" :key="item.id" @click="toggleDeleteButton(item)">
               <span>{{item.name}}</span>
               <div>
@@ -37,7 +37,7 @@
 
           <hr v-if="sortedShoppingList.length">
           <h3 v-if="sortedShoppingList.length">Shopping List</h3>
-          <ul class="list-group my-3">
+          <ul class="list-group my-3" data-step="4">
             <li class="list-group-item d-flex justify-content-between align-items-center" v-for="item in sortedShoppingList" :key="item.id">
               <span>{{item.name}} - Quantity: {{item.quantity}}</span>
               <button class="btn btn-sm btn-warning" @click="decreaseShoppingListQuantity(item)">-{{getDefaultQuantity(item)}} {{ getUnits(item)}}</button>
@@ -46,12 +46,17 @@
         </div>
       </div>
     </div>
+    <span class="start-tour-button" @click="this.startTour()">
+      <i class="bi bi-question-circle"/>
+    </span>
   </div>
 </template>
 
 <script>
-import Header from '@/components/Header.vue';
+import Shepherd from 'shepherd.js';
+import 'shepherd.js/dist/css/shepherd.css';
 import pluralize from 'pluralize';
+import Header from '@/components/Header.vue';
 
 export default {
   data () {
@@ -210,7 +215,128 @@ export default {
       } else {
         return pluralize(item.units, item.quantity);
       }
-    }
+    },
+    startTour() {
+      const tour = new Shepherd.Tour({
+        defaultStepOptions: {
+          classes: 'mx-auto col-9',
+          cancelIcon: {
+            enabled: true
+          }
+        },
+        useModalOverlay: true
+      });
+
+      tour.addStep({
+        title: 'Groceries',
+        text: 'Let me show you around real quick.',
+        buttons: [
+          {
+            text: 'Next',
+            action: tour.next,
+            classes: 'btn-success btn btn-sm'
+          }
+        ]
+      });
+
+      tour.addStep({
+        title: 'Add Grocery Item',
+        text: 'Here you can add a new grocery item. You can specify the quantity, units, and aisle if you want.',
+        attachTo: {
+          element: '[data-step="1"]',
+          on: 'bottom'
+        },
+        buttons: [
+          {
+            text: 'Back',
+            action: tour.back,
+            classes: 'btn-secondary btn btn-sm'
+          },
+          {
+            text: 'Next',
+            action: tour.next,
+            classes: 'btn-success btn btn-sm'
+          }
+        ]
+      });
+
+      tour.addStep({
+        title: 'Search Existing Items',
+        text: 'You can search the list for previous grocery items here.',
+        attachTo: {
+          element: '[data-step="2"]',
+          on: 'bottom'
+        },
+        buttons: [
+          {
+            text: 'Back',
+            action: tour.back,
+            classes: 'btn-secondary btn btn-sm'
+          },
+          {
+            text: 'Next',
+            action: tour.next,
+            classes: 'btn-success btn btn-sm'
+          }
+        ]
+      });
+
+      tour.addStep({
+        title: 'Grocery Items',
+        text: 'This is the list of all grocery items you\'ve used in the past. Click the buttons to add them to your shopping list. If you click the item itself, a delete button will appear.',
+        attachTo: {
+          element: '[data-step="3"]',
+          on: 'bottom'
+        },
+        buttons: [
+          {
+            text: 'Back',
+            action: tour.back,
+            classes: 'btn-secondary btn btn-sm'
+          },
+          {
+            text: 'Next',
+            action: tour.next,
+            classes: 'btn-success btn btn-sm'
+          }
+        ]
+      });
+
+      tour.addStep({
+        title: 'Shopping List',
+        text: 'This is your shopping list. It includes things from this page and all of the ingredients from upcoming meals the hat has drawn.',
+        attachTo: {
+          element: '[data-step="4"]',
+          on: 'bottom'
+        },
+        buttons: [
+          {
+            text: 'Back',
+            action: tour.back,
+            classes: 'btn-secondary btn btn-sm'
+          },
+          {
+            text: 'Next',
+            action: tour.next,
+            classes: 'btn-success btn btn-sm'
+          }
+        ]
+      });
+
+      tour.addStep({
+        title: 'That should get you started.',
+        text: 'Good luck!',
+        buttons: [
+          {
+            text: 'Done',
+            action: tour.complete,
+            classes: 'btn-success btn btn-sm'
+          }
+        ]
+      });
+
+      tour.start();
+    },
   },
 };
 </script>

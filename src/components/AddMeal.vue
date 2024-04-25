@@ -3,11 +3,11 @@
     <Header :headerText="headerText"/>
     <div class="add-meal-body p-3">
       <div class="row md-col-6 mx-auto g-2 mb-3">
-        <div class="form-floating col-9">
+        <div class="form-floating col-9" data-step="1">
           <input type="text" class="form-control" id="recipe-title" v-model="name">
           <label for="recipe-title">Name</label>
         </div>
-        <div class="form-floating col-3">
+        <div class="form-floating col-3" data-step="2">
           <input type="number" class="form-control" id="recipe-title" v-model="minDaysBetween">
           <label for="recipe-title">Frequency</label>
         </div>
@@ -17,6 +17,7 @@
         class="row md-col-6 mx-auto g-2 mb-3"
         v-for="(ingredient, index) in ingredients"
         :key="index"
+        data-step="3"
       >
         <div class="form-floating col-7">
           <input type="text" class="form-control " :id="`ingredient-${index}-name`" v-model="ingredient.name" :ref="`ingredient-${index}-name`">
@@ -33,14 +34,19 @@
       </div>
       <div class="ctas p-3">
         <button type="button" class="btn btn-tertiary" @click="addIngredient">Add More Lines</button>
-        <button type="button" class="btn btn-primary mx-3" @click="submitMeal">{{ submitButtonText }}</button>
+        <button type="button" class="btn btn-primary mx-3" @click="submitMeal" data-step="4">{{ submitButtonText }}</button>
       </div>
     </div>
+    <span class="start-tour-button" @click="this.startTour()">
+      <i class="bi bi-question-circle"/>
+    </span>
   </div>
 </template>
 
 <script>
 import { v4 as uuidv4 } from 'uuid';
+import Shepherd from 'shepherd.js';
+import 'shepherd.js/dist/css/shepherd.css';
 import Header from '@/components/Header.vue';
 
 export default {
@@ -200,7 +206,128 @@ export default {
       }
 
       this.$router.push('/');
-    }
+    },
+    startTour() {
+      const tour = new Shepherd.Tour({
+        defaultStepOptions: {
+          classes: 'mx-auto col-9',
+          cancelIcon: {
+            enabled: true
+          }
+        },
+        useModalOverlay: true
+      });
+
+      tour.addStep({
+        title: this.headerText,
+        text: 'This page is for adding/editing meals in the hat. Let me show you around.',
+        buttons: [
+          {
+            text: 'Next',
+            action: tour.next,
+            classes: 'btn-success btn btn-sm'
+          }
+        ]
+      });
+
+      tour.addStep({
+        title: 'Meal Name',
+        text: 'Type the name of the meal here (or the restaurant if you\'re adding a takeout meal).',
+        attachTo: {
+          element: '[data-step="1"]',
+          on: 'bottom'
+        },
+        buttons: [
+          {
+            text: 'Back',
+            action: tour.back,
+            classes: 'btn-secondary btn btn-sm'
+          },
+          {
+            text: 'Next',
+            action: tour.next,
+            classes: 'btn-success btn btn-sm'
+          }
+        ]
+      });
+
+      tour.addStep({
+        title: 'Frequency',
+        text: 'Add a number of days here that will be the minimum number of days the hat will wait before it can suggest the meal again.',
+        attachTo: {
+          element: '[data-step="2"]',
+          on: 'bottom'
+        },
+        buttons: [
+          {
+            text: 'Back',
+            action: tour.back,
+            classes: 'btn-secondary btn btn-sm'
+          },
+          {
+            text: 'Next',
+            action: tour.next,
+            classes: 'btn-success btn btn-sm'
+          }
+        ]
+      });
+
+      tour.addStep({
+        title: 'Add Ingredients',
+        text: 'Here you can add the ingredients you need to make the meal.<br>You can add units (like cups or bags).<br>You can add more lines if you need to.<br>If it\'s a takeout meal, you can leave these blank.',
+        attachTo: {
+          element: '[data-step="3"]',
+          on: 'bottom'
+        },
+        buttons: [
+          {
+            text: 'Back',
+            action: tour.back,
+            classes: 'btn-secondary btn btn-sm'
+          },
+          {
+            text: 'Next',
+            action: tour.next,
+            classes: 'btn-success btn btn-sm'
+          }
+        ]
+      });
+
+      tour.addStep({
+        title: 'Add the Meal',
+        text: 'Click here to add the meal to your hat. If you\'re editing a meal, this will save your changes.',
+        attachTo: {
+          element: '[data-step="4"]',
+          on: 'bottom'
+        },
+        buttons: [
+          {
+            text: 'Back',
+            action: tour.back,
+            classes: 'btn-secondary btn btn-sm'
+          },
+          {
+            text: 'Next',
+            action: tour.next,
+            classes: 'btn-success btn btn-sm'
+          }
+        ]
+      });
+
+      tour.addStep({
+        title: 'All done!',
+        text: 'I hope that helped. Enjoy!',
+        buttons: [
+          {
+            text: 'Done',
+            action: tour.complete,
+            classes: 'btn-success btn btn-sm'
+          }
+        ]
+      });
+
+      tour.start();
+    },
   },
 }
 </script>

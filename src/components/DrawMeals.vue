@@ -5,25 +5,32 @@
       <h3 class="my-2">Pick Days for drawing</h3>
       <VDatePicker
         v-model.range="dateRange"
+        data-step="1"
         :attributes='attributes'
         :disabled-dates="datesWithMeals"
         expanded
       />
-      <div v-if="hasDateRange" class="date-range my-3">
+      <div v-if="hasDateRange" class="date-range my-3"  data-step="2">
         <div class="range">
           <span class="mx-2 fw-bold">{{ formattedStartDate }}</span>
           <span>to</span>
           <span class="mx-2 fw-bold">{{ formattedEndDate }}</span>
         </div>
-        <button class="btn btn-primary my-3" @click="drawMeals">Draw Meals</button>
+        <button class="btn btn-primary my-3" @click="drawMeals" data-step="3">Draw Meals</button>
       </div>
       <div v-if="message" class="messages">{{ message }}</div>
     </div>
+    <span class="start-tour-button" @click="this.startTour()">
+      <i class="bi bi-question-circle"/>
+    </span>
   </div>
 </template>
 
 <script>
+import Shepherd from 'shepherd.js';
+import 'shepherd.js/dist/css/shepherd.css';
 import Header from '@/components/Header.vue';
+import { routeLocationKey } from 'vue-router';
 
 export default {
   name: 'DrawMeals',
@@ -174,7 +181,107 @@ export default {
       }
 
       return this.$store.getters.getMeal(id) ? this.$store.getters.getMeal(id) : { name: 'No meal found' };
-    }
+    },
+    startTour() {
+      const tour = new Shepherd.Tour({
+        defaultStepOptions: {
+          classes: 'mx-auto col-9',
+          cancelIcon: {
+            enabled: true
+          }
+        },
+        useModalOverlay: true
+      });
+
+      tour.addStep({
+        title: 'Draw Meals',
+        text: 'Let\'s take a look.',
+        buttons: [
+          {
+            text: 'Next',
+            action: tour.next,
+            classes: 'btn-success btn btn-sm'
+          }
+        ]
+      });
+
+      tour.addStep({
+        title: 'Pick Days for Drawing',
+        text: 'Select the range of dates for which you want to draw meals.',
+        attachTo: {
+          element: '[data-step="1"]',
+          on: 'bottom'
+        },
+        buttons: [
+          {
+            text: 'Back',
+            action: tour.back,
+            classes: 'btn-secondary btn btn-sm'
+          },
+          {
+            text: 'Next',
+            action: tour.next,
+            classes: 'btn-success btn btn-sm'
+          }
+        ]
+      });
+
+      tour.addStep({
+        title: 'Selected Date Range',
+        text: 'This is the range of dates you have selected.',
+        attachTo: {
+          element: '[data-step="2"]',
+          on: 'bottom'
+        },
+        buttons: [
+          {
+            text: 'Back',
+            action: tour.back,
+            classes: 'btn-secondary btn btn-sm'
+          },
+          {
+            text: 'Next',
+            action: tour.next,
+            classes: 'btn-success btn btn-sm'
+          }
+        ]
+      });
+
+      tour.addStep({
+        title: 'Draw Meals',
+        text: 'Click here to draw meals for the selected date range.',
+        attachTo: {
+          element: '[data-step="3"]',
+          on: 'bottom'
+        },
+        buttons: [
+          {
+            text: 'Back',
+            action: tour.back,
+            classes: 'btn-secondary btn btn-sm'
+          },
+          {
+            text: 'Next',
+            action: tour.next,
+            classes: 'btn-success btn btn-sm'
+          }
+        ]
+      });
+
+      tour.addStep({
+        title: 'You\'re all set!',
+        text: 'I hope that helped.',
+        buttons: [
+          {
+            text: 'Done',
+            action: tour.complete,
+            classes: 'btn-success btn btn-sm'
+          }
+        ]
+      });
+
+      tour.start();
+    },
   },
 }
 </script>

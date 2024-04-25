@@ -2,20 +2,20 @@
   <div class="meal-hats-list">
     <Header headerText="Meal Hats"/>
     <div class="meal-hats-list-body">
-      <ul>
+      <ul data-step="1">
         <li v-for="(mealHat, index) in mealHatsList" :key="index" class="col-12 my-2">
           <div class="btn-group w-100" role="group">
-            <button type="button" class="btn btn-secondary flex-grow-1" style="width: 70%;" @click="switchToMealHat(mealHat)">{{mealHat}}</button>
-            <button type="button" class="btn btn-primary" @click="shareMealHat(mealHat)" :style="{ width: showDeleteButton(mealHat) ? '15%' : '30%' }">
+            <button type="button" class="btn btn-secondary flex-grow-1" style="width: 70%;" @click="switchToMealHat(mealHat)" :data-step="index === 0 ? '2' : undefined">{{mealHat}}</button>
+            <button type="button" class="btn btn-primary" @click="shareMealHat(mealHat)" :style="{ width: showDeleteButton(mealHat) ? '15%' : '30%' }" :data-step="index === 0 ? '3' : undefined">
               <i class="bi bi-share-fill"></i>
             </button>
-            <button v-if="showDeleteButton(mealHat)" type="button" class="btn btn-danger" style="width: 15%;" @click="removeMealhat(mealHat)">
+            <button v-if="showDeleteButton(mealHat)" type="button" class="btn btn-danger" style="width: 15%;" @click="removeMealhat(mealHat)" :data-step="index === 1 ? '4' : undefined">
               <i class="bi bi-trash-fill"></i>
             </button>
           </div>
         </li>
       </ul>
-      <div class="add-more-hats">
+      <div class="add-more-hats" data-step="5">
         <button class="btn btn-primary my-3 col-12" @click="showNewHatPrompt">Add a hat</button>
       </div>
     </div>
@@ -42,10 +42,15 @@
       <p>That hat doesn't exist yet, do you want to create it?</p>
       <p>After you create it, other users can use it by entering the same name on their device.</p>
     </Modal>
+    <span class="start-tour-button" @click="this.startTour()">
+      <i class="bi bi-question-circle"/>
+    </span>
   </div>
 </template>
 
 <script>
+import Shepherd from 'shepherd.js';
+import 'shepherd.js/dist/css/shepherd.css';
 import Header from '@/components/Header.vue';
 import Modal from '@/components/Modal.vue';
 
@@ -163,7 +168,151 @@ export default {
     closeCreateHatModal () {
       this.showCreateHatModal = false;
       this.newHat = '';
-    }
+    },
+    startTour() {
+      const tour = new Shepherd.Tour({
+        defaultStepOptions: {
+          classes: 'mx-auto col-9',
+          cancelIcon: {
+            enabled: true
+          }
+        },
+        useModalOverlay: true
+      });
+
+      tour.addStep({
+        title: 'Meal Hats',
+        text: 'You can have more than one meal hat and you can share them with others. Let me show you around.',
+        buttons: [
+          {
+            text: 'Next',
+            action: tour.next,
+            classes: 'btn-success btn btn-sm'
+          }
+        ]
+      });
+
+      tour.addStep({
+        title: 'List of Hats',
+        text: 'This is a list of all the hats you are a part of.',
+        attachTo: {
+          element: '[data-step="1"]',
+          on: 'bottom'
+        },
+        buttons: [
+          {
+            text: 'Back',
+            action: tour.back,
+            classes: 'btn-secondary btn btn-sm'
+          },
+          {
+            text: 'Next',
+            action: tour.next,
+            classes: 'btn-success btn btn-sm'
+          }
+        ]
+      });
+
+      tour.addStep({
+        title: 'Hat Title',
+        text: 'Click on the name of a hat to switch to it.',
+        attachTo: {
+          element: '[data-step="2"]',
+          on: 'bottom'
+        },
+        buttons: [
+          {
+            text: 'Back',
+            action: tour.back,
+            classes: 'btn-secondary btn btn-sm'
+          },
+          {
+            text: 'Next',
+            action: tour.next,
+            classes: 'btn-success btn btn-sm'
+          }
+        ]
+      });
+
+      tour.addStep({
+        title: 'Share a Hat',
+        text: 'Click this button to share the hat with someone else. They can also add it to their list of hats just by entering the hat\'s name.',
+        attachTo: {
+          element: '[data-step="3"]',
+          on: 'bottom'
+        },
+        buttons: [
+          {
+            text: 'Back',
+            action: tour.back,
+            classes: 'btn-secondary btn btn-sm'
+          },
+          {
+            text: 'Next',
+            action: tour.next,
+            classes: 'btn-success btn btn-sm'
+          }
+        ]
+      });
+
+      if (document.querySelector('[data-step="4"]')) {
+        tour.addStep({
+          title: 'Delete Hat',
+          text: 'Click this button to remove the hat from your list. You can\'t ever delete your default hat.',
+          attachTo: {
+            element: '[data-step="4"]',
+            on: 'bottom'
+          },
+          buttons: [
+            {
+              text: 'Back',
+              action: tour.back,
+              classes: 'btn-secondary btn btn-sm'
+            },
+            {
+              text: 'Next',
+              action: tour.next,
+              classes: 'btn-success btn btn-sm'
+            }
+          ]
+        });
+      }
+
+      tour.addStep({
+        title: 'Add a Hat',
+        text: 'Click this button to add a new hat to your list. You can also join someone else\'s hat by entering its name here.',
+        attachTo: {
+          element: '[data-step="5"]',
+          on: 'bottom'
+        },
+        buttons: [
+          {
+            text: 'Back',
+            action: tour.back,
+            classes: 'btn-secondary btn btn-sm'
+          },
+          {
+            text: 'Next',
+            action: tour.next,
+            classes: 'btn-success btn btn-sm'
+          }
+        ]
+      });
+
+      tour.addStep({
+        title: 'That\'s all',
+        text: 'Enjoy your meal hats!',
+        buttons: [
+          {
+            text: 'Done',
+            action: tour.complete,
+            classes: 'btn-success btn btn-sm'
+          }
+        ]
+      });
+
+      tour.start();
+    },
   },
 };
 </script>

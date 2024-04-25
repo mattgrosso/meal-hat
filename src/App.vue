@@ -80,4 +80,67 @@ body {
     transform: translateX(-50%);
   }
 }
+
+.start-tour-button {
+  cursor: pointer;
+  font-size: 1.5rem;
+  height: 40px;
+  position: fixed;
+  right: 5px;
+  width: 40px;
+  bottom: 5px;
+}
+
+.shepherd-element.shepherd-has-title {
+  margin-top: 15px;
+
+  .shepherd-arrow:before {
+    background-color: #274C77 !important;
+  }
+
+  .shepherd-content {
+    .shepherd-header {
+      align-items: center;
+      background: #274C77;
+      display: flex;
+      padding: 12px 12px;
+
+      .shepherd-title {
+        align-items: center;
+        color: white;
+        display: flex;
+        font-size: 1.2rem;
+        width: 75%;
+      }
+
+      .shepherd-cancel-icon {
+        align-items: center;
+        color: white;
+        display: flex;
+        height: 20px;
+        justify-content: center;
+        width: 20px;
+
+        span {
+          align-items: center;
+          display: flex;
+          font-size: 25px;
+          height: 18px;
+          justify-content: center;
+          position: relative;
+          top: -1px;
+          width: 18px;
+        }
+      }
+    }
+
+    .shepherd-text {
+      font-size: 0.9rem;
+    }
+
+    .shepherd-footer {
+      padding: 6px;
+    }
+  }
+}
 </style>

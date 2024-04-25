@@ -38,6 +38,7 @@ export default createStore({
     userEmail: null,
     databaseTopKey: null,
     mostRecentDatabase: null,
+    showTutorial: null,
     allHatsList: null,
     meals: null,
     drawnMealsWithHistory: null,
@@ -116,6 +117,9 @@ export default createStore({
     },
     setMostRecentDatabase (state, value) {
       state.mostRecentDatabase = value;
+    },
+    setShowTutorial (state, value) {
+      state.showTutorial = value;
     },
     setAllHatsList (state, allHatsList) {
       state.allHatsList = allHatsList;
@@ -201,6 +205,7 @@ export default createStore({
       context.commit('setUserEmail', null);
       context.commit('setDatabaseTopKey', null);
       context.commit('setMostRecentDatabase', null);
+      context.commit('setShowTutorial', null);
       context.commit('setAllHatsList', null);
       context.commit('setMeals', null);
       context.commit('setDrawnMealsWithHistory', null);
@@ -390,6 +395,20 @@ export default createStore({
 
           // Commit the fetched mealHatsList to the state.
           context.commit('setMostRecentDatabase', data);
+        });
+      }
+
+      // If there's no showTutorial in the state, fetch it from the database.
+      if (context.state.showTutorial === null) {
+        onValue(ref(db, `${context.state.databaseTopKey}/show-tutorial`), (snapshot) => {
+          const data = snapshot.val();
+
+          // Commit the fetched showTutorial to the state.
+          if (data === null) {
+            context.commit('setShowTutorial', true);
+          } else {
+            context.commit('setShowTutorial', data);
+          }
         });
       }
     },
