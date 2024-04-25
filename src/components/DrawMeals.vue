@@ -145,6 +145,12 @@ export default {
         }
 
         this.$store.dispatch('updateDBValue', drawnMealForUpdate);
+
+        this.$store.dispatch('updateDBValue', {
+          path: 'purchased-ingredients',
+          value: {}
+        });
+
         this.$router.push('/');
       });
     },

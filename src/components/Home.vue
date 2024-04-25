@@ -63,9 +63,7 @@ export default {
   },
   watch: {
     showTutorial (newVal) {
-      console.error('1');
       if (newVal === true) {
-        console.error('2');
         this.startTour();
       }
     }
