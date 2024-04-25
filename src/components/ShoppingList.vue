@@ -3,12 +3,12 @@
     <Header headerText="Shopping List"/>
     <div class="shopping-list-body p-3">
       <ul>
-        <li v-for="(ingredient, index) in sortedCompiledIngredientsList" :key="index" class="d-flex flex-wrap">
+        <li v-for="(ingredient, index) in sortedShoppingList" :key="index" class="d-flex flex-wrap">
           <div class="m-0 col-12 d-flex justify-content-between align-items-center">
             <div class="col">
               <span class="fw-bold me-3">{{ ingredient.name }}</span>
               <span>{{ ingredient.quantity }}</span>
-              <span>&nbsp;{{ pluralizedUnits(ingredient) }}</span>
+              <span v-if="ingredient.units">&nbsp;{{ pluralizedUnits(ingredient) }}</span>
             </div>
             <div class="col-2">
               <input type="number" class="form-control" id="aisle-input" v-model.number.lazy="ingredient.aisle" @blur="updateGroceryItemAisle(ingredient)" placeholder="##">
@@ -23,10 +23,6 @@
           </div>
         </li>
       </ul>
-      <button class="btn" :class="compiledIngredientsList.length ? 'btn-warning' : 'btn-primary' " @click="resetShoppingList">
-        <span v-if="compiledIngredientsList.length">Reset List</span>
-        <span v-else>Build List</span>
-      </button>
     </div>
   </div>
 </template>
@@ -40,37 +36,9 @@ export default {
   components: {
     Header
   },
-  data () {
-    return {
-      compiledIngredientsList: []
-    }
-  },
-  mounted () {
-    this.compiledIngredientsList = this.$store.state.shoppingList || [];
-  },
-  watch: {
-    shoppingList () {
-      this.compiledIngredientsList = this.$store.state.shoppingList || [];
-    }
-  },
   computed: {
-    shoppingList () {
-      return this.$store.state.shoppingList;
-    },
-    drawnMeals () {
-      if (!this.$store.state.drawnMeals || !this.$store.state.drawnMeals.length) {
-        return [];
-      } else {
-        return this.$store.state.drawnMeals.map((drawnMeal) => {
-          return {
-            ...drawnMeal,
-            meal: this.$store.getters.getMeal(drawnMeal.mealId)
-          }
-        });
-      }
-    },
-    sortedCompiledIngredientsList () {
-      return [...this.compiledIngredientsList].sort((a, b) => {
+    sortedShoppingList () {
+      return [...this.$store.getters.unpurchasedIngredients].sort((a, b) => {
         if (!a.aisle && b.aisle) {
           return 1;
         } else if (a.aisle && !b.aisle) {
@@ -88,70 +56,19 @@ export default {
     }
   },
   methods: {
-    resetShoppingList () {
-      const groceryItems = this.$store.state.groceryItems || [];
-      const ingredientsList = [];
-
-      if (this.drawnMeals && this.drawnMeals.length) {
-        this.drawnMeals.forEach((drawnMeal) => {
-          if (!drawnMeal.meal || !drawnMeal.meal.ingredients || !drawnMeal.meal.ingredients.length) {
-            return;
-          }
-
-          drawnMeal.meal.ingredients.forEach((ingredient) => {
-            const existingIngredient = ingredientsList.find((existingIngredient) => {
-              return existingIngredient.id === ingredient.groceryItemId;
-            });
-
-            if (existingIngredient) {
-              existingIngredient.quantity += ingredient.quantity;
-            } else {
-              const groceryItem = groceryItems[ingredient.groceryItemId];
-              if (groceryItem) {
-                ingredientsList.push({
-                  ...groceryItem,
-                  quantity: ingredient.quantity
-                });
-              } else {
-                console.error(`No grocery item found for ingredient: ${ingredient.groceryItemId} in meal ${drawnMeal.meal.name} (${drawnMeal.id})`);
-              }
-            }
-          });
-        });
-      }
-
-      this.compiledIngredientsList = ingredientsList;
-      this.updateShoppingList();
-    },
     ingredientChecked (ingredient, n) {
-      ingredient.quantity -= ingredient.quantity - n + 1;
-
-      if (ingredient.quantity < 1) {
-        this.compiledIngredientsList = this.compiledIngredientsList.filter((ingredient) => {
-          return ingredient.quantity > 0;
-        });
+      const quantityToRemove = ingredient.quantity - n + 1;
+      const value = {
+        ingredientId: ingredient.id,
+        quantity: quantityToRemove
       }
 
-      this.updateShoppingList();
+      this.$store.dispatch('purchaseIngredient', value);
     },
     updateGroceryItemAisle (ingredient) {
       const dbEntry = {
         path: `grocery-items/${ingredient.id}/aisle`,
         value: ingredient.aisle
-      }
-
-      this.$nextTick(() => {
-        this.$store.dispatch('updateDBValue', dbEntry);
-      });
-    },
-    updateShoppingList () {
-      const noEmpties = this.compiledIngredientsList.filter((ingredient) => {
-        return ingredient.quantity > 0;
-      });
-
-      const dbEntry = {
-        path: `shopping-list`,
-        value: noEmpties
       }
 
       this.$nextTick(() => {

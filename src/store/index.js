@@ -44,6 +44,9 @@ export default createStore({
     drawnMeals: null,
     shoppingList: null,
     groceryItems: null,
+    nonMealShoppingList: null,
+    purchasedIngredients: {},
+    nonMealGroceryItems: null,
     mealHatsList: null
   },
   getters: {
@@ -62,7 +65,47 @@ export default createStore({
       }
 
       return state.userEmail.replaceAll(/[-!$%@^&*()_+|~=`{}[\]:";'<>?,./]/g, "-");
-    }
+    },
+    drawnIngredients: (state) => {
+      if (!state.drawnMeals || !state.meals || !state.groceryItems) {
+        return [];
+      }
+
+      const ingredients = {};
+
+      state.drawnMeals.forEach(drawnMeal => {
+        const meal = state.meals.find(meal => meal.id === drawnMeal.mealId);
+        if (meal && meal.ingredients) {
+          meal.ingredients.forEach(ingredient => {
+            const groceryItem = state.groceryItems[ingredient.groceryItemId];
+            if (groceryItem) {
+              const id = groceryItem.id;
+              if (ingredients[id]) {
+                ingredients[id].quantity += ingredient.quantity;
+              } else {
+                ingredients[id] = { ...groceryItem, quantity: ingredient.quantity };
+              }
+            }
+          });
+        }
+      });
+
+      return Object.values(ingredients);
+    },
+    combinedShoppingList: (state, getters) => {
+      const nonMealShoppingListArray = state.nonMealShoppingList && typeof state.nonMealShoppingList === 'object' ? Object.values(state.nonMealShoppingList) : [];
+      const drawnIngredientsArray = getters.drawnIngredients || [];
+
+      return [...drawnIngredientsArray, ...nonMealShoppingListArray];
+    },
+    unpurchasedIngredients: (state, getters) => {
+      return getters.combinedShoppingList
+        .map(ingredient => ({
+          ...ingredient,
+          quantity: ingredient.quantity - (state.purchasedIngredients[ingredient.id] || 0),
+        }))
+        .filter(ingredient => ingredient.quantity > 0);
+    },
   },
   mutations: {
     setUserEmail (state, value) {
@@ -92,6 +135,22 @@ export default createStore({
     setGroceryItems (state, groceryItems) {
       state.groceryItems = groceryItems;
     },
+    setNonMealShoppingList (state, nonMealShoppingList) {
+      state.nonMealShoppingList = nonMealShoppingList;
+    },
+    setPurchasedIngredients (state, purchasedIngredients) {
+      state.purchasedIngredients = purchasedIngredients;
+    },
+    purchaseIngredient (state, config) {
+      if (state.purchasedIngredients[config.ingredientId]) {
+        state.purchasedIngredients[config.ingredientId] += config.quantity;
+      } else {
+        state.purchasedIngredients[config.ingredientId] = config.quantity;
+      }
+    },
+    setNonMealGroceryItems (state, nonMealGroceryItems) {
+      state.nonMealGroceryItems = nonMealGroceryItems;
+    },
     setMealHatsList (state, mealHatsList) {
       state.mealHatsList = mealHatsList;
     },
@@ -101,6 +160,9 @@ export default createStore({
       state.drawnMeals = null;
       state.shoppingList = null;
       state.groceryItems = null;
+      state.nonMealShoppingList = null;
+      state.purchasedIngredients = {};
+      state.nonMealGroceryItems = null;
       state.mealHatsList = null;
     }
   },
@@ -145,6 +207,9 @@ export default createStore({
       context.commit('setDrawnMeals', null);
       context.commit('setShoppingList', null);
       context.commit('setGroceryItems', null);
+      context.commit('setNonMealShoppingList', null);
+      context.commit('setPurchasedIngredients', {});
+      context.commit('setNonMealGroceryItems', null);
       context.commit('setMealHatsList', null);
       window.localStorage.removeItem('mealHatDatabaseTopKey');
       window.localStorage.removeItem('mealHatUserEmail');
@@ -278,6 +343,36 @@ export default createStore({
         });
       }
 
+      // If there's no nonMealShoppingList in the state, fetch it from the database.
+      if (!context.state.nonMealShoppingList) {
+        onValue(ref(db, `${context.state.databaseTopKey}/non-meal-shopping-list`), (snapshot) => {
+          const data = snapshot.val();
+
+          // Commit the fetched nonMealShoppingList to the state.
+          context.commit('setNonMealShoppingList', data);
+        });
+      }
+
+      // If there's no purchasedIngredients in the state, fetch it from the database.
+      if (!context.state.purchasedIngredients || Object.keys(context.state.purchasedIngredients).length === 0) {
+        onValue(ref(db, `${context.state.databaseTopKey}/purchased-ingredients`), (snapshot) => {
+          const data = snapshot.val();
+
+          // Commit the fetched purchasedIngredients to the state.
+          context.commit('setPurchasedIngredients', data);
+        });
+      }
+
+      // If there's no nonMealGroceryItems in the state, fetch it from the database.
+      if (!context.state.nonMealGroceryItems) {
+        onValue(ref(db, `${context.state.databaseTopKey}/non-meal-grocery-items`), (snapshot) => {
+          const data = snapshot.val();
+
+          // Commit the fetched nonMealGroceryItems to the state.
+          context.commit('setNonMealGroceryItems', data);
+        });
+      }
+
       // If there's no mealHatsList in the state, fetch it from the database.
       if (!context.state.mealHatsList && context.getters.primaryDatabaseTopKey) {
         onValue(ref(db, `${context.getters.primaryDatabaseTopKey}/meal-hats-list`), (snapshot) => {
@@ -297,6 +392,16 @@ export default createStore({
           context.commit('setMostRecentDatabase', data);
         });
       }
+    },
+    purchaseIngredient (context, config) {
+      context.commit('purchaseIngredient', config);
+
+      const dbEntry = {
+        path: 'purchased-ingredients',
+        value: context.state.purchasedIngredients
+      };
+
+      context.dispatch('updateDBValue', dbEntry);
     },
     async setDBValue (context, dbEntry) {
       const uuid = uuidv4();

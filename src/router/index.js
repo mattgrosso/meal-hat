@@ -5,6 +5,7 @@ import Home from '@/components/Home.vue';
 import AddMeal from '@/components/AddMeal.vue';
 import DrawMeals from '@/components/DrawMeals.vue';
 import ShowMeals from '@/components/ShowMeals.vue';
+import Groceries from '@/components/Groceries.vue';
 import ShoppingList from '@/components/ShoppingList.vue';
 import MealHats from '@/components/MealHats.vue';
 
@@ -85,6 +86,21 @@ const routes = [
   {
     path: '/show-meals',
     component: ShowMeals,
+    meta: {
+      requiresLogin: true
+    },
+    beforeEnter: (to, from, next) => {
+      if (!loggedIn()) {
+        next('/login');
+      } else {
+        next();
+      }
+    }
+  },
+  {
+    path: '/add-groceries',
+    name: 'Groceries',
+    component: Groceries,
     meta: {
       requiresLogin: true
     },

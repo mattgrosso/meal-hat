@@ -41,7 +41,6 @@
 
 <script>
 import { v4 as uuidv4 } from 'uuid';
-import { ref, get } from 'firebase/database';
 import Header from '@/components/Header.vue';
 
 export default {
@@ -105,7 +104,7 @@ export default {
             if (meal.ingredients) {
               this.ingredients = meal.ingredients.map((ingredient) => {
                 const groceryItem = this.groceryItemsAsArray.find((item) => item.id === ingredient.groceryItemId);
-  
+
                 if (groceryItem) {
                   return {
                     name: groceryItem.name,

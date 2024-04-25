@@ -21,6 +21,14 @@
         >
           Draw Meals
         </router-link>
+      </div>
+      <div class="btn-group mt-3" role="group" aria-label="Button group with nested dropdown">
+        <router-link
+          to="/add-groceries"
+          class="btn btn-primary"
+        >
+          Add Groceries
+        </router-link>
         <router-link
           to="/shopping-list"
           class="btn btn-success"
