@@ -169,7 +169,7 @@ export default {
       this.showCreateHatModal = false;
       this.newHat = '';
     },
-    startTour() {
+    startTour () {
       const tour = new Shepherd.Tour({
         defaultStepOptions: {
           classes: 'mx-auto col-9',

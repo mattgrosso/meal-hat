@@ -30,7 +30,6 @@
 import Shepherd from 'shepherd.js';
 import 'shepherd.js/dist/css/shepherd.css';
 import Header from '@/components/Header.vue';
-import { routeLocationKey } from 'vue-router';
 
 export default {
   name: 'DrawMeals',
@@ -182,7 +181,7 @@ export default {
 
       return this.$store.getters.getMeal(id) ? this.$store.getters.getMeal(id) : { name: 'No meal found' };
     },
-    startTour() {
+    startTour () {
       const tour = new Shepherd.Tour({
         defaultStepOptions: {
           classes: 'mx-auto col-9',

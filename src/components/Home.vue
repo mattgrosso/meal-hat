@@ -62,7 +62,7 @@ export default {
     DrawnMealSchedule
   },
   watch: {
-    showTutorial(newVal) {
+    showTutorial (newVal) {
       console.error('1');
       if (newVal === true) {
         console.error('2');
@@ -71,12 +71,12 @@ export default {
     }
   },
   computed: {
-    showTutorial() {
+    showTutorial () {
       return this.$store.state.showTutorial;
     }
   },
   methods: {
-    startTour() {
+    startTour () {
       const tour = new Shepherd.Tour({
         defaultStepOptions: {
           classes: 'mx-auto col-9',

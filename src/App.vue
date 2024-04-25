@@ -86,9 +86,9 @@ body {
   font-size: 1.5rem;
   height: 40px;
   position: fixed;
-  right: 5px;
+  right: 12px;
   width: 40px;
-  bottom: 5px;
+  bottom: 12px;
 }
 
 .shepherd-element.shepherd-has-title {

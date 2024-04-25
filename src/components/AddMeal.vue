@@ -207,7 +207,7 @@ export default {
 
       this.$router.push('/');
     },
-    startTour() {
+    startTour () {
       const tour = new Shepherd.Tour({
         defaultStepOptions: {
           classes: 'mx-auto col-9',
