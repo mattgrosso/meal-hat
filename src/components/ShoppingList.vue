@@ -3,12 +3,17 @@
     <Header headerText="Shopping List"/>
     <div class="shopping-list-body p-3">
       <ul>
-        <li v-for="(ingredient, index) in compiledIngredientsList" :key="index" class="d-flex flex-wrap">
-          <p class="m-0 col-12">
-            <span class="fw-bold me-3">{{ ingredient.name }}</span>
-            <span>{{ ingredient.quantity }}</span>
-            <span>&nbsp;{{ pluralizedUnits(ingredient) }}</span>
-          </p>
+        <li v-for="(ingredient, index) in sortedCompiledIngredientsList" :key="index" class="d-flex flex-wrap">
+          <div class="m-0 col-12 d-flex justify-content-between align-items-center">
+            <div class="col">
+              <span class="fw-bold me-3">{{ ingredient.name }}</span>
+              <span>{{ ingredient.quantity }}</span>
+              <span>&nbsp;{{ pluralizedUnits(ingredient) }}</span>
+            </div>
+            <div class="col-2">
+              <input type="number" class="form-control" id="aisle-input" v-model.number.lazy="ingredient.aisle" @blur="updateGroceryItemAisle(ingredient)" placeholder="##">
+            </div>
+          </div>
           <div class="ingredient-checkboxes d-flex flex-wrap">
             <button v-for="n in parsedIngredientQuantity(ingredient)" :key="n" class="btn btn-primary" @click="ingredientChecked(ingredient, n)">
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-check2" viewBox="0 0 16 16">
@@ -29,7 +34,6 @@
 <script>
 import pluralize from 'pluralize';
 import Header from '@/components/Header.vue';
-import { v4 as uuidv4 } from 'uuid';
 
 export default {
   name: 'ShoppingList',
@@ -64,10 +68,28 @@ export default {
           }
         });
       }
+    },
+    sortedCompiledIngredientsList () {
+      return [...this.compiledIngredientsList].sort((a, b) => {
+        if (!a.aisle && b.aisle) {
+          return 1;
+        } else if (a.aisle && !b.aisle) {
+          return -1;
+        } else if (!a.aisle && !b.aisle) {
+          return 0;
+        } else if (a.aisle < b.aisle) {
+          return -1;
+        } else if (a.aisle > b.aisle) {
+          return 1;
+        } else {
+          return 0;
+        }
+      });
     }
   },
   methods: {
     resetShoppingList () {
+      const groceryItems = this.$store.state.groceryItems || [];
       const ingredientsList = [];
 
       if (this.drawnMeals && this.drawnMeals.length) {
@@ -78,22 +100,27 @@ export default {
 
           drawnMeal.meal.ingredients.forEach((ingredient) => {
             const existingIngredient = ingredientsList.find((existingIngredient) => {
-              return existingIngredient.name === ingredient.name;
+              return existingIngredient.id === ingredient.groceryItemId;
             });
 
             if (existingIngredient) {
               existingIngredient.quantity += ingredient.quantity;
             } else {
-              ingredientsList.push({
-                ...ingredient
-              });
+              const groceryItem = groceryItems[ingredient.groceryItemId];
+              if (groceryItem) {
+                ingredientsList.push({
+                  ...groceryItem,
+                  quantity: ingredient.quantity
+                });
+              } else {
+                console.error(`No grocery item found for ingredient: ${ingredient.groceryItemId} in meal ${drawnMeal.meal.name} (${drawnMeal.id})`);
+              }
             }
           });
         });
       }
 
-      this.compiledIngredientsList = ingredientsList || [];
-      this.updateGroceryItemsList();
+      this.compiledIngredientsList = ingredientsList;
       this.updateShoppingList();
     },
     ingredientChecked (ingredient, n) {
@@ -107,51 +134,20 @@ export default {
 
       this.updateShoppingList();
     },
-    updateGroceryItemsList () {
-      const groceryItems = this.$store.state.groceryItems || [];
-      let shoppingListUpdated = false;
-
-      this.compiledIngredientsList = this.compiledIngredientsList.map((ingredient) => {
-        let existingIngredient = groceryItems.find((existingIngredient) => {
-          return existingIngredient.id === ingredient.id;
-        });
-
-        if (!existingIngredient) {
-          const { quantity, ...ingredientWithoutQuantity } = ingredient;
-          const newIngredient = {
-            id: uuidv4(),
-            ...ingredientWithoutQuantity
-          };
-          groceryItems.push(newIngredient);
-          existingIngredient = { ...ingredient, id: newIngredient.id };
-          shoppingListUpdated = true;
-        }
-
-        return existingIngredient;
-      });
-
+    updateGroceryItemAisle (ingredient) {
       const dbEntry = {
-        path: `grocery-items`,
-        value: groceryItems
+        path: `grocery-items/${ingredient.id}/aisle`,
+        value: ingredient.aisle
       }
 
       this.$nextTick(() => {
         this.$store.dispatch('updateDBValue', dbEntry);
-        if (shoppingListUpdated) {
-          const shoppingListDbEntry = {
-            path: `shopping-list`,
-            value: this.compiledIngredientsList
-          }
-          this.$store.dispatch('updateDBValue', shoppingListDbEntry);
-        }
       });
     },
     updateShoppingList () {
       const noEmpties = this.compiledIngredientsList.filter((ingredient) => {
         return ingredient.quantity > 0;
       });
-
-      this.updateGroceryItemsList();
 
       const dbEntry = {
         path: `shopping-list`,

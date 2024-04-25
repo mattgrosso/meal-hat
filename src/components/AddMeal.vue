@@ -1,6 +1,6 @@
 <template>
   <div class="add-meal">
-    <Header headerText="Add Meal"/>
+    <Header :headerText="headerText"/>
     <div class="add-meal-body p-3">
       <div class="row md-col-6 mx-auto g-2 mb-3">
         <div class="form-floating col-9">
@@ -33,13 +33,15 @@
       </div>
       <div class="ctas p-3">
         <button type="button" class="btn btn-tertiary" @click="addIngredient">Add More Lines</button>
-        <button type="button" class="btn btn-primary mx-3" @click="submitMeal">Add Meal To Hat</button>
+        <button type="button" class="btn btn-primary mx-3" @click="submitMeal">{{ submitButtonText }}</button>
       </div>
     </div>
-    </div>
+  </div>
 </template>
 
 <script>
+import { v4 as uuidv4 } from 'uuid';
+import { ref, get } from 'firebase/database';
 import Header from '@/components/Header.vue';
 
 export default {
@@ -49,6 +51,7 @@ export default {
   },
   data () {
     return {
+      mealId: null,
       name: null,
       minDaysBetween: 7,
       ingredients: [
@@ -75,9 +78,55 @@ export default {
       ],
     }
   },
+  computed: {
+    groceryItemsAsArray () {
+      return Object.keys(this.$store.state.groceryItems).map((key) => this.$store.state.groceryItems[key]);
+    },
+    headerText () {
+      return this.mealId ? 'Edit Meal' : 'Add Meal';
+    },
+    submitButtonText () {
+      return this.mealId ? 'Save Changes' : 'Add Meal To Hat';
+    }
+  },
+  created () {
+    this.mealId = this.$route.params.id;
+
+    this.$watch(
+      () => this.$store.state.meals,
+      (newMeals) => {
+        if (newMeals && this.mealId) {
+          const meal = newMeals.find(meal => meal.id === this.mealId);
+
+          if (meal) {
+            this.id = meal.id;
+            this.name = meal.name;
+            this.minDaysBetween = meal.minDaysBetween;
+            if (meal.ingredients) {
+              this.ingredients = meal.ingredients.map((ingredient) => {
+                const groceryItem = this.groceryItemsAsArray.find((item) => item.id === ingredient.groceryItemId);
+  
+                if (groceryItem) {
+                  return {
+                    name: groceryItem.name,
+                    quantity: ingredient.quantity,
+                    units: groceryItem.units
+                  };
+                } else {
+                  return null;
+                }
+              }).filter((ingredient) => ingredient);
+            }
+          }
+        }
+      },
+      { immediate: true }
+    );
+  },
   methods: {
     addIngredient () {
       this.ingredients.push({
+        aisle: 0,
         name: null,
         quantity: null
       });
@@ -86,19 +135,71 @@ export default {
         this.$refs[`ingredient-${this.ingredients.length - 1}-name`][0].focus();
       });
     },
+    addNewIngredientsToGroceryItems () {
+      this.ingredients.forEach((ingredient) => {
+        const existingIngredient = this.groceryItemsAsArray.find((item) => item.name === ingredient.name);
+
+        if (ingredient.name && !existingIngredient) {
+          const newId = uuidv4();
+
+          const newIngredient = {
+            id: newId,
+            aisle: 0,
+            name: ingredient.name,
+            units: ingredient.units
+          };
+
+          const dbEntry = {
+            path: `grocery-items/${newId}`,
+            value: newIngredient
+          }
+
+          this.$store.dispatch('updateDBValue', dbEntry);
+        }
+      });
+    },
+    parseIngredients () {
+      return this.ingredients.map((ingredient) => {
+        const groceryItem = this.groceryItemsAsArray.find((item) => item.name === ingredient.name);
+
+        if (groceryItem) {
+          return {
+            groceryItemId: groceryItem.id,
+            quantity: ingredient.quantity
+          };
+        } else {
+          return null;
+        }
+      }).filter((ingredient) => ingredient);
+    },
     async submitMeal () {
+      this.addNewIngredientsToGroceryItems();
+
       const meal = {
         name: this.name,
         minDaysBetween: this.minDaysBetween,
-        ingredients: this.ingredients
+        ingredients: this.parseIngredients()
       };
 
-      const dbEntry = {
-        path: "meals",
-        value: meal
+      if (this.mealId) {
+        const updatedDbEntry = {
+          path: `meals/${this.mealId}`,
+          value: {
+            ...meal,
+            id: this.mealId
+          }
+        };
+
+        this.$store.dispatch('updateDBValue', updatedDbEntry);
+      } else {
+        const dbEntry = {
+          path: "meals",
+          value: meal
+        };
+
+        this.$store.dispatch('setDBValue', dbEntry);
       }
 
-      this.$store.dispatch('setDBValue', dbEntry);
       this.$router.push('/');
     }
   },

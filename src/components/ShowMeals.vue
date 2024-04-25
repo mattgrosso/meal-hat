@@ -7,8 +7,8 @@
           <div class="card-body">
             <h5 class="card-title">{{meal.name}}</h5>
             <p class="card-text">Days before repeating: {{meal.minDaysBetween}}</p>
-            <ul class="list-group list-group-flush border my-3">
-              <li v-for="(ingredient, index) in meal.ingredients" :key="index" class="list-group-item text-start col-12">
+            <ul v-if="meal.ingredients" class="list-group list-group-flush border my-3">
+              <li v-for="(ingredient, index) in getGroceryItems(meal)" :key="index" class="list-group-item text-start col-12">
                 {{ingredient.name}}
               </li>
             </ul>
@@ -36,12 +36,15 @@ export default {
   computed: {
     meals () {
       return this.$store.state.meals;
+    },
+    groceryItemsAsArray () {
+      return Object.keys(this.$store.state.groceryItems).map((key) => this.$store.state.groceryItems[key]);
     }
   },
   methods: {
     editMeal (meal) {
       this.$router.push({
-        name: 'EditMeal',
+        name: 'AddMeal',
         params: {
           id: meal.id
         }
@@ -54,6 +57,11 @@ export default {
       }
 
       this.$store.dispatch('updateDBValue', dbEntry);
+    },
+    getGroceryItems (meal) {
+      return meal.ingredients.map((ingredient) => {
+        return this.groceryItemsAsArray.find((groceryItem) => groceryItem.id === ingredient.groceryItemId);
+      });
     }
   },
 }

@@ -5,7 +5,6 @@ import Home from '@/components/Home.vue';
 import AddMeal from '@/components/AddMeal.vue';
 import DrawMeals from '@/components/DrawMeals.vue';
 import ShowMeals from '@/components/ShowMeals.vue';
-import EditMeal from '@/components/EditMeal.vue';
 import ShoppingList from '@/components/ShoppingList.vue';
 import MealHats from '@/components/MealHats.vue';
 
@@ -55,7 +54,8 @@ const routes = [
     }
   },
   {
-    path: '/add-meal',
+    path: '/add-meal/:id?',
+    name: 'AddMeal',
     component: AddMeal,
     meta: {
       requiresLogin: true
@@ -100,21 +100,6 @@ const routes = [
     path: '/shopping-list',
     name: 'ShoppingList',
     component: ShoppingList,
-    meta: {
-      requiresLogin: true
-    },
-    beforeEnter: (to, from, next) => {
-      if (!loggedIn()) {
-        next('/login');
-      } else {
-        next();
-      }
-    }
-  },
-  {
-    path: '/edit-meal/:id',
-    name: 'EditMeal',
-    component: EditMeal,
     meta: {
       requiresLogin: true
     },

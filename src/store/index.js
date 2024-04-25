@@ -15,6 +15,20 @@ const firebaseConfig = {
   databaseURL: "https://meal-hat-default-rtdb.firebaseio.com",
 }
 
+const removeNaNAndUndefined = (obj) => {
+  for (const key in obj) {
+    if (Object.prototype.hasOwnProperty.call(obj, key)) {
+      if (typeof obj[key] === "object" && obj[key] !== null) {
+        removeNaNAndUndefined(obj[key]);
+      } else if (Number.isNaN(obj[key]) || obj[key] === undefined) {
+        console.error(`NaN or undefined value found in ${key}. The Object was ${JSON.stringify(obj)}`);
+        delete obj[key];
+      }
+    }
+  }
+  return obj;
+};
+
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 // const auth = getAuth();
@@ -284,23 +298,23 @@ export default createStore({
         });
       }
     },
-    setDBValue (context, dbEntry) {
+    async setDBValue (context, dbEntry) {
       const uuid = uuidv4();
       const valueWithId = { ...dbEntry.value, id: uuid };
-      set(ref(db, `${context.state.databaseTopKey}/${dbEntry.path}/${uuid}`), valueWithId);
+      return set(ref(db, `${context.state.databaseTopKey}/${dbEntry.path}/${uuid}`), removeNaNAndUndefined(valueWithId));
     },
-    updateDBValue (context, dbEntry) {
-      set(ref(db, `${context.state.databaseTopKey}/${dbEntry.path}`), dbEntry.value);
+    async updateDBValue (context, dbEntry) {
+      return set(ref(db, `${context.state.databaseTopKey}/${dbEntry.path}`), removeNaNAndUndefined(dbEntry.value));
     },
-    updateUserDBValue (context, dbEntry) {
+    async updateUserDBValue (context, dbEntry) {
       const userDatabaseTopKey = context.getters.primaryDatabaseTopKey;
-      set(ref(db, `${userDatabaseTopKey}/${dbEntry.path}`), dbEntry.value);
+      return set(ref(db, `${userDatabaseTopKey}/${dbEntry.path}`), removeNaNAndUndefined(dbEntry.value));
     },
-    createNewHat (context, dBTitle) {
+    async createNewHat (context, dBTitle) {
       if (!dBTitle) {
-        return;
+        return Promise.reject(new Error("dBTitle is required"));
       }
-      set(ref(db, `${dBTitle}/most-recent-database`), dBTitle)
+      return set(ref(db, `${dBTitle}/most-recent-database`), dBTitle)
     },
   }
 })
