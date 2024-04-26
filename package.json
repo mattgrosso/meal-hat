@@ -3,8 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "serve": "vue-cli-service serve",
-    "build": "vue-cli-service build",
+    "update-version": "node src/assets/javascript/version.js",
+    "serve": "nodemon --watch .env --exec \"vue-cli-service serve\"",
+    "build": "yarn update-version && vue-cli-service build",
     "lint": "vue-cli-service lint",
     "deploy": "vue-cli-service build && surge dist/"
   },
@@ -16,6 +17,7 @@
     "core-js": "^3.8.3",
     "firebase": "^9.22.2",
     "lodash": "^4.17.21",
+    "nodemon": "^3.1.0",
     "pluralize": "^8.0.0",
     "register-service-worker": "^1.7.2",
     "shepherd.js": "^11.2.0",

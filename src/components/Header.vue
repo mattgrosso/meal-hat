@@ -6,6 +6,7 @@
       <p class="col-6" @click.stop="logout">{{$store.state.userEmail}}</p>
       <p class="col-6" @click.stop="$router.push('/meal-hats')">{{hatTitle}}</p>
     </div>
+    <span class="version">{{version}}</span>
   </div>
 </template>
 
@@ -18,6 +19,9 @@ export default {
     }
   },
   computed: {
+    version () {
+      return process.env.VUE_APP_VERSION;
+    },
     hatTitle () {
       if (this.$store.getters.primaryDatabaseTopKey === this.$store.state.databaseTopKey) {
         return "your default hat";
@@ -83,6 +87,14 @@ export default {
           text-decoration: underline;
         }
       }
+    }
+
+    .version {
+      font-family: "Roboto Condensed", sans-serif;
+      font-size: 0.5rem;
+      position: absolute;
+      right: 3px;
+      top: 2px;
     }
   }
 </style>

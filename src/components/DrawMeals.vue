@@ -148,7 +148,7 @@ export default {
 
         this.$store.dispatch('updateDBValue', {
           path: 'purchased-ingredients',
-          value: {}
+          value: { placeholder: 'placeholder' }
         });
 
         this.$router.push('/');

@@ -94,6 +94,14 @@ body {
 .shepherd-element.shepherd-has-title {
   margin-top: 15px;
 
+  &[data-popper-placement^='top'] {
+    margin-top: -15px;
+
+    .shepherd-arrow:before {
+      background-color: white !important;
+    }
+  }
+
   .shepherd-arrow:before {
     background-color: #274C77 !important;
   }

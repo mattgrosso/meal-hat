@@ -43,7 +43,7 @@
       </div>
       <DrawnMealSchedule />
     </div>
-    <span class="start-tour-button" @click="this.startTour()">
+    <span class="start-tour-button" @click="this.startTour()" data-step="7">
       <i class="bi bi-question-circle"/>
     </span>
   </div>
@@ -87,7 +87,7 @@ export default {
 
       tour.addStep({
         title: 'Welcome to Meal Hat!',
-        text: 'Let me show you around real quick.',
+        text: 'Meal Hat is a tool for helping you plan your meals and grocery shopping.<br>The main idea is that you seed the hat with meals you like to make and then, when you ask it to, the hat will randomly assign those meals to dates for you.<br>You\'ll never have to wonder what to make for dinner again!',
         buttons: [
           {
             text: 'Next',
@@ -141,7 +141,7 @@ export default {
 
       tour.addStep({
         title: 'Click here to draw meals.',
-        text: 'From here you\'ll select dates you want to draw meals for and let the hat do it\'s magic.',
+        text: 'From here you\'ll select dates you want to draw meals for and let the hat do it\'s magic.<br>I suggest you draw meals from the hat right before you go grocery shopping.<br>That way you can use the shopping list to make sure you have what you need for the meals that get drawn.',
         attachTo: {
           element: '[data-step="3"]',
           on: 'bottom'
@@ -183,7 +183,7 @@ export default {
 
       tour.addStep({
         title: 'Click here to view your shopping list.',
-        text: 'This will show you a checklist of the things you need to buy for the meals the hat has drawn and the groceries you\'ve added.',
+        text: 'This will show you a checklist of the things you need to buy for the meals the hat has drawn as well as any groceries you\'ve added in the Add Groceries section.',
         attachTo: {
           element: '[data-step="5"]',
           on: 'bottom'
@@ -204,7 +204,7 @@ export default {
 
       tour.addStep({
         title: 'The Header',
-        text: 'From the header you can click your email address to log out.<br>Click the name of your hat to select a different hat<br>And you can always click the logo to return to this Home screen.',
+        text: 'From the header you can click your email address to log out.<br>Click the name of your hat to select a different hat.<br>And you can always click the logo to return to this Home screen.',
         attachTo: {
           element: '[data-step="6"]',
           on: 'bottom'
@@ -224,8 +224,29 @@ export default {
       });
 
       tour.addStep({
+        title: 'Click here for help.',
+        text: 'On each page you can click this button to get a tour of the page you\'re on.<br>It\'s a great way to learn how to use Meal Hat!',
+        attachTo: {
+          element: '[data-step="7"]',
+          on: 'bottom'
+        },
+        buttons: [
+          {
+            text: 'Back',
+            action: tour.back,
+            classes: 'btn-secondary btn btn-sm'
+          },
+          {
+            text: 'Next',
+            action: tour.next,
+            classes: 'btn-success btn btn-sm'
+          }
+        ]
+      });
+
+      tour.addStep({
         title: 'That\'s it!',
-        text: 'You\'ll probably want to get started by adding some meals. Have fun!',
+        text: 'You\'ll probably want to get started by adding some meals.<br>Have fun!',
         buttons: [
           {
             text: 'Done',
