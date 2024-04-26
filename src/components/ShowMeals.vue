@@ -43,7 +43,11 @@ export default {
       return this.$store.state.meals;
     },
     groceryItemsAsArray () {
-      return Object.keys(this.$store.state.groceryItems).map((key) => this.$store.state.groceryItems[key]);
+      if (!this.$store.state.groceryItems) {
+        return [];
+      } else {
+        return Object.keys(this.$store.state.groceryItems).map((key) => this.$store.state.groceryItems[key]);
+      }
     }
   },
   methods: {

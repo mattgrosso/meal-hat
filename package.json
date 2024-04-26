@@ -7,7 +7,7 @@
     "serve": "nodemon --watch .env --exec \"vue-cli-service serve\"",
     "build": "yarn update-version && vue-cli-service build",
     "lint": "vue-cli-service lint",
-    "deploy": "vue-cli-service build && surge dist/"
+    "deploy": "yarn build && surge dist/"
   },
   "dependencies": {
     "@popperjs/core": "^2.11.8",

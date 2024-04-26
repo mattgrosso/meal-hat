@@ -166,6 +166,9 @@ export default {
     },
     getRandomMealForDate (date) {
       const allMeals = this.$store.state.meals;
+      if (typeof allMeals !== 'object') {
+        return null;
+      }
       const allMealsArray = Object.keys(allMeals).map((key) => allMeals[key]);
       const filteredMealsArray = allMealsArray.filter((meal) => {
         return !this.mealDrawnTooRecently(meal, date);

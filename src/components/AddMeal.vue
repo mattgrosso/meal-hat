@@ -85,7 +85,11 @@ export default {
   },
   computed: {
     groceryItemsAsArray () {
-      return Object.keys(this.$store.state.groceryItems).map((key) => this.$store.state.groceryItems[key]);
+      if (!this.$store.state.groceryItems) {
+        return [];
+      } else {
+        return Object.keys(this.$store.state.groceryItems).map((key) => this.$store.state.groceryItems[key]);
+      }
     },
     headerText () {
       return this.mealId ? 'Edit Meal' : 'Add Meal';
