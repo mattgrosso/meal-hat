@@ -296,9 +296,12 @@ export default {
 
 <style lang="scss">
   .draw-meals {
-    max-width: 600px;
-    margin: 0 auto;
     text-align: center;
+
+    .draw-meals-body {
+      max-width: 600px;
+      margin: 0 auto;
+    }
 
     h1 {
       cursor: pointer;

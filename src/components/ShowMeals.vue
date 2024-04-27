@@ -1,7 +1,7 @@
 <template>
   <div class="show-meals">
     <Header headerText="Show Meals"/>
-    <div class="meals d-flex flex-wrap justify-content-start col-12">
+    <div class="show-meals-body d-flex flex-wrap justify-content-start col-12">
       <div v-for="(meal, index) in meals" :key="index" class="meal col-12 md-col-4 p-3" data-step="1">
         <div class="card">
           <div class="card-body">
@@ -178,8 +178,8 @@ export default {
 
 <style lang="scss">
   .show-meals {
-    @media screen and (min-width: 768px) {
-      max-width: 80%;
+    .show-meals-body {
+      max-width: 600px;
       margin: 0 auto;
     }
   }

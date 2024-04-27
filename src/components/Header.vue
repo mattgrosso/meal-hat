@@ -3,8 +3,8 @@
     <h1>{{headerText}}</h1>
     <img @click="$router.push('/')" :src="require('@/assets/icon.png')" alt="Icon">
     <div class="user-and-hat col-12">
-      <p class="col-6" @click.stop="logout">{{$store.state.userEmail}}</p>
-      <p class="col-6" @click.stop="$router.push('/meal-hats')">{{hatTitle}}</p>
+      <p class="col-6 col-md-2" @click.stop="logout">{{$store.state.userEmail}}</p>
+      <p class="col-6 col-md-2" @click.stop="$router.push('/meal-hats')">{{hatTitle}}</p>
     </div>
     <span class="version">{{version}}</span>
   </div>

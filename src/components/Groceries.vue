@@ -1,7 +1,7 @@
 <template>
   <div class="groceries">
     <Header headerText="Groceries"/>
-    <div class="container">
+    <div class="groceries-body">
       <div class="row">
         <div class="col-12">
           <div class="my-3" data-step="1">
@@ -342,8 +342,15 @@ export default {
 </script>
 
 <style lang="scss">
-.scrollable-list {
-  max-height: 200px;
-  overflow-y: auto;
+.groceries {
+  .groceries-body {
+    max-width: 600px;
+    margin: 0 auto;
+
+    .scrollable-list {
+      max-height: 200px;
+      overflow-y: auto;
+    }
+  }
 }
 </style>

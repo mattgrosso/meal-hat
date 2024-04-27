@@ -215,43 +215,47 @@ export default {
 
 <style lang="scss">
   .shopping-list {
-    max-width: 600px;
-    margin: 0 auto 100px;
     text-align: center;
 
-    ul {
-      list-style: none;
-      border: 1px solid black;
-      padding: 0 32px;
+    .shopping-list-body {
+      max-width: 600px;
+      margin: 0 auto 100px;
 
-      li {
-        border-bottom: 1px solid black;
-        padding: 16px 0;
-        text-align: left;
-        font-size: 1.25rem;
+      ul {
+        list-style: none;
+        border: 1px solid black;
+        padding: 0 32px;
 
-        &:last-of-type {
-          border-bottom: none;
-        }
+        li {
+          border-bottom: 1px solid black;
+          padding: 16px 0;
+          text-align: left;
+          font-size: 1.25rem;
 
-        .ingredient-checkboxes {
-          button {
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 6px;
-            box-shadow: 0 0 4px rgba(0,0,0,0.25);
-            margin: 16px 4px 0;
+          &:last-of-type {
+            border-bottom: none;
+          }
 
-            svg {
-              width: 16px;
-              height: 16px;
+          .ingredient-checkboxes {
+            button {
+              border-radius: 50%;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              padding: 6px;
+              box-shadow: 0 0 4px rgba(0,0,0,0.25);
+              margin: 16px 4px 0;
+
+              svg {
+                width: 16px;
+                height: 16px;
+              }
             }
           }
-        }
 
+        }
       }
     }
+
   }
 </style>

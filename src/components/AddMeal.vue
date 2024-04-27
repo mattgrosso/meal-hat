@@ -339,6 +339,9 @@ export default {
 <style lang="scss">
   .add-meal {
     .add-meal-body {
+      max-width: 600px;
+      margin: 0 auto;
+
       .ctas {
         display: flex;
         justify-content: center;

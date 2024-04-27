@@ -273,18 +273,19 @@ export default {
 
 <style lang="scss">
   .home {
+    align-items: center;
     display: flex;
     flex-direction: column;
-    align-items: center;
     justify-content: center;
     text-align: center;
 
-    @media screen and (min-width: 768px) {
-      width: 60%;
-    }
-
     .home-body {
+      margin: 0 auto;
+      max-width: 600px;
+
       .btn-group {
+        width: 100%;
+
         .btn {
           font-size: 0.75rem;
         }

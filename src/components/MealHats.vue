@@ -319,19 +319,28 @@ export default {
 
 <style lang="scss">
   .meal-hats-list {
-    ul {
-      list-style: none;
-      padding: 0 32px;
-      margin: 0;
-    }
+    .meal-hats-list-body {
+      max-width: 600px;
+      margin: 0 auto;
 
-    .add-more-hats {
-      border-top: 1px solid black;
-      padding: 0 32px;
-    }
+      ul {
+        list-style: none;
+        padding: 0 32px;
+        margin: 0;
+      }
 
-    .btn-secondary {
-      font-size: 0.8rem;
+      .add-more-hats {
+        border-top: 1px solid black;
+        padding: 0 32px;
+
+        @media screen and (min-width: 768px) {
+          border: none;
+        }
+      }
+
+      .btn-secondary {
+        font-size: 0.8rem;
+      }
     }
   }
 </style>
