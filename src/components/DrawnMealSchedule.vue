@@ -14,15 +14,17 @@
         v-model="drawnMeals"
         :item-key="id"
         tag="ul"
+        handle=".bi-grip-vertical"
         @start="startDrag"
         @end="endDrag"
       >
         <template #item="{element}">
-          <li class="schedule-meal" :class="{'next-meal': nextMeal(element)}">
-            <span>
+          <li class="schedule-meal" :class="{'next-meal': nextMeal(element), 'hide-delete': selectedMeal.id !== element.id }" @click="toggleDeleteButton(element)">
+            <span class="">
               {{ element.meal.name }}
             </span>
-            <i class="bi bi-grip-vertical"/>
+            <button class="btn btn-sm btn-warning delete-button" @click.stop="deleteMeal(element)">Delete</button>
+            <i v-if="selectedMeal.id !== element.id" class="bi bi-grip-vertical"/>
           </li>
         </template>
       </draggable>
@@ -41,6 +43,7 @@ export default {
   },
   data () {
     return {
+      selectedMeal: {},
       drag: false
     }
   },
@@ -103,6 +106,13 @@ export default {
       const options = { weekday: 'short', month: 'numeric', day: 'numeric' };
       const date = new Date(dateString);
       return date.toLocaleDateString('en-US', options);
+    },
+    toggleDeleteButton (drawnMeal) {
+      if (this.selectedMeal.id === drawnMeal.id) {
+        this.selectedMeal = {};
+      } else {
+        this.selectedMeal = drawnMeal;
+      }
     },
     deleteMeal (drawnMeal) {
       const dbEntry = {
@@ -186,11 +196,38 @@ export default {
           border-left: none;
 
           .schedule-meal {
-            cursor: move;
             justify-content: flex-start;
             padding: 8px 6px 8px 12px;
             display: flex;
             justify-content: space-between;
+            position: relative;
+            
+            &.hide-delete .delete-button{
+              width: 0;
+              padding: 0;
+              border: none;
+              pointer-events: none;
+              opacity: 0;
+            }
+            
+            .delete-button {
+              width: 75px;
+              transition: all 0.10s ease-out;
+              white-space: nowrap;
+              display: flex;
+              justify-content: center;
+              align-items: center;
+              line-height: 1;
+              opacity: 1;
+              position: absolute;
+              right: 10px;
+              top: 50%;
+              transform: translateY(-50%);
+            }
+            
+            .bi-grip-vertical {
+              cursor: move;
+            }
           }
         }
       }
