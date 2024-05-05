@@ -423,9 +423,10 @@ export default createStore({
       context.dispatch('updateDBValue', dbEntry);
     },
     async setDBValue (context, dbEntry) {
+      const timestamp = Date.now();
       const uuid = uuidv4();
       const valueWithId = { ...dbEntry.value, id: uuid };
-      return set(ref(db, `${context.state.databaseTopKey}/${dbEntry.path}/${uuid}`), removeNaNAndUndefined(valueWithId));
+      return set(ref(db, `${context.state.databaseTopKey}/${dbEntry.path}/${timestamp}-${uuid}`), removeNaNAndUndefined(valueWithId));
     },
     async updateDBValue (context, dbEntry) {
       return set(ref(db, `${context.state.databaseTopKey}/${dbEntry.path}`), removeNaNAndUndefined(dbEntry.value));
