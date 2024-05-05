@@ -152,6 +152,11 @@ export default {
           value: { placeholder: 'placeholder' }
         });
 
+        this.$store.dispatch('updateDBValue', {
+          path: 'non-meal-shopping-list',
+          value: { placeholder: 'placeholder' }
+        });
+
         this.$router.push('/');
       });
     },
