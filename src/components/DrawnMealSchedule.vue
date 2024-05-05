@@ -201,7 +201,7 @@ export default {
             display: flex;
             justify-content: space-between;
             position: relative;
-            
+
             &.hide-delete .delete-button{
               width: 0;
               padding: 0;
@@ -209,7 +209,7 @@ export default {
               pointer-events: none;
               opacity: 0;
             }
-            
+
             .delete-button {
               width: 75px;
               transition: all 0.10s ease-out;
@@ -224,7 +224,7 @@ export default {
               top: 50%;
               transform: translateY(-50%);
             }
-            
+
             .bi-grip-vertical {
               cursor: move;
             }
