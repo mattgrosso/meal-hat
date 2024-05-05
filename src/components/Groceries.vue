@@ -1,7 +1,7 @@
 <template>
   <div class="groceries">
     <Header headerText="Groceries"/>
-    <div class="groceries-body">
+    <div class="groceries-body p-3">
       <div class="row">
         <div class="col-12">
           <div class="my-3" data-step="1">
@@ -25,22 +25,28 @@
 
           <hr v-if="filteredGroceryItems.length" >
           <h3 v-if="filteredGroceryItems.length" >Grocery Items</h3>
-          <ul class="list-group my-3 scrollable-list" data-step="3">
-            <li class="list-group-item d-flex justify-content-between align-items-center" v-for="item in filteredGroceryItems" :key="item.id" @click="toggleDeleteButton(item)">
-              <span>{{item.name}}</span>
-              <div>
-                <button v-if="showDeleteButton === item.id" class="btn btn-sm btn-danger" @click.stop="deleteItem(item)">Delete</button>
-                <button v-else class="btn btn-sm btn-primary mr-2" @click.stop="increaseShoppingListQuantity(item)">+{{item.quantity}} {{item.units}}</button>
-              </div>
-            </li>
-          </ul>
+          <div class="scrollable-list-wrapper">
+            <ul class="list-group my-3 scrollable-list" data-step="3">
+              <li class="list-group-item d-flex justify-content-between align-items-center" v-for="item in filteredGroceryItems" :key="item.id" @click="toggleDeleteButton(item)">
+                <span class="col">{{item.name}}</span>
+                <div class="col-4 mr-2">
+                  <button v-if="showDeleteButton === item.id" class="btn btn-sm btn-danger col-12" @click.stop="deleteItem(item)">Delete</button>
+                  <button v-else class="btn btn-sm btn-primary col-12" @click.stop="increaseShoppingListQuantity(item)">
+                    <i v-if="buttonClicked === item.id" class="bi bi-check-circle"/>
+                    <span v-else>+{{item.quantity}} {{item.units}}</span>
+                  </button>
+                </div>
+              </li>
+            </ul>
+            <div class="scrollable-list-gradient"></div>
+          </div>
 
           <hr v-if="sortedShoppingList.length">
           <h3 v-if="sortedShoppingList.length">Shopping List</h3>
           <ul class="list-group my-3" data-step="4">
             <li class="list-group-item d-flex justify-content-between align-items-center" v-for="item in sortedShoppingList" :key="item.id">
-              <span>{{item.name}} - Quantity: {{item.quantity}}</span>
-              <button class="btn btn-sm btn-warning" @click="decreaseShoppingListQuantity(item)">-{{getDefaultQuantity(item)}} {{ getUnits(item)}}</button>
+              <span class="col">{{item.name}} - Quantity: {{item.quantity}}</span>
+              <button class="btn btn-sm btn-warning col-4" @click="decreaseShoppingListQuantity(item)">-{{getDefaultQuantity(item)}} {{ getUnits(item)}}</button>
             </li>
           </ul>
         </div>
@@ -66,7 +72,8 @@ export default {
       newGroceryItemQuantity: null,
       newGroceryItemUnits: '',
       newGroceryItemAisle: null,
-      searchText: ''
+      searchText: '',
+      buttonClicked: false
     }
   },
   components: {
@@ -90,24 +97,13 @@ export default {
       }
     },
     filteredGroceryItems () {
-      return this.nonMealGroceryItems.filter((item) => item.name.toLowerCase().includes(this.searchText.toLowerCase()));
+      return this.nonMealGroceryItems
+        .filter((item) => item.name.toLowerCase().includes(this.searchText.toLowerCase()))
+        .sort((a, b) => a.name.localeCompare(b.name));
     },
     sortedShoppingList () {
-      return [...this.$store.getters.unpurchasedIngredients].sort((a, b) => {
-        if (!a.aisle && b.aisle) {
-          return 1;
-        } else if (a.aisle && !b.aisle) {
-          return -1;
-        } else if (!a.aisle && !b.aisle) {
-          return 0;
-        } else if (a.aisle < b.aisle) {
-          return -1;
-        } else if (a.aisle > b.aisle) {
-          return 1;
-        } else {
-          return 0;
-        }
-      }) || [];
+      return [...this.$store.getters.unpurchasedIngredients]
+        .sort((a, b) => a.name.localeCompare(b.name)) || [];
     }
   },
   methods: {
@@ -149,6 +145,7 @@ export default {
       return nonMealGroceryItems ? nonMealGroceryItems[item.id] : null
     },
     increaseShoppingListQuantity (item) {
+      this.buttonClicked = item.id;
       const nonMealShoppingList = this.$store.state.nonMealShoppingList;
       const existingItem = nonMealShoppingList ? nonMealShoppingList[item.id] : null;
 
@@ -177,6 +174,10 @@ export default {
 
         this.$store.dispatch('updateDBValue', dbEntry);
       }
+
+      setTimeout(() => {
+        this.buttonClicked = false;
+      }, 1000);
     },
     decreaseShoppingListQuantity (item) {
       const correspondingItem = this.correspondingItemInNonMealGroceryItems(item);
@@ -344,13 +345,25 @@ export default {
 <style lang="scss">
 .groceries {
   .groceries-body {
-    max-width: 600px;
-    margin: 0 auto;
+  .scrollable-list-wrapper {
+    position: relative;
+    height: 225px;
 
     .scrollable-list {
-      max-height: 200px;
+      height: 100%;
       overflow-y: auto;
     }
+
+    .scrollable-list-gradient {
+      content: "";
+      position: absolute;
+      bottom: -2px;
+      left: 0;
+      right: 0;
+      height: 20px;
+      background: linear-gradient(to bottom, rgba(255, 255, 255, 0), rgba(255, 255, 255, 1) 100%);
+    }
   }
+}
 }
 </style>

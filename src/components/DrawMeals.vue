@@ -117,8 +117,9 @@ export default {
   methods: {
     drawMeals () {
       this.allDatesInRange.forEach(async (date) => {
+        console.log('date: ', date);
         const randomMeal = this.getRandomMealForDate(date);
-
+        console.log('randomMeal: ', randomMeal);
         if (!randomMeal) {
           this.message = `No meals available for ${date.toDateString()}`;
           return;

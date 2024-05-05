@@ -13,15 +13,34 @@
               </li>
             </ul>
             <button class="btn btn-warning mx-2" @click="removeMeal(meal)" :data-step="index === 0 ? '2' : undefined">
-              Remove Meal
+              Remove
             </button>
             <button class="btn btn-primary mx-2" @click="editMeal(meal)" :data-step="index === 0 ? '3' : undefined">
-              Edit Meal
+              Edit
+            </button>
+            <button class="btn btn-primary mx-2" @click="pickDateForMeal(meal)" :data-step="index === 0 ? '4' : undefined">
+              Schedule
             </button>
           </div>
         </div>
       </div>
     </div>
+    <Modal
+      :showModal="showScheduleModal"
+      title="Pick a Date"
+      primaryButtonText="Schedule Meal"
+      secondaryButtonText="Cancel"
+      :closeModalCallback="hideScheduleModal"
+      :primaryButtonCallback="scheduleMeal"
+      :secondaryButtonCallback="hideScheduleModal"
+    >
+      <VDatePicker
+        v-model="dateToSchedule"
+        :attributes='attributes'
+        :disabled-dates="datesWithMeals"
+        expanded
+      />
+    </Modal>
     <span class="start-tour-button" @click="this.startTour()">
       <i class="bi bi-question-circle"/>
     </span>
@@ -32,11 +51,20 @@
 import Shepherd from 'shepherd.js';
 import 'shepherd.js/dist/css/shepherd.css';
 import Header from '@/components/Header.vue';
+import Modal from '@/components/Modal.vue';
 
 export default {
   name: 'ShowMeals',
   components: {
-    Header
+    Header,
+    Modal
+  },
+  data () {
+    return {
+      showScheduleModal: false,
+      mealToSchedule: null,
+      dateToSchedule: new Date().toISOString().slice(0, 10)
+    }
   },
   computed: {
     meals () {
@@ -48,6 +76,41 @@ export default {
       } else {
         return Object.keys(this.$store.state.groceryItems).map((key) => this.$store.state.groceryItems[key]);
       }
+    },
+    datesWithMeals () {
+      if (!this.$store.state.drawnMealsWithHistory) {
+        return [];
+      } else {
+        return this.$store.state.drawnMealsWithHistory.map((drawnMeal) => {
+          return new Date(drawnMeal.assignedDate);
+        });
+      }
+    },
+    attributes () {
+      if (!this.$store.state.drawnMeals || !this.$store.state.drawnMeals.length) {
+        return [];
+      }
+
+      const assignedMeals = this.$store.state.drawnMealsWithHistory.map((meal) => {
+        return {
+          highlight: {
+            color: 'green',
+            fillMode: 'outline',
+          },
+          dates: [new Date(meal.assignedDate)]
+        }
+      });
+
+      return [
+        ...assignedMeals,
+        {
+          key: 'today',
+          highlight: {
+            fillMode: 'light',
+          },
+          dates: [new Date()]
+        }
+      ]
     }
   },
   methods: {
@@ -66,6 +129,49 @@ export default {
       }
 
       this.$store.dispatch('updateDBValue', dbEntry);
+    },
+    pickDateForMeal (meal) {
+      this.mealToSchedule = meal;
+      this.showScheduleModal = true;
+    },
+    hideScheduleModal () {
+      this.showScheduleModal = false;
+    },
+    scheduleMeal () {
+      const meal = this.mealToSchedule;
+      const date = new Date(this.dateToSchedule);
+
+      const dbEntry = {
+        path: "drawnMeals",
+        value: {
+          mealId: meal.id,
+          assignedDate: date.toDateString()
+        }
+      }
+
+      this.$store.dispatch('setDBValue', dbEntry);
+
+      const drawnMealForUpdate = {
+        path: `meals/${meal.id}`,
+        value: {
+          ...meal,
+          lastDrawn: date.getTime()
+        }
+      }
+
+      this.$store.dispatch('updateDBValue', drawnMealForUpdate);
+
+      this.$store.dispatch('updateDBValue', {
+        path: 'purchased-ingredients',
+        value: { placeholder: 'placeholder' }
+      });
+
+      this.$router.push('/');
+      this.$emit('showToast', {
+        delay: 3000,
+        message: `Scheduled ${meal.name} for ${new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric' }).format(date)}`
+      });
+      this.showScheduleModal = false
     },
     getGroceryItems (meal) {
       return meal.ingredients.map((ingredient) => {
