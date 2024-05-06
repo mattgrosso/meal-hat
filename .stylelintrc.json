@@ -1,0 +1,40 @@
+{
+  "extends": "stylelint-config-sass-guidelines",
+  "rules": {
+      "declaration-block-single-line-max-declarations": 0,
+      "max-nesting-depth": [
+          9,
+          {
+              "ignoreAtRules": [
+                  "each",
+                  "media",
+                  "supports",
+                  "include"
+              ]
+          }
+      ],
+      "selector-max-compound-selectors": 9,
+      "selector-max-id": 3,
+      "string-quotes": "double",
+      "scss/at-import-partial-extension-blacklist": null,
+      "selector-no-qualifying-type": null,
+      "property-no-unknown": [
+          true,
+          {
+              "ignoreProperties": [
+                  "mso-line-height-rule", 
+                  "print-color-adjust", 
+                  "margin-after", 
+                  "margin-before",
+                  "padding-start"
+              ]
+          }
+      ],
+      "scss/at-extend-no-missing-placeholder": null,
+      "scss/at-import-no-partial-leading-underscore": null,
+      "property-no-vendor-prefix": null,
+      "value-no-vendor-prefix": null,
+      "declaration-block-semicolon-newline-after": "always-multi-line",
+      "color-named": null
+  }
+}

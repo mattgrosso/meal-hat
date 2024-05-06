@@ -233,7 +233,7 @@ export default {
           font-size: 1.25rem;
 
           &:last-of-type {
-            border-bottom: none;
+            border-bottom: 0;
           }
 
           .ingredient-checkboxes {

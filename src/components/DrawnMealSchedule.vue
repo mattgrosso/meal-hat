@@ -176,7 +176,7 @@ export default {
           }
 
           &:last-of-type {
-            border-bottom: none;
+            border-bottom: 0;
           }
         }
 
@@ -193,19 +193,20 @@ export default {
         &.meals-list {
           border-top-left-radius: 0;
           border-bottom-left-radius: 0;
-          border-left: none;
+          border-left: 0;
 
           .schedule-meal {
-            justify-content: flex-start;
-            padding: 8px 6px 8px 12px;
+            cursor: pointer;
             display: flex;
+            justify-content: flex-start;
             justify-content: space-between;
+            padding: 8px 6px 8px 12px;
             position: relative;
 
             &.hide-delete .delete-button{
               width: 0;
               padding: 0;
-              border: none;
+              border: 0;
               pointer-events: none;
               opacity: 0;
             }

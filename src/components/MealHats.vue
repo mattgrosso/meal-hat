@@ -334,7 +334,7 @@ export default {
         padding: 0 32px;
 
         @media screen and (min-width: 768px) {
-          border: none;
+          border: 0;
         }
       }
 

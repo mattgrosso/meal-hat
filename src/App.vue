@@ -43,7 +43,7 @@ body {
 }
 
 #app {
-  font-family: 'Mulish', sans-serif;
+  font-family: "Mulish", sans-serif;
 
   .btn-primary {
     background: #408558;
@@ -94,15 +94,15 @@ body {
 .shepherd-element.shepherd-has-title {
   margin-top: 15px;
 
-  &[data-popper-placement^='top'] {
+  &[data-popper-placement^="top"] {
     margin-top: -15px;
 
-    .shepherd-arrow:before {
+    .shepherd-arrow::before {
       background-color: white !important;
     }
   }
 
-  .shepherd-arrow:before {
+  .shepherd-arrow::before {
     background-color: #274C77 !important;
   }
 
@@ -111,7 +111,7 @@ body {
       align-items: center;
       background: #274C77;
       display: flex;
-      padding: 12px 12px;
+      padding: 12px;
 
       .shepherd-title {
         align-items: center;

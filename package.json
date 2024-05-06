@@ -6,7 +6,7 @@
     "update-version": "node src/assets/javascript/version.js",
     "serve": "nodemon --watch .env --exec \"vue-cli-service serve\"",
     "build": "yarn update-version && vue-cli-service build",
-    "lint": "vue-cli-service lint",
+    "lint": "vue-cli-service lint && stylelint '**/*.vue' --formatter verbose --fix",
     "deploy": "yarn build && surge dist/"
   },
   "dependencies": {
@@ -43,8 +43,11 @@
     "eslint-plugin-node": "^11.1.0",
     "eslint-plugin-promise": "^5.1.0",
     "eslint-plugin-vue": "^8.0.3",
+    "postcss-html": "^1.6.0",
     "sass": "^1.58.0",
-    "sass-loader": "^13.2.0"
+    "sass-loader": "^13.2.0",
+    "stylelint": "13.12.0",
+    "stylelint-config-sass-guidelines": "^11.1.0"
   },
   "eslintConfig": {
     "root": true,
