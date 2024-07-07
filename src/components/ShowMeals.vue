@@ -68,7 +68,8 @@ export default {
   },
   computed: {
     meals () {
-      return this.$store.state.meals;
+      return Object.values(this.$store.state.meals)
+        .sort((a, b) => a.name.localeCompare(b.name));
     },
     groceryItemsAsArray () {
       if (!this.$store.state.groceryItems) {
