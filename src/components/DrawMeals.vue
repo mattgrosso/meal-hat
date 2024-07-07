@@ -116,10 +116,11 @@ export default {
   },
   methods: {
     drawMeals () {
+      const mealsToAdd = [];
+
       this.allDatesInRange.forEach(async (date) => {
-        console.log('date: ', date);
-        const randomMeal = this.getRandomMealForDate(date);
-        console.log('randomMeal: ', randomMeal);
+        const randomMeal = this.getRandomMealForDate(date, mealsToAdd);
+
         if (!randomMeal) {
           this.message = `No meals available for ${date.toDateString()}`;
           return;
@@ -127,21 +128,28 @@ export default {
         // TODO: If more than one copy of the same meal is drawn in one call of drawMeals,
         // we may have trouble because the DB entries might not update in time.
 
+        mealsToAdd.push({
+          randomMeal: randomMeal,
+          date: date
+        });
+      });
+
+      mealsToAdd.forEach((entry) => {
         const dbEntry = {
           path: "drawnMeals",
           value: {
-            mealId: randomMeal.id,
-            assignedDate: date.toDateString()
+            mealId: entry.randomMeal.id,
+            assignedDate: entry.date.toDateString()
           }
         }
 
         this.$store.dispatch('setDBValue', dbEntry);
 
         const drawnMealForUpdate = {
-          path: `meals/${randomMeal.id}`,
+          path: `meals/${entry.randomMeal.id}`,
           value: {
-            ...randomMeal,
-            lastDrawn: date.getTime()
+            ...entry.randomMeal,
+            lastDrawn: entry.date.getTime()
           }
         }
 
@@ -156,9 +164,9 @@ export default {
           path: 'non-meal-shopping-list',
           value: { placeholder: 'placeholder' }
         });
+      })
 
-        this.$router.push('/');
-      });
+      this.$router.push('/');
     },
     mealDrawnTooRecently (meal, date) {
       if (!meal.lastDrawn) {
@@ -170,7 +178,9 @@ export default {
       const daysSinceLastDrawn = Math.abs(Math.floor((dateNum - lastDrawnNum) / (1000 * 60 * 60 * 24)));
       return daysSinceLastDrawn < meal.minDaysBetween;
     },
-    getRandomMealForDate (date) {
+    getRandomMealForDate (date, mealsAlreadyDrawn) {
+      const mealIdsAlreadyDrawn = mealsAlreadyDrawn.map((meal) => meal.randomMeal.id);
+
       const allMeals = this.$store.state.meals;
       if (typeof allMeals !== 'object') {
         return null;
@@ -178,6 +188,8 @@ export default {
       const allMealsArray = Object.keys(allMeals).map((key) => allMeals[key]);
       const filteredMealsArray = allMealsArray.filter((meal) => {
         return !this.mealDrawnTooRecently(meal, date);
+      }).filter((meal) => {
+        return !mealIdsAlreadyDrawn.includes(meal.id);
       });
 
       if (!filteredMealsArray.length) {
