@@ -25,7 +25,6 @@
     "v-calendar": "^3.0.3",
     "vue": "^3.2.13",
     "vue-router": "^4.2.2",
-    "vue3-google-login": "^2.0.18",
     "vuedraggable": "^4.1.0",
     "vuex": "^4.0.0"
   },
