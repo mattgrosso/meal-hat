@@ -74,8 +74,8 @@ export default {
       this.drag = false;
 
       // Get the dragged item and the item at the new index.
-      const draggedItem = this.drawnMeals[event.oldIndex];
-      const itemAtNewIndex = this.drawnMeals[event.newIndex];
+      const draggedItem = this.drawnMeals[event.newIndex];
+      const itemAtNewIndex = this.drawnMeals[event.oldIndex];
 
       // Swap the meal and mealId of the dragged item and the item at the new index.
       [draggedItem.meal, itemAtNewIndex.meal] = [itemAtNewIndex.meal, draggedItem.meal];
