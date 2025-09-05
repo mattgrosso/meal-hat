@@ -71,16 +71,24 @@ export default {
       this.$store.dispatch('purchaseIngredient', value);
     },
     updateGroceryItemAisle (ingredient) {
-      const isGroceryItem = Object.prototype.hasOwnProperty.call(this.$store.state.groceryItems, ingredient.id);
-      const isNonMealGroceryItem = Object.prototype.hasOwnProperty.call(this.$store.state.nonMealGroceryItems, ingredient.id);
+      // Check new unified grocery catalog first
+      const isInGroceryCatalog = this.$store.state.groceryCatalog && this.$store.state.groceryCatalog[ingredient.id];
+      // Fallback to old system
+      const isGroceryItem = this.$store.state.groceryItems && Object.prototype.hasOwnProperty.call(this.$store.state.groceryItems, ingredient.id);
+      const isNonMealGroceryItem = this.$store.state.nonMealGroceryItems && Object.prototype.hasOwnProperty.call(this.$store.state.nonMealGroceryItems, ingredient.id);
 
       let dbPath;
-      if (isGroceryItem) {
+      if (isInGroceryCatalog) {
+        // Update in new unified system
+        dbPath = `grocery-catalog/${ingredient.id}/defaultAisle`;
+      } else if (isGroceryItem) {
+        // Update in old system
         dbPath = `grocery-items/${ingredient.id}/aisle`;
       } else if (isNonMealGroceryItem) {
+        // Update in old system
         dbPath = `non-meal-grocery-items/${ingredient.id}/aisle`;
       } else {
-        console.error('Ingredient not found in groceryItems or nonMealGroceryItems');
+        console.error('Ingredient not found in any grocery system:', ingredient);
         return;
       }
 
@@ -88,6 +96,7 @@ export default {
         path: dbPath,
         value: ingredient.aisle
       };
+
 
       this.$nextTick(() => {
         this.$store.dispatch('updateDBValue', dbEntry);

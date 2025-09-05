@@ -85,17 +85,48 @@ export default createStore({
       return getters.shoppingListItems.filter(item => !item.purchased);
     },
     
-    // DEPRECATED GETTERS - keeping for backward compatibility during migration
-    drawnIngredients: (state, getters) => {
-      // Return items from new shopping list that came from meals
-      return getters.shoppingListItems.filter(item => item.source === 'meal');
+    // RESTORED ORIGINAL GETTERS - needed for shopping list to work
+    drawnIngredients: (state) => {
+      if (!state.drawnMeals || !state.meals || (!state.groceryItems && !state.groceryCatalog)) {
+        return [];
+      }
+
+      const ingredients = {};
+
+      state.drawnMeals.forEach(drawnMeal => {
+        const meal = state.meals.find(meal => meal.id === drawnMeal.mealId);
+        if (meal && meal.ingredients) {
+          meal.ingredients.forEach(ingredient => {
+            // Try new system first, fall back to old system
+            const groceryItem = state.groceryCatalog[ingredient.groceryItemId] || 
+                              (state.groceryItems && state.groceryItems[ingredient.groceryItemId]);
+            if (groceryItem) {
+              const id = groceryItem.id;
+              if (ingredients[id]) {
+                ingredients[id].quantity += ingredient.quantity;
+              } else {
+                ingredients[id] = { ...groceryItem, quantity: ingredient.quantity };
+              }
+            }
+          });
+        }
+      });
+
+      return Object.values(ingredients);
     },
     combinedShoppingList: (state, getters) => {
-      // Return all shopping list items in old format for compatibility
-      return getters.shoppingListItems;
+      const nonMealShoppingListArray = state.nonMealShoppingList && typeof state.nonMealShoppingList === 'object' ? Object.values(state.nonMealShoppingList) : [];
+      const drawnIngredientsArray = getters.drawnIngredients || [];
+
+      return [...drawnIngredientsArray, ...nonMealShoppingListArray];
     },
     unpurchasedIngredients: (state, getters) => {
-      return getters.unpurchasedShoppingItems;
+      return getters.combinedShoppingList
+        .map(ingredient => ({
+          ...ingredient,
+          quantity: ingredient.quantity - (state.purchasedIngredients[ingredient.id] || 0),
+        }))
+        .filter(ingredient => ingredient.quantity > 0);
     },
   },
   mutations: {

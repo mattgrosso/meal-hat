@@ -33,7 +33,7 @@ async function setupAuthAndDisableTutorial(page) {
 async function dismissTutorialIfPresent(page) {
   try {
     // Wait a moment for tutorial to potentially appear
-    await page.waitForTimeout(1000);
+    await page.waitForTimeout(300);
     
     // Look for tutorial elements and dismiss them
     const doneButton = page.locator('button:has-text("Done")');
@@ -92,7 +92,14 @@ async function navigateDirectly(page, path) {
   });
   
   await page.goto(`/#${path}`);
-  await page.waitForTimeout(2000); // Let page load
+  
+  // Wait for Vue app to initialize by checking for the app div to have content
+  await page.waitForFunction(() => {
+    const appDiv = document.querySelector('#app');
+    return appDiv && appDiv.children.length > 0;
+  }, { timeout: 10000 });
+  
+  await page.waitForTimeout(1000); // Additional wait for component mounting
   
   // Dismiss any tutorial that might appear on this page
   await dismissTutorialIfPresent(page);

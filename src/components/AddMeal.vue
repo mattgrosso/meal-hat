@@ -19,7 +19,7 @@
         :key="index"
         data-step="3"
       >
-        <div class="form-floating col-7">
+        <div class="form-floating col-5">
           <input type="text" class="form-control " :id="`ingredient-${index}-name`" v-model="ingredient.name" :ref="`ingredient-${index}-name`">
           <label :for="`ingredient-${index}-name`">Ingredient #{{index + 1}}</label>
         </div>
@@ -30,6 +30,10 @@
         <div class="form-floating col-3">
           <input type="text" class="form-control " :id="`ingredient-${index}-units`" v-model="ingredient.units">
           <label :for="`ingredient-${index}-units`">Units</label>
+        </div>
+        <div class="form-floating col-2">
+          <input type="number" class="form-control " :id="`ingredient-${index}-aisle`" v-model="ingredient.aisle">
+          <label :for="`ingredient-${index}-aisle`">Aisle</label>
         </div>
       </div>
       <div class="ctas p-3">
@@ -153,17 +157,29 @@ export default {
 
           const newIngredient = {
             id: newId,
-            aisle: 0,
+            aisle: ingredient.aisle || 0,
             name: ingredient.name,
             units: ingredient.units
           };
 
-          const dbEntry = {
+          // Add to both old system (for compatibility) and new unified system
+          const groceryItemEntry = {
             path: `grocery-items/${newId}`,
             value: newIngredient
-          }
+          };
 
-          this.$store.dispatch('updateDBValue', dbEntry);
+          const groceryCatalogEntry = {
+            path: `grocery-catalog/${newId}`,
+            value: {
+              id: newId,
+              name: ingredient.name,
+              defaultUnits: ingredient.units,
+              defaultAisle: ingredient.aisle || 0
+            }
+          };
+
+          this.$store.dispatch('updateDBValue', groceryItemEntry);
+          this.$store.dispatch('updateDBValue', groceryCatalogEntry);
         }
       });
     },

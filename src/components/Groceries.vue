@@ -108,17 +108,33 @@ export default {
   },
   methods: {
     addGroceryItemToNonMealGroceryItems () {
-      const dbEntry = {
+      const newId = require('uuid').v4();
+      
+      // Add to old system for compatibility
+      const nonMealGroceryEntry = {
         path: `non-meal-grocery-items`,
         value: {
+          id: newId,
           name: this.newGroceryItemName,
           units: this.newGroceryItemUnits,
           aisle: this.newGroceryItemAisle || 0,
           quantity: this.newGroceryItemQuantity || 1
         }
-      }
+      };
 
-      this.$store.dispatch('setDBValue', dbEntry);
+      // Add to new unified system
+      const groceryCatalogEntry = {
+        path: `grocery-catalog/${newId}`,
+        value: {
+          id: newId,
+          name: this.newGroceryItemName,
+          defaultUnits: this.newGroceryItemUnits,
+          defaultAisle: this.newGroceryItemAisle || 0
+        }
+      };
+
+      this.$store.dispatch('setDBValue', nonMealGroceryEntry);
+      this.$store.dispatch('updateDBValue', groceryCatalogEntry);
       this.newGroceryItemName = '';
       this.newGroceryItemQuantity = null;
       this.newGroceryItemUnits = '';
