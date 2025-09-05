@@ -145,11 +145,26 @@ export default {
 
         this.$store.dispatch('setDBValue', dbEntry);
 
+        // Update meal with new drawnDates array system
+        let currentDrawnDates = entry.randomMeal.drawnDates || [];
+        
+        // Migration: if no drawnDates but has lastDrawn, initialize with that history
+        if (currentDrawnDates.length === 0 && entry.randomMeal.lastDrawn) {
+          currentDrawnDates = [entry.randomMeal.lastDrawn];
+        }
+        
+        const newTimestamp = entry.date.getTime();
+        
+        // Add new date to front of array, keep old dates for history
+        const updatedDrawnDates = [newTimestamp, ...currentDrawnDates.filter(date => date !== newTimestamp)];
+        
         const drawnMealForUpdate = {
           path: `meals/${entry.randomMeal.id}`,
           value: {
             ...entry.randomMeal,
-            lastDrawn: entry.date.getTime()
+            drawnDates: updatedDrawnDates,
+            // Keep lastDrawn for backward compatibility during transition
+            lastDrawn: newTimestamp
           }
         }
 
@@ -169,11 +184,19 @@ export default {
       this.$router.push('/');
     },
     mealDrawnTooRecently (meal, date) {
-      if (!meal.lastDrawn) {
-        return false;
+      // Get the most recent drawn date using new or old system
+      let lastDrawnTimestamp = null;
+      if (meal.drawnDates && meal.drawnDates.length > 0) {
+        lastDrawnTimestamp = meal.drawnDates[0]; // Most recent in new system
+      } else if (meal.lastDrawn) {
+        lastDrawnTimestamp = meal.lastDrawn; // Fallback to old system
+      }
+      
+      if (!lastDrawnTimestamp) {
+        return false; // Never drawn before
       }
 
-      const lastDrawnNum = new Date(meal.lastDrawn).getTime();
+      const lastDrawnNum = new Date(lastDrawnTimestamp).getTime();
       const dateNum = new Date(date).getTime();
       const daysSinceLastDrawn = Math.abs(Math.floor((dateNum - lastDrawnNum) / (1000 * 60 * 60 * 24)));
       return daysSinceLastDrawn < meal.minDaysBetween;

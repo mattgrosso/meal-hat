@@ -7,6 +7,13 @@
           <div class="card-body">
             <h5 class="card-title">{{meal.name}}</h5>
             <p class="card-text">Days before repeating: {{meal.minDaysBetween}}</p>
+            <p class="card-text text-muted" v-if="getLastDrawnDate(meal)">
+              Last drawn: {{formatLastDrawnDate(getLastDrawnDate(meal))}}
+              <span v-if="isInThePast(getLastDrawnDate(meal))">({{daysSinceLastDrawn(getLastDrawnDate(meal))}} days)</span>
+            </p>
+            <p class="card-text text-muted" v-else>
+              Last drawn: Never
+            </p>
             <ul v-if="meal.ingredients" class="list-group list-group-flush border my-3">
               <li v-for="(ingredient, index) in getGroceryItems(meal)" :key="index" class="list-group-item text-start col-12">
                 {{ingredient.name}}
@@ -68,6 +75,9 @@ export default {
   },
   computed: {
     meals () {
+      if (!this.$store.state.meals) {
+        return [];
+      }
       return Object.values(this.$store.state.meals)
         .sort((a, b) => a.name.localeCompare(b.name));
     },
@@ -152,11 +162,26 @@ export default {
 
       this.$store.dispatch('setDBValue', dbEntry);
 
+      // Update meal with new drawnDates array system
+      let currentDrawnDates = meal.drawnDates || [];
+      
+      // Migration: if no drawnDates but has lastDrawn, initialize with that history
+      if (currentDrawnDates.length === 0 && meal.lastDrawn) {
+        currentDrawnDates = [meal.lastDrawn];
+      }
+      
+      const newTimestamp = date.getTime();
+      
+      // Add new date to front of array, keep old dates for history
+      const updatedDrawnDates = [newTimestamp, ...currentDrawnDates.filter(date => date !== newTimestamp)];
+      
       const drawnMealForUpdate = {
         path: `meals/${meal.id}`,
         value: {
           ...meal,
-          lastDrawn: date.getTime()
+          drawnDates: updatedDrawnDates,
+          // Keep lastDrawn for backward compatibility during transition
+          lastDrawn: newTimestamp
         }
       }
 
@@ -278,6 +303,41 @@ export default {
       });
 
       tour.start();
+    },
+    formatLastDrawnDate (lastDrawnTimestamp) {
+      const date = new Date(lastDrawnTimestamp);
+      return new Intl.DateTimeFormat('en-US', { 
+        month: 'short', 
+        day: 'numeric'
+      }).format(date);
+    },
+    daysSinceLastDrawn (lastDrawnTimestamp) {
+      const lastDrawnDate = new Date(lastDrawnTimestamp);
+      const today = new Date();
+      const diffTime = Math.abs(today - lastDrawnDate);
+      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+      return diffDays;
+    },
+    getLastDrawnDate (meal) {
+      // New system: use drawnDates array (most recent first)
+      if (meal.drawnDates && meal.drawnDates.length > 0) {
+        return meal.drawnDates[0];
+      }
+      // Fallback to old system
+      if (meal.lastDrawn) {
+        return meal.lastDrawn;
+      }
+      return null;
+    },
+    isInThePast (timestamp) {
+      const drawnDate = new Date(timestamp);
+      const today = new Date();
+      
+      // Compare dates (not times) to handle timezone issues
+      const drawnDateOnly = new Date(drawnDate.getFullYear(), drawnDate.getMonth(), drawnDate.getDate());
+      const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      
+      return drawnDateOnly < todayOnly;
     },
   },
 }

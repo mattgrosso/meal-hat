@@ -43,7 +43,12 @@ export default createStore({
     meals: null,
     drawnMealsWithHistory: null,
     drawnMeals: null,
-    shoppingList: null,
+    
+    // SIMPLIFIED UNIFIED DATA MODEL
+    groceryCatalog: {}, // Single source for all grocery items: id → { id, name, defaultUnits, defaultAisle }
+    shoppingList: {}, // Unified shopping list: id → { groceryId, quantity, units, aisle, source, mealId?, purchased }
+    
+    // DEPRECATED - keeping temporarily for migration
     groceryItems: null,
     nonMealShoppingList: null,
     purchasedIngredients: {},
@@ -67,45 +72,30 @@ export default createStore({
 
       return state.userEmail.replaceAll(/[-!$%@^&*()_+|~=`{}[\]:";'<>?,./]/g, "-");
     },
-    drawnIngredients: (state) => {
-      if (!state.drawnMeals || !state.meals || !state.groceryItems) {
-        return [];
-      }
-
-      const ingredients = {};
-
-      state.drawnMeals.forEach(drawnMeal => {
-        const meal = state.meals.find(meal => meal.id === drawnMeal.mealId);
-        if (meal && meal.ingredients) {
-          meal.ingredients.forEach(ingredient => {
-            const groceryItem = state.groceryItems[ingredient.groceryItemId];
-            if (groceryItem) {
-              const id = groceryItem.id;
-              if (ingredients[id]) {
-                ingredients[id].quantity += ingredient.quantity;
-              } else {
-                ingredients[id] = { ...groceryItem, quantity: ingredient.quantity };
-              }
-            }
-          });
-        }
-      });
-
-      return Object.values(ingredients);
+    // SIMPLIFIED GETTERS FOR NEW DATA MODEL
+    shoppingListItems: (state) => {
+      return Object.values(state.shoppingList || {})
+        .map(item => ({
+          ...item,
+          groceryItem: state.groceryCatalog[item.groceryId] || { name: 'Unknown Item' }
+        }))
+        .sort((a, b) => (a.aisle || 999) - (b.aisle || 999));
+    },
+    unpurchasedShoppingItems: (state, getters) => {
+      return getters.shoppingListItems.filter(item => !item.purchased);
+    },
+    
+    // DEPRECATED GETTERS - keeping for backward compatibility during migration
+    drawnIngredients: (state, getters) => {
+      // Return items from new shopping list that came from meals
+      return getters.shoppingListItems.filter(item => item.source === 'meal');
     },
     combinedShoppingList: (state, getters) => {
-      const nonMealShoppingListArray = state.nonMealShoppingList && typeof state.nonMealShoppingList === 'object' ? Object.values(state.nonMealShoppingList) : [];
-      const drawnIngredientsArray = getters.drawnIngredients || [];
-
-      return [...drawnIngredientsArray, ...nonMealShoppingListArray];
+      // Return all shopping list items in old format for compatibility
+      return getters.shoppingListItems;
     },
     unpurchasedIngredients: (state, getters) => {
-      return getters.combinedShoppingList
-        .map(ingredient => ({
-          ...ingredient,
-          quantity: ingredient.quantity - (state.purchasedIngredients[ingredient.id] || 0),
-        }))
-        .filter(ingredient => ingredient.quantity > 0);
+      return getters.unpurchasedShoppingItems;
     },
   },
   mutations: {
@@ -133,8 +123,35 @@ export default createStore({
     setDrawnMeals (state, drawnMeals) {
       state.drawnMeals = drawnMeals;
     },
+    // NEW UNIFIED DATA MUTATIONS
+    setGroceryCatalog (state, groceryCatalog) {
+      state.groceryCatalog = groceryCatalog || {};
+    },
     setShoppingList (state, shoppingList) {
-      state.shoppingList = shoppingList;
+      state.shoppingList = shoppingList || {};
+    },
+    addToGroceryCatalog (state, groceryItem) {
+      if (groceryItem && groceryItem.id) {
+        state.groceryCatalog[groceryItem.id] = groceryItem;
+      }
+    },
+    addToShoppingList (state, shoppingItem) {
+      if (shoppingItem && shoppingItem.id) {
+        state.shoppingList[shoppingItem.id] = shoppingItem;
+      }
+    },
+    updateShoppingListItem (state, { id, updates }) {
+      if (state.shoppingList[id]) {
+        state.shoppingList[id] = { ...state.shoppingList[id], ...updates };
+      }
+    },
+    removeFromShoppingList (state, itemId) {
+      delete state.shoppingList[itemId];
+    },
+    markItemPurchased (state, { itemId, purchased = true }) {
+      if (state.shoppingList[itemId]) {
+        state.shoppingList[itemId].purchased = purchased;
+      }
     },
     setGroceryItems (state, groceryItems) {
       state.groceryItems = groceryItems;
@@ -162,7 +179,12 @@ export default createStore({
       state.meals = null;
       state.drawnMealsWithHistory = null;
       state.drawnMeals = null;
-      state.shoppingList = null;
+      
+      // Clear new unified data
+      state.groceryCatalog = {};
+      state.shoppingList = {};
+      
+      // Clear deprecated data
       state.groceryItems = null;
       state.nonMealShoppingList = null;
       state.purchasedIngredients = {};
@@ -210,12 +232,18 @@ export default createStore({
       context.commit('setMeals', null);
       context.commit('setDrawnMealsWithHistory', null);
       context.commit('setDrawnMeals', null);
-      context.commit('setShoppingList', null);
+      
+      // Clear new unified data structures
+      context.commit('setGroceryCatalog', {});
+      context.commit('setShoppingList', {});
+      
+      // Clear deprecated data
       context.commit('setGroceryItems', null);
       context.commit('setNonMealShoppingList', null);
       context.commit('setPurchasedIngredients', {});
       context.commit('setNonMealGroceryItems', null);
       context.commit('setMealHatsList', null);
+      
       window.localStorage.removeItem('mealHatDatabaseTopKey');
       window.localStorage.removeItem('mealHatUserEmail');
     },
@@ -409,6 +437,55 @@ export default createStore({
           } else {
             context.commit('setShowTutorial', data);
           }
+        });
+      }
+
+      // INITIALIZE NEW UNIFIED DATA STRUCTURES
+      // Initialize grocery catalog from existing groceryItems and nonMealGroceryItems
+      if (Object.keys(context.state.groceryCatalog).length === 0) {
+        onValue(ref(db, `${context.state.databaseTopKey}/grocery-catalog`), (snapshot) => {
+          const data = snapshot.val();
+          context.commit('setGroceryCatalog', data);
+        });
+        
+        // Migration: populate catalog from old data if new structure doesn't exist
+        if (!context.state.groceryCatalog || Object.keys(context.state.groceryCatalog).length === 0) {
+          // Merge old groceryItems and nonMealGroceryItems into unified catalog
+          const mergedCatalog = {};
+          
+          if (context.state.groceryItems) {
+            Object.values(context.state.groceryItems).forEach(item => {
+              mergedCatalog[item.id] = {
+                id: item.id,
+                name: item.name,
+                defaultUnits: item.units || 'units',
+                defaultAisle: item.aisle || null
+              };
+            });
+          }
+          
+          if (context.state.nonMealGroceryItems) {
+            Object.values(context.state.nonMealGroceryItems).forEach(item => {
+              mergedCatalog[item.id] = {
+                id: item.id,
+                name: item.name,
+                defaultUnits: item.units || 'units',
+                defaultAisle: item.aisle || null
+              };
+            });
+          }
+          
+          if (Object.keys(mergedCatalog).length > 0) {
+            context.commit('setGroceryCatalog', mergedCatalog);
+          }
+        }
+      }
+
+      // Initialize unified shopping list
+      if (Object.keys(context.state.shoppingList).length === 0) {
+        onValue(ref(db, `${context.state.databaseTopKey}/unified-shopping-list`), (snapshot) => {
+          const data = snapshot.val();
+          context.commit('setShoppingList', data);
         });
       }
     },
