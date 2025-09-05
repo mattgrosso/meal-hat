@@ -105,8 +105,12 @@ export default {
         return 1;
       } else if (ingredient.quantity < 1 && ingredient.quantity > 0) {
         return 1;
+      } else if (ingredient.quantity > 100) {
+        return 100;
+      } else if (ingredient.quantity < 0 || !Number.isFinite(ingredient.quantity)) {
+        return 1;
       } else {
-        return ingredient.quantity;
+        return Math.floor(ingredient.quantity);
       }
     },
     startTour () {
