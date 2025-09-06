@@ -4,54 +4,96 @@
     <div class="groceries-body p-3">
       <div class="row">
         <div class="col-12">
+          <!-- Quick Add Section -->
           <div class="my-3" data-step="1">
-            <div class="input-group mb-1">
-              <input type="text" class="form-control" placeholder="New Grocery Item" v-model="newGroceryItemName">
+            <div class="input-group mb-2">
+              <input 
+                type="text" 
+                class="form-control" 
+                placeholder="Add item to shopping list..." 
+                v-model="quickAddInput"
+                @keyup.enter="handleQuickAdd"
+                @input="updateSuggestions"
+                ref="quickAddInput"
+              >
+              <button 
+                class="btn btn-primary" 
+                :disabled="!quickAddInput.trim()" 
+                @click="handleQuickAdd"
+              >
+                Add
+              </button>
             </div>
-            <div class="input-group">
-              <input type="number" class="form-control" style="flex: 2;" placeholder="Quantity" v-model="newGroceryItemQuantity">
-              <input type="text" class="form-control" style="flex: 0.5;" placeholder="Units" v-model="newGroceryItemUnits">
-              <input type="number" class="form-control" style="flex: 0.5;" placeholder="Aisle" v-model="newGroceryItemAisle">
-              <button class="btn btn-primary" :disabled="!newGroceryItemName" @click="addGroceryItemToNonMealGroceryItems">Add</button>
+            
+            <!-- Suggestions Dropdown -->
+            <div v-if="showSuggestions && filteredSuggestions.length" class="suggestions-dropdown">
+              <div 
+                v-for="suggestion in filteredSuggestions" 
+                :key="suggestion.id"
+                class="suggestion-item"
+                @click="selectSuggestion(suggestion)"
+              >
+                <span class="suggestion-name">{{ suggestion.name }}</span>
+                <span class="suggestion-details">{{ suggestion.quantity }} {{ suggestion.units }}</span>
+              </div>
             </div>
           </div>
 
-          <hr>
-
-          <div class="input-group my-3" data-step="2">
-            <input type="text" class="form-control" placeholder="Search Existing Items" v-model="searchText">
-            <button class="btn btn-secondary" @click="searchText = ''" v-if="searchText">Clear</button>
-          </div>
-
-          <hr v-if="filteredGroceryItems.length" >
-          <h3 v-if="filteredGroceryItems.length" >Grocery Items</h3>
-          <div class="scrollable-list-wrapper">
-            <ul class="list-group my-3 scrollable-list" data-step="3">
-              <li class="list-group-item d-flex justify-content-between align-items-center" v-for="item in filteredGroceryItems" :key="item.id" @click="toggleDeleteButton(item)">
-                <span class="col">{{item.name}}</span>
-                <div class="col-4 mr-2">
-                  <button v-if="showDeleteButton === item.id" class="btn btn-sm btn-danger col-12" @click.stop="deleteItem(item)">Delete</button>
-                  <button v-else class="btn btn-sm btn-primary col-12" @click.stop="increaseShoppingListQuantity(item)">
-                    <i v-if="buttonClicked === item.id" class="bi bi-check-circle"/>
-                    <span v-else>+{{item.quantity}} {{item.units}}</span>
-                  </button>
+          <!-- Shopping List -->
+          <div v-if="sortedShoppingList.length">
+            <h3>Shopping List</h3>
+            <ul class="list-group my-3" data-step="2">
+              <li class="list-group-item d-flex justify-content-between align-items-center" v-for="item in sortedShoppingList" :key="item.id">
+                <span class="col">{{item.name}} - {{item.quantity}} {{ getUnits(item)}}</span>
+                <div class="d-flex gap-2">
+                  <button class="btn btn-sm btn-tertiary" @click="increaseShoppingListQuantity(item)">+{{getDefaultQuantity(item)}}</button>
+                  <button class="btn btn-sm btn-warning" @click="decreaseShoppingListQuantity(item)">-{{getDefaultQuantity(item)}}</button>
                 </div>
               </li>
             </ul>
-            <div class="scrollable-list-gradient"></div>
           </div>
-
-          <hr v-if="sortedShoppingList.length">
-          <h3 v-if="sortedShoppingList.length">Shopping List</h3>
-          <ul class="list-group my-3" data-step="4">
-            <li class="list-group-item d-flex justify-content-between align-items-center" v-for="item in sortedShoppingList" :key="item.id">
-              <span class="col">{{item.name}} - Quantity: {{item.quantity}}</span>
-              <button class="btn btn-sm btn-warning col-4" @click="decreaseShoppingListQuantity(item)">-{{getDefaultQuantity(item)}} {{ getUnits(item)}}</button>
-            </li>
-          </ul>
+          
+          <!-- Empty State -->
+          <div v-else class="text-center py-4 text-muted">
+            <i class="bi bi-cart3" style="font-size: 3rem; opacity: 0.5;"></i>
+            <p class="mt-2">Start typing to add items to your shopping list</p>
+          </div>
         </div>
       </div>
     </div>
+    
+    <!-- Quick Details Modal -->
+    <div class="modal fade" id="quickDetailsModal" tabindex="-1">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Add "{{ pendingItemName }}"</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <div class="row g-2">
+              <div class="col-6">
+                <label class="form-label">Quantity</label>
+                <input type="number" class="form-control" v-model="pendingQuantity" min="1">
+              </div>
+              <div class="col-6">
+                <label class="form-label">Units</label>
+                <input type="text" class="form-control" v-model="pendingUnits" placeholder="lbs, cans, etc.">
+              </div>
+              <div class="col-12">
+                <label class="form-label">Aisle (optional)</label>
+                <input type="number" class="form-control" v-model="pendingAisle" placeholder="Aisle number">
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="button" class="btn btn-primary" @click="confirmAddItem">Add to List</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    
     <span class="start-tour-button" @click="this.startTour()">
       <i class="bi bi-question-circle"/>
     </span>
@@ -67,19 +109,35 @@ import Header from '@/components/Header.vue';
 export default {
   data () {
     return {
+      // Quick add functionality
+      quickAddInput: '',
+      showSuggestions: false,
+      filteredSuggestions: [],
+      
+      // Modal data for new items
+      pendingItemName: '',
+      pendingQuantity: 1,
+      pendingUnits: '',
+      pendingAisle: null,
+      
+      // Legacy data (kept for compatibility)
       showDeleteButton: null,
-      newGroceryItemName: '',
-      newGroceryItemQuantity: null,
-      newGroceryItemUnits: '',
-      newGroceryItemAisle: null,
-      searchText: '',
       buttonClicked: false
     }
   },
   components: {
     Header
   },
+  mounted() {
+    // Close suggestions when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!this.$refs.quickAddInput || !this.$refs.quickAddInput.contains(e.target)) {
+        this.showSuggestions = false;
+      }
+    });
+  },
   computed: {
+    // All existing grocery items for suggestions
     nonMealGroceryItems () {
       if (!this.$store.state.nonMealGroceryItems || !Object.keys(this.$store.state.nonMealGroceryItems).length) {
         return [];
@@ -89,84 +147,157 @@ export default {
           .sort((a, b) => a.name.localeCompare(b.name));
       }
     },
-    nonMealShoppingList () {
-      if (!this.$store.state.nonMealShoppingList || !Object.keys(this.$store.state.nonMealShoppingList).length) {
-        return [];
-      } else {
-        return Object.keys(this.$store.state.nonMealShoppingList).map((key) => this.$store.state.nonMealShoppingList[key]);
-      }
-    },
-    filteredGroceryItems () {
-      return this.nonMealGroceryItems
-        .filter((item) => item.name.toLowerCase().includes(this.searchText.toLowerCase()))
-        .sort((a, b) => a.name.localeCompare(b.name));
-    },
+    
+    // Shopping list from store
     sortedShoppingList () {
       return [...this.$store.getters.unpurchasedIngredients]
         .sort((a, b) => a.name.localeCompare(b.name)) || [];
     }
   },
   methods: {
-    addGroceryItemToNonMealGroceryItems () {
+    // Update suggestions as user types
+    updateSuggestions() {
+      const query = this.quickAddInput.toLowerCase().trim();
+      
+      if (query.length === 0) {
+        this.showSuggestions = false;
+        this.filteredSuggestions = [];
+        return;
+      }
+
+      this.filteredSuggestions = this.nonMealGroceryItems
+        .filter(item => item.name.toLowerCase().includes(query))
+        .slice(0, 5); // Show max 5 suggestions
+      
+      this.showSuggestions = this.filteredSuggestions.length > 0;
+    },
+
+    // Handle quick add (Enter key or Add button)
+    handleQuickAdd() {
+      const itemName = this.quickAddInput.trim();
+      if (!itemName) return;
+
+      // Check if this exact item already exists
+      const existingItem = this.nonMealGroceryItems.find(
+        item => item.name.toLowerCase() === itemName.toLowerCase()
+      );
+
+      if (existingItem) {
+        // Use existing item with its stored details
+        this.addToShoppingList(existingItem);
+      } else {
+        // New item - show modal for details
+        this.showNewItemModal(itemName);
+      }
+    },
+
+    // Select item from suggestions dropdown
+    selectSuggestion(suggestion) {
+      this.addToShoppingList(suggestion);
+      this.quickAddInput = '';
+      this.showSuggestions = false;
+    },
+
+    // Show modal for new item details
+    showNewItemModal(itemName) {
+      this.pendingItemName = itemName;
+      this.pendingQuantity = 1;
+      this.pendingUnits = '';
+      this.pendingAisle = null;
+      
+      // Show Bootstrap modal - try multiple ways to ensure compatibility
+      this.$nextTick(() => {
+        const modalEl = document.getElementById('quickDetailsModal');
+        try {
+          // Try using Bootstrap 5 syntax
+          if (window.bootstrap && window.bootstrap.Modal) {
+            const modal = new window.bootstrap.Modal(modalEl);
+            modal.show();
+          } else if (window.Bootstrap && window.Bootstrap.Modal) {
+            const modal = new window.Bootstrap.Modal(modalEl);
+            modal.show();
+          } else {
+            // Fallback: manually show modal
+            modalEl.classList.add('show');
+            modalEl.style.display = 'block';
+            document.body.classList.add('modal-open');
+          }
+        } catch (error) {
+          console.warn('Bootstrap modal failed, using fallback:', error);
+          // Fallback: manually show modal
+          modalEl.classList.add('show');
+          modalEl.style.display = 'block';
+          document.body.classList.add('modal-open');
+        }
+      });
+    },
+
+    // Confirm adding new item from modal
+    confirmAddItem() {
       const newId = require('uuid').v4();
       
-      // Add to old system for compatibility
-      const nonMealGroceryEntry = {
-        path: `non-meal-grocery-items`,
-        value: {
-          id: newId,
-          name: this.newGroceryItemName,
-          units: this.newGroceryItemUnits,
-          aisle: this.newGroceryItemAisle || 0,
-          quantity: this.newGroceryItemQuantity || 1
-        }
+      // Create new grocery item object
+      const newItem = {
+        id: newId,
+        name: this.pendingItemName,
+        quantity: this.pendingQuantity || 1,
+        units: this.pendingUnits || '',
+        aisle: this.pendingAisle || 0
       };
 
-      // Add to new unified system
+      // Add to grocery items database for future use
+      const nonMealGroceryEntry = {
+        path: `non-meal-grocery-items`,
+        value: newItem
+      };
+
       const groceryCatalogEntry = {
         path: `grocery-catalog/${newId}`,
         value: {
           id: newId,
-          name: this.newGroceryItemName,
-          defaultUnits: this.newGroceryItemUnits,
-          defaultAisle: this.newGroceryItemAisle || 0
+          name: this.pendingItemName,
+          defaultUnits: this.pendingUnits || '',
+          defaultAisle: this.pendingAisle || 0
         }
       };
 
       this.$store.dispatch('setDBValue', nonMealGroceryEntry);
       this.$store.dispatch('updateDBValue', groceryCatalogEntry);
-      this.newGroceryItemName = '';
-      this.newGroceryItemQuantity = null;
-      this.newGroceryItemUnits = '';
-      this.newGroceryItemAisle = null;
-    },
-    toggleDeleteButton (item) {
-      if (this.showDeleteButton === item.id) {
-        this.showDeleteButton = null;
-      } else {
-        this.showDeleteButton = item.id;
+
+      // Add to shopping list
+      this.addToShoppingList(newItem);
+
+      // Close modal and clear inputs
+      const modalEl = document.getElementById('quickDetailsModal');
+      try {
+        if (window.bootstrap && window.bootstrap.Modal) {
+          const modal = window.bootstrap.Modal.getInstance(modalEl);
+          if (modal) {
+            modal.hide();
+          }
+        } else {
+          // Fallback: manually hide modal
+          modalEl.classList.remove('show');
+          modalEl.style.display = 'none';
+          document.body.classList.remove('modal-open');
+        }
+      } catch (error) {
+        // Fallback: manually hide modal
+        modalEl.classList.remove('show');
+        modalEl.style.display = 'none';
+        document.body.classList.remove('modal-open');
       }
+      this.quickAddInput = '';
+      this.showSuggestions = false;
     },
-    deleteItem (item) {
-      const dbEntry = {
-        path: `non-meal-grocery-items/${item.id}`,
-        value: null
-      };
 
-      this.$store.dispatch('updateDBValue', dbEntry);
-    },
-    correspondingItemInNonMealGroceryItems (item) {
-      const nonMealGroceryItems = this.$store.state.nonMealGroceryItems;
-
-      return nonMealGroceryItems ? nonMealGroceryItems[item.id] : null
-    },
-    increaseShoppingListQuantity (item) {
-      this.buttonClicked = item.id;
+    // Add item directly to shopping list
+    addToShoppingList(item) {
       const nonMealShoppingList = this.$store.state.nonMealShoppingList;
       const existingItem = nonMealShoppingList ? nonMealShoppingList[item.id] : null;
 
       if (existingItem) {
-        // If the item is already in the shopping list, increase its quantity
+        // If item already in shopping list, increase quantity
         const dbEntry = {
           path: `non-meal-shopping-list/${item.id}`,
           value: {
@@ -174,10 +305,9 @@ export default {
             quantity: existingItem.quantity + item.quantity
           }
         };
-
         this.$store.dispatch('updateDBValue', dbEntry);
       } else {
-        // If the item is not in the shopping list, add it
+        // Add new item to shopping list
         const dbEntry = {
           path: `non-meal-shopping-list/${item.id}`,
           value: {
@@ -187,19 +317,34 @@ export default {
             quantity: item.quantity
           }
         };
-
         this.$store.dispatch('updateDBValue', dbEntry);
       }
 
-      setTimeout(() => {
-        this.buttonClicked = false;
-      }, 1000);
+      // Clear input
+      this.quickAddInput = '';
+      this.showSuggestions = false;
     },
+
+    // Increase item quantity in shopping list
+    increaseShoppingListQuantity(item) {
+      const correspondingItem = this.correspondingItemInNonMealGroceryItems(item);
+      const quantityToAdd = correspondingItem ? correspondingItem.quantity : 1;
+      
+      const dbEntry = {
+        path: `non-meal-shopping-list/${item.id}`,
+        value: {
+          ...item,
+          quantity: item.quantity + quantityToAdd
+        }
+      };
+      this.$store.dispatch('updateDBValue', dbEntry);
+    },
+
+    // Remove item from shopping list (keep existing logic)
     decreaseShoppingListQuantity (item) {
       const correspondingItem = this.correspondingItemInNonMealGroceryItems(item);
 
       if (correspondingItem && item.quantity > correspondingItem.quantity) {
-        // If the corresponding item exists and the item quantity is greater than the corresponding item quantity, decrease the item quantity
         const dbEntry = {
           path: `non-meal-shopping-list/${item.id}`,
           value: {
@@ -207,31 +352,38 @@ export default {
             quantity: item.quantity - correspondingItem.quantity
           }
         };
-
         this.$store.dispatch('updateDBValue', dbEntry);
       } else {
-        // If the corresponding item does not exist or the item quantity is not greater than the corresponding item quantity, remove the item from the shopping list
         const dbEntry = {
           path: `non-meal-shopping-list/${item.id}`,
           value: null
         };
-
         this.$store.dispatch('updateDBValue', dbEntry);
       }
     },
+
+    // Helper methods (keep existing logic)
+    correspondingItemInNonMealGroceryItems (item) {
+      const nonMealGroceryItems = this.$store.state.nonMealGroceryItems;
+      return nonMealGroceryItems ? nonMealGroceryItems[item.id] : null
+    },
+
     getDefaultQuantity (item) {
       const correspondingItem = this.correspondingItemInNonMealGroceryItems(item);
-
       return correspondingItem ? correspondingItem.quantity : 1;
     },
+
     getUnits (item) {
+      let units;
       if (!item.units) {
         const itemInNonMealGroceryItems = this.correspondingItemInNonMealGroceryItems(item);
-
-        return itemInNonMealGroceryItems ? itemInNonMealGroceryItems.units : '';
+        units = itemInNonMealGroceryItems ? itemInNonMealGroceryItems.units : '';
       } else {
-        return pluralize(item.units, item.quantity);
+        units = item.units;
       }
+      
+      // Always pluralize based on the item's quantity
+      return units ? pluralize(units, item.quantity) : '';
     },
     startTour () {
       const tour = new Shepherd.Tour({
@@ -245,8 +397,8 @@ export default {
       });
 
       tour.addStep({
-        title: 'Groceries',
-        text: 'Let me show you around real quick.',
+        title: 'Groceries - Simplified!',
+        text: 'This page has been redesigned to be much simpler and faster to use.',
         buttons: [
           {
             text: 'Next',
@@ -257,8 +409,8 @@ export default {
       });
 
       tour.addStep({
-        title: 'Add Grocery Item',
-        text: 'Here you can add a new grocery item. You can specify the quantity, units, and aisle if you want.',
+        title: 'Quick Add',
+        text: 'Just start typing any grocery item name. If you\'ve used it before, it will suggest it with saved details. Press Enter or click Add to add it to your shopping list.',
         attachTo: {
           element: '[data-step="1"]',
           on: 'bottom'
@@ -278,8 +430,8 @@ export default {
       });
 
       tour.addStep({
-        title: 'Search Existing Items',
-        text: 'You can search the list for previous grocery items here.',
+        title: 'Shopping List',
+        text: 'This is your shopping list. It includes items you add here and all ingredients from upcoming meals the hat has drawn. Click the minus button to remove items.',
         attachTo: {
           element: '[data-step="2"]',
           on: 'bottom'
@@ -290,60 +442,6 @@ export default {
             action: tour.back,
             classes: 'btn-secondary btn btn-sm'
           },
-          {
-            text: 'Next',
-            action: tour.next,
-            classes: 'btn-success btn btn-sm'
-          }
-        ]
-      });
-
-      tour.addStep({
-        title: 'Grocery Items',
-        text: 'This is the list of all grocery items you\'ve used in the past. Click the buttons to add them to your shopping list. If you click the item itself, a delete button will appear.',
-        attachTo: {
-          element: '[data-step="3"]',
-          on: 'bottom'
-        },
-        buttons: [
-          {
-            text: 'Back',
-            action: tour.back,
-            classes: 'btn-secondary btn btn-sm'
-          },
-          {
-            text: 'Next',
-            action: tour.next,
-            classes: 'btn-success btn btn-sm'
-          }
-        ]
-      });
-
-      tour.addStep({
-        title: 'Shopping List',
-        text: 'This is your shopping list. It includes things from this page and all of the ingredients from upcoming meals the hat has drawn.',
-        attachTo: {
-          element: '[data-step="4"]',
-          on: 'bottom'
-        },
-        buttons: [
-          {
-            text: 'Back',
-            action: tour.back,
-            classes: 'btn-secondary btn btn-sm'
-          },
-          {
-            text: 'Next',
-            action: tour.next,
-            classes: 'btn-success btn btn-sm'
-          }
-        ]
-      });
-
-      tour.addStep({
-        title: 'That should get you started.',
-        text: 'Good luck!',
-        buttons: [
           {
             text: 'Done',
             action: tour.complete,
@@ -361,25 +459,80 @@ export default {
 <style lang="scss">
 .groceries {
   .groceries-body {
-  .scrollable-list-wrapper {
-    position: relative;
-    height: 225px;
-
-    .scrollable-list {
-      height: 100%;
-      overflow-y: auto;
+    max-width: 600px;
+    margin: 0 auto;
+    
+    // Suggestions dropdown
+    .suggestions-dropdown {
+      position: relative;
+      border: 1px solid #ced4da;
+      border-top: none;
+      border-radius: 0 0 0.375rem 0.375rem;
+      background: white;
+      box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+      z-index: 1000;
+      
+      .suggestion-item {
+        padding: 0.75rem;
+        cursor: pointer;
+        border-bottom: 1px solid #eee;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        
+        &:hover {
+          background-color: #f8f9fa;
+        }
+        
+        &:last-child {
+          border-bottom: none;
+        }
+        
+        .suggestion-name {
+          font-weight: 500;
+          color: #212529;
+        }
+        
+        .suggestion-details {
+          font-size: 0.875rem;
+          color: #6c757d;
+        }
+      }
     }
+    
+    // Empty state styling
+    .text-muted {
+      i {
+        display: block;
+        margin-bottom: 1rem;
+      }
+    }
+    
+    // Keep existing modal and button styles
+    .modal-content {
+      border-radius: 0.5rem;
+    }
+    
+    // Legacy styles (can be removed later if needed)
+    .scrollable-list-wrapper {
+      position: relative;
+      height: 225px;
 
-    .scrollable-list-gradient {
-      content: "";
-      position: absolute;
-      bottom: -2px;
-      left: 0;
-      right: 0;
-      height: 20px;
-      background: linear-gradient(to bottom, rgba(255, 255, 255, 0), rgba(255, 255, 255, 1) 100%);
+      .scrollable-list {
+        height: 100%;
+        overflow-y: auto;
+      }
+
+      .scrollable-list-gradient {
+        content: "";
+        position: absolute;
+        bottom: -2px;
+        left: 0;
+        right: 0;
+        height: 20px;
+        background: linear-gradient(to bottom, rgba(255, 255, 255, 0), rgba(255, 255, 255, 1) 100%);
+      }
     }
   }
-}
 }
 </style>
