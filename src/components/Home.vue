@@ -1,6 +1,6 @@
 <template>
   <div class="home">
-    <Header headerText="Meal Hat" data-step="6"/>
+    <Header headerText="Meal Hat" data-step="5"/>
     <div class="home-body p-3">
       <div class="btn-group" role="group" aria-label="Button group with nested dropdown">
         <router-link
@@ -25,25 +25,18 @@
           Draw Meals
         </router-link>
       </div>
-      <div class="btn-group mt-3" role="group" aria-label="Button group with nested dropdown">
-        <router-link
-          to="/add-groceries"
-          class="btn btn-primary"
-          data-step="4"
-        >
-          Add Groceries
-        </router-link>
+      <div class="btn-group mt-2" role="group">
         <router-link
           to="/shopping-list"
-          class="btn btn-success"
-          data-step="5"
+          class="btn btn-success w-100"
+          data-step="4"
         >
           Shopping List
         </router-link>
       </div>
       <DrawnMealSchedule />
     </div>
-    <span class="start-tour-button" @click="this.startTour()" data-step="7">
+    <span class="start-tour-button" @click="this.startTour()" data-step="6">
       <i class="bi bi-question-circle"/>
     </span>
   </div>
@@ -161,31 +154,10 @@ export default {
       });
 
       tour.addStep({
-        title: 'Click here to add groceries.',
-        text: 'Sometimes you need to add groceries to your shopping list that aren\'t tied to a meal. You can do that here.',
+        title: 'Click here to view your shopping list.',
+        text: 'This is your complete grocery hub! View ingredients from drawn meals, add additional grocery items, adjust quantities if you already have some at home, and organize by aisle for efficient shopping.',
         attachTo: {
           element: '[data-step="4"]',
-          on: 'bottom'
-        },
-        buttons: [
-          {
-            text: 'Back',
-            action: tour.back,
-            classes: 'btn-secondary btn btn-sm'
-          },
-          {
-            text: 'Next',
-            action: tour.next,
-            classes: 'btn-success btn btn-sm'
-          }
-        ]
-      });
-
-      tour.addStep({
-        title: 'Click here to view your shopping list.',
-        text: 'This will show you a checklist of the things you need to buy for the meals the hat has drawn as well as any groceries you\'ve added in the Add Groceries section.',
-        attachTo: {
-          element: '[data-step="5"]',
           on: 'bottom'
         },
         buttons: [
@@ -206,7 +178,7 @@ export default {
         title: 'The Header',
         text: 'From the header you can click your email address to log out.<br>Click the name of your hat to select a different hat.<br>And you can always click the logo to return to this Home screen.',
         attachTo: {
-          element: '[data-step="6"]',
+          element: '[data-step="5"]',
           on: 'bottom'
         },
         buttons: [
@@ -227,7 +199,7 @@ export default {
         title: 'Click here for help.',
         text: 'On each page you can click this button to get a tour of the page you\'re on.<br>It\'s a great way to learn how to use Meal Hat!',
         attachTo: {
-          element: '[data-step="7"]',
+          element: '[data-step="6"]',
           on: 'bottom'
         },
         buttons: [
