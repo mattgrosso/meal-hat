@@ -187,10 +187,8 @@ export default {
 
       this.$store.dispatch('updateDBValue', drawnMealForUpdate);
 
-      this.$store.dispatch('updateDBValue', {
-        path: 'purchased-ingredients',
-        value: { placeholder: 'placeholder' }
-      });
+      // Regenerate shopping list from newly scheduled meal
+      this.$store.dispatch('generateShoppingListFromMeals');
 
       this.$router.push('/');
       this.$emit('showToast', {

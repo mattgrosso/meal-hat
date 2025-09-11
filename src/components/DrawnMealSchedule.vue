@@ -112,6 +112,9 @@ export default {
       // Update each meal's drawnDates array to reflect the new assignments
       this.updateMealDrawnDates(meal1, date1, date2);
       this.updateMealDrawnDates(meal2, date2, date1);
+      
+      // Regenerate shopping list since meal dates may have changed
+      this.$store.dispatch('generateShoppingListFromMeals');
     },
     formatDate (dateString) {
       const options = { weekday: 'short', month: 'numeric', day: 'numeric' };
@@ -174,6 +177,9 @@ export default {
         
         this.$store.dispatch('updateDBValue', mealUpdateEntry);
       }
+      
+      // Regenerate shopping list to remove ingredients from deleted meal
+      this.$store.dispatch('generateShoppingListFromMeals');
     },
     updateMealDrawnDates (meal, oldDate, newDate) {
       if (!meal || !meal.id) return;

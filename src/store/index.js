@@ -44,11 +44,11 @@ export default createStore({
     drawnMealsWithHistory: null,
     drawnMeals: null,
     
-    // SIMPLIFIED UNIFIED DATA MODEL
+    // UNIFIED DATA MODEL
     groceryCatalog: {}, // Single source for all grocery items: id → { id, name, defaultUnits, defaultAisle }
     shoppingList: {}, // Unified shopping list: id → { groceryId, quantity, units, aisle, source, mealId?, purchased }
     
-    // DEPRECATED - keeping temporarily for migration
+    // DEPRECATED - keeping only for backward compatibility during initialization
     groceryItems: null,
     nonMealShoppingList: null,
     purchasedIngredients: {},
@@ -72,61 +72,127 @@ export default createStore({
 
       return state.userEmail.replaceAll(/[-!$%@^&*()_+|~=`{}[\]:";'<>?,./]/g, "-");
     },
-    // SIMPLIFIED GETTERS FOR NEW DATA MODEL
+    // UNIFIED SHOPPING LIST GETTERS
     shoppingListItems: (state) => {
       return Object.values(state.shoppingList || {})
-        .map(item => ({
-          ...item,
-          groceryItem: state.groceryCatalog[item.groceryId] || { name: 'Unknown Item' }
-        }))
+        .map(item => {
+          // Try to get grocery item from catalog, with fallbacks
+          let groceryItem = state.groceryCatalog[item.groceryId];
+          
+          // Fallback to old systems during migration
+          if (!groceryItem && item.groceryId) {
+            groceryItem = (state.groceryItems && state.groceryItems[item.groceryId]) ||
+                         (state.nonMealGroceryItems && state.nonMealGroceryItems[item.groceryId]);
+          }
+          
+          // If still no grocery item found, try to use item's own properties
+          if (!groceryItem) {
+            groceryItem = {
+              id: item.groceryId || item.id,
+              name: item.name || 'Unknown Item',
+              defaultUnits: item.units || '',
+              defaultAisle: item.aisle || 0
+            };
+          }
+          
+          return {
+            ...item,
+            groceryItem: groceryItem
+          };
+        })
         .sort((a, b) => (a.aisle || 999) - (b.aisle || 999));
     },
     unpurchasedShoppingItems: (state, getters) => {
       return getters.shoppingListItems.filter(item => !item.purchased);
     },
     
-    // RESTORED ORIGINAL GETTERS - needed for shopping list to work
-    drawnIngredients: (state) => {
-      if (!state.drawnMeals || !state.meals || (!state.groceryItems && !state.groceryCatalog)) {
-        return [];
+    // MIGRATION HELPERS
+    migrateToUnifiedSystem: (state) => {
+      console.log('Starting migration to unified shopping list system...');
+      
+      // Migrate nonMealShoppingList items to unified shoppingList
+      if (state.nonMealShoppingList && typeof state.nonMealShoppingList === 'object') {
+        Object.values(state.nonMealShoppingList).forEach(item => {
+          const shoppingItemId = require('uuid').v4();
+          
+          // Ensure grocery catalog entry exists
+          if (!state.groceryCatalog[item.id]) {
+            state.groceryCatalog[item.id] = {
+              id: item.id,
+              name: item.name,
+              defaultUnits: item.units || '',
+              defaultAisle: item.aisle || 0
+            };
+          }
+          
+          state.shoppingList[shoppingItemId] = {
+            id: shoppingItemId,
+            groceryId: item.id,
+            quantity: item.quantity || 1,
+            units: item.units || '',
+            aisle: item.aisle || 0,
+            source: 'manual',
+            purchased: false
+          };
+        });
+        console.log('Migrated', Object.keys(state.nonMealShoppingList).length, 'manual items');
       }
-
-      const ingredients = {};
-
-      state.drawnMeals.forEach(drawnMeal => {
-        const meal = state.meals.find(meal => meal.id === drawnMeal.mealId);
-        if (meal && meal.ingredients) {
-          meal.ingredients.forEach(ingredient => {
-            // Try new system first, fall back to old system
-            const groceryItem = state.groceryCatalog[ingredient.groceryItemId] || 
-                              (state.groceryItems && state.groceryItems[ingredient.groceryItemId]);
-            if (groceryItem) {
-              const id = groceryItem.id;
-              if (ingredients[id]) {
-                ingredients[id].quantity += ingredient.quantity;
-              } else {
-                ingredients[id] = { ...groceryItem, quantity: ingredient.quantity };
+      
+      // Migrate drawnIngredients to unified shoppingList
+      if (state.drawnMeals && state.meals && (state.groceryItems || state.groceryCatalog)) {
+        const ingredients = {};
+        
+        state.drawnMeals.forEach(drawnMeal => {
+          const meal = state.meals.find(meal => meal.id === drawnMeal.mealId);
+          if (meal && meal.ingredients) {
+            meal.ingredients.forEach(ingredient => {
+              const groceryItem = state.groceryCatalog[ingredient.groceryItemId] || 
+                                (state.groceryItems && state.groceryItems[ingredient.groceryItemId]);
+              if (groceryItem) {
+                const id = groceryItem.id;
+                if (ingredients[id]) {
+                  ingredients[id].quantity += ingredient.quantity;
+                } else {
+                  ingredients[id] = { ...groceryItem, quantity: ingredient.quantity };
+                }
               }
-            }
-          });
-        }
-      });
-
-      return Object.values(ingredients);
-    },
-    combinedShoppingList: (state, getters) => {
-      const nonMealShoppingListArray = state.nonMealShoppingList && typeof state.nonMealShoppingList === 'object' ? Object.values(state.nonMealShoppingList) : [];
-      const drawnIngredientsArray = getters.drawnIngredients || [];
-
-      return [...drawnIngredientsArray, ...nonMealShoppingListArray];
-    },
-    unpurchasedIngredients: (state, getters) => {
-      return getters.combinedShoppingList
-        .map(ingredient => ({
-          ...ingredient,
-          quantity: ingredient.quantity - (state.purchasedIngredients[ingredient.id] || 0),
-        }))
-        .filter(ingredient => ingredient.quantity > 0);
+            });
+          }
+        });
+        
+        // Add meal ingredients to unified shopping list
+        Object.values(ingredients).forEach(item => {
+          const shoppingItemId = require('uuid').v4();
+          const purchasedAmount = state.purchasedIngredients[item.id] || 0;
+          const remainingQuantity = item.quantity - purchasedAmount;
+          
+          // Ensure grocery catalog entry exists
+          if (!state.groceryCatalog[item.id]) {
+            state.groceryCatalog[item.id] = {
+              id: item.id,
+              name: item.name,
+              defaultUnits: item.units || item.defaultUnits || '',
+              defaultAisle: item.aisle || item.defaultAisle || 0
+            };
+          }
+          
+          if (remainingQuantity > 0) {
+            state.shoppingList[shoppingItemId] = {
+              id: shoppingItemId,
+              groceryId: item.id,
+              quantity: remainingQuantity,
+              units: item.units || item.defaultUnits || '',
+              aisle: item.aisle || item.defaultAisle || 0,
+              source: 'meal',
+              purchased: false
+            };
+          }
+        });
+        console.log('Migrated', Object.keys(ingredients).length, 'meal ingredients');
+      }
+      
+      console.log('Migration complete! Unified shopping list has', Object.keys(state.shoppingList).length, 'items');
+      return true;
     },
   },
   mutations: {
@@ -224,6 +290,134 @@ export default createStore({
     }
   },
   actions: {
+    // Migrate from old split system to unified system
+    async migrateToUnifiedSystem(context) {
+      console.log('Migrating to unified shopping list system...');
+      
+      // Run the migration
+      const migrationSuccess = context.getters.migrateToUnifiedSystem;
+      
+      if (migrationSuccess) {
+        // Save the new unified shopping list to database
+        await context.dispatch('updateDBValue', {
+          path: 'shopping-list',
+          value: context.state.shoppingList
+        });
+        
+        // Save the updated grocery catalog to database
+        await context.dispatch('updateDBValue', {
+          path: 'grocery-catalog',
+          value: context.state.groceryCatalog
+        });
+        
+        // Clear old data from database
+        await context.dispatch('updateDBValue', { path: 'non-meal-shopping-list', value: null });
+        await context.dispatch('updateDBValue', { path: 'purchased-ingredients', value: {} });
+        
+        // Clear old data from state
+        context.commit('setNonMealShoppingList', null);
+        context.commit('setPurchasedIngredients', {});
+        
+        console.log('Migration completed and saved to database');
+        return true;
+      }
+      return false;
+    },
+    
+    // Generate shopping list items from drawn meals
+    async generateShoppingListFromMeals(context) {
+      console.log('Generating shopping list from drawn meals...');
+      
+      // Use drawnMealsWithHistory as the primary source, fallback to drawnMeals
+      const drawnMealsToUse = context.state.drawnMealsWithHistory || context.state.drawnMeals;
+      
+      if (!drawnMealsToUse || !context.state.meals) {
+        console.log('No drawn meals or meals data available');
+        return;
+      }
+
+      const mealIngredients = {};
+      
+      // Filter to only include meals from today forward (not past meals)
+      const today = new Date();
+      today.setHours(0, 0, 0, 0); // Start of today
+      
+      const upcomingMeals = drawnMealsToUse.filter(drawnMeal => {
+        const mealDate = new Date(drawnMeal.assignedDate);
+        return mealDate >= today;
+      });
+      
+      // Collect all ingredients from upcoming drawn meals only
+      upcomingMeals.forEach(drawnMeal => {
+        const meal = context.getters.getMeal(drawnMeal.mealId);
+        if (meal && meal.ingredients) {
+          meal.ingredients.forEach(ingredient => {
+            const groceryItem = context.state.groceryCatalog[ingredient.groceryItemId] || 
+                              (context.state.groceryItems && context.state.groceryItems[ingredient.groceryItemId]);
+            if (groceryItem) {
+              const id = groceryItem.id;
+              if (mealIngredients[id]) {
+                mealIngredients[id].quantity += ingredient.quantity;
+              } else {
+                mealIngredients[id] = { 
+                  ...groceryItem, 
+                  quantity: ingredient.quantity,
+                  mealId: drawnMeal.mealId 
+                };
+              }
+            }
+          });
+        }
+      });
+
+      // Remove existing meal ingredients from shopping list (keep manual items)
+      const existingShoppingList = { ...context.state.shoppingList };
+      Object.keys(existingShoppingList).forEach(itemId => {
+        if (existingShoppingList[itemId].source === 'meal') {
+          delete context.state.shoppingList[itemId];
+        }
+      });
+
+      // Add new meal ingredients to shopping list
+      Object.values(mealIngredients).forEach(item => {
+        const shoppingItemId = require('uuid').v4();
+        
+        // Ensure grocery catalog entry exists
+        if (!context.state.groceryCatalog[item.id]) {
+          context.state.groceryCatalog[item.id] = {
+            id: item.id,
+            name: item.name,
+            defaultUnits: item.units || item.defaultUnits || '',
+            defaultAisle: item.aisle || item.defaultAisle || 0
+          };
+        }
+        
+        context.state.shoppingList[shoppingItemId] = {
+          id: shoppingItemId,
+          groceryId: item.id,
+          quantity: item.quantity,
+          units: item.units || item.defaultUnits || '',
+          aisle: item.aisle || item.defaultAisle || 0,
+          source: 'meal',
+          mealId: item.mealId,
+          purchased: false
+        };
+      });
+
+      // Save to database
+      await context.dispatch('updateDBValue', {
+        path: 'shopping-list',
+        value: context.state.shoppingList
+      });
+      
+      await context.dispatch('updateDBValue', {
+        path: 'grocery-catalog',
+        value: context.state.groceryCatalog
+      });
+
+      console.log('Generated', Object.keys(mealIngredients).length, 'meal ingredients for shopping list');
+    },
+    
     async login (context) {
       const auth = getAuth();
       const provider = new GoogleAuthProvider();
@@ -387,15 +581,6 @@ export default createStore({
         });
       }
 
-      // If there's no shoppingList in the state, fetch it from the database.
-      if (!context.state.shoppingList) {
-        onValue(ref(db, `${context.state.databaseTopKey}/shopping-list`), (snapshot) => {
-          const data = snapshot.val();
-
-          // Commit the fetched shoppingList to the state.
-          context.commit('setShoppingList', data);
-        });
-      }
 
       // If there's no groceryItems in the state, fetch it from the database.
       if (!context.state.groceryItems) {
@@ -514,9 +699,9 @@ export default createStore({
 
       // Initialize unified shopping list
       if (Object.keys(context.state.shoppingList).length === 0) {
-        onValue(ref(db, `${context.state.databaseTopKey}/unified-shopping-list`), (snapshot) => {
+        onValue(ref(db, `${context.state.databaseTopKey}/shopping-list`), (snapshot) => {
           const data = snapshot.val();
-          context.commit('setShoppingList', data);
+          context.commit('setShoppingList', data || {});
         });
       }
     },
