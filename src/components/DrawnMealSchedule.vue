@@ -112,7 +112,7 @@ export default {
       // Update each meal's drawnDates array to reflect the new assignments
       this.updateMealDrawnDates(meal1, date1, date2);
       this.updateMealDrawnDates(meal2, date2, date1);
-      
+
       // Regenerate shopping list since meal dates may have changed
       this.$store.dispatch('generateShoppingListFromMeals');
     },
@@ -140,24 +140,22 @@ export default {
       // Remove this date from the meal's drawnDates array
       const meal = drawnMeal.meal;
       const dateToRemove = new Date(drawnMeal.assignedDate).getTime();
-      
-      
+
       if (meal && meal.id) {
         let updatedDrawnDates = [];
-        
+
         if (meal.drawnDates) {
           console.log('Using new system - current drawnDates:', meal.drawnDates);
-          
+
           // More robust date matching - compare by date only, not exact timestamp
           const dateToRemoveDay = new Date(dateToRemove);
           const targetDateString = dateToRemoveDay.toDateString();
-          
+
           updatedDrawnDates = meal.drawnDates.filter(timestamp => {
             const existingDateString = new Date(timestamp).toDateString();
             const matches = existingDateString === targetDateString;
-              return !matches;
+            return !matches;
           });
-          
         } else if (meal.lastDrawn && meal.lastDrawn === dateToRemove) {
           // Old system: if we're removing the lastDrawn date, clear it
           updatedDrawnDates = [];
@@ -165,7 +163,7 @@ export default {
           // Old system: keep existing lastDrawn if we're not removing that specific date
           updatedDrawnDates = [meal.lastDrawn];
         }
-        
+
         const mealUpdateEntry = {
           path: `meals/${meal.id}`,
           value: {
@@ -174,22 +172,22 @@ export default {
             lastDrawn: updatedDrawnDates.length > 0 ? updatedDrawnDates[0] : null
           }
         }
-        
+
         this.$store.dispatch('updateDBValue', mealUpdateEntry);
       }
-      
+
       // Regenerate shopping list to remove ingredients from deleted meal
       this.$store.dispatch('generateShoppingListFromMeals');
     },
     updateMealDrawnDates (meal, oldDate, newDate) {
       if (!meal || !meal.id) return;
-      
+
       const currentDrawnDates = meal.drawnDates || [];
-      
+
       // Remove the old date and add the new date
       const updatedDrawnDates = currentDrawnDates.filter(date => date !== oldDate);
       updatedDrawnDates.unshift(newDate); // Add new date to front
-      
+
       const mealUpdateEntry = {
         path: `meals/${meal.id}`,
         value: {
@@ -199,7 +197,7 @@ export default {
           lastDrawn: updatedDrawnDates[0]
         }
       }
-      
+
       this.$store.dispatch('updateDBValue', mealUpdateEntry);
     },
     nextMeal (drawnMeal) {

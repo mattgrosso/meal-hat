@@ -147,17 +147,17 @@ export default {
 
         // Update meal with new drawnDates array system
         let currentDrawnDates = entry.randomMeal.drawnDates || [];
-        
+
         // Migration: if no drawnDates but has lastDrawn, initialize with that history
         if (currentDrawnDates.length === 0 && entry.randomMeal.lastDrawn) {
           currentDrawnDates = [entry.randomMeal.lastDrawn];
         }
-        
+
         const newTimestamp = entry.date.getTime();
-        
+
         // Add new date to front of array, keep old dates for history
         const updatedDrawnDates = [newTimestamp, ...currentDrawnDates.filter(date => date !== newTimestamp)];
-        
+
         const drawnMealForUpdate = {
           path: `meals/${entry.randomMeal.id}`,
           value: {
@@ -184,7 +184,7 @@ export default {
       } else if (meal.lastDrawn) {
         lastDrawnTimestamp = meal.lastDrawn; // Fallback to old system
       }
-      
+
       if (!lastDrawnTimestamp) {
         return false; // Never drawn before
       }

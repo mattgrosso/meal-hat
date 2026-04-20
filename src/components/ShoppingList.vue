@@ -7,28 +7,28 @@
           <!-- Quick Add Section -->
           <div class="my-3" data-step="1">
             <div class="input-group mb-2">
-              <input 
-                type="text" 
-                class="form-control" 
-                placeholder="Add item to shopping list..." 
+              <input
+                type="text"
+                class="form-control"
+                placeholder="Add item to shopping list..."
                 v-model="quickAddInput"
                 @keyup.enter="handleQuickAdd"
                 @input="updateSuggestions"
                 ref="quickAddInput"
               >
-              <button 
-                class="btn btn-primary" 
-                :disabled="!quickAddInput.trim()" 
+              <button
+                class="btn btn-primary"
+                :disabled="!quickAddInput.trim()"
                 @click="handleQuickAdd"
               >
                 Add
               </button>
             </div>
-            
+
             <!-- Suggestions Dropdown -->
             <div v-if="showSuggestions && filteredSuggestions.length" class="suggestions-dropdown">
-              <div 
-                v-for="suggestion in filteredSuggestions" 
+              <div
+                v-for="suggestion in filteredSuggestions"
                 :key="suggestion.id"
                 class="suggestion-item"
                 @click="selectSuggestion(suggestion)"
@@ -37,6 +37,20 @@
                 <span class="suggestion-details">{{ suggestion.quantity }} {{ suggestion.units }}</span>
               </div>
             </div>
+          </div>
+
+          <!-- Sort Toggle -->
+          <div v-if="sortedShoppingList.length" class="d-flex gap-2 mb-3">
+            <button
+              class="btn btn-sm"
+              :class="sortMode === 'aisle' ? 'btn-primary' : 'btn-outline-secondary'"
+              @click="sortMode = 'aisle'"
+            >Sort by Aisle</button>
+            <button
+              class="btn btn-sm"
+              :class="sortMode === 'location' ? 'btn-primary' : 'btn-outline-secondary'"
+              @click="sortMode = 'location'"
+            >Sort by Home Location</button>
           </div>
 
           <!-- Shopping List -->
@@ -49,25 +63,34 @@
                   <span class="fw-bold">{{ ingredient.groceryItem ? ingredient.groceryItem.name : ingredient.name }}</span>
                   <span>{{ ingredient.quantity }} {{ pluralizedUnits(ingredient) }}</span>
                 </div>
-                <!-- Second line: Aisle input and +/- buttons -->
-                <div class="d-flex justify-content-between align-items-center">
-                  <div class="d-flex align-items-center">
-                    <label class="form-label me-2 mb-0 small text-muted">Aisle:</label>
-                    <div class="input-group input-group-sm aisle-input-group" style="width: 120px;" :data-step="ingredient === sortedShoppingList[0] ? '3' : undefined">
-                      <input type="number" class="form-control aisle-input" :value="ingredient.aisle" @focus="showAisleButton(ingredient)" @blur="handleAisleBlur" @input="updateAisleValue" placeholder="##">
-                      <button v-if="activeAisleInputs[ingredient.id]" class="btn btn-outline-secondary btn-sm" type="button" @click="updateGroceryItemAisle(ingredient)"><i class="bi bi-arrow-right"></i></button>
-                    </div>
+                <!-- Second line: Aisle input and location selector -->
+                <div class="d-flex align-items-center gap-2 mb-2">
+                  <label class="form-label me-1 mb-0 small text-muted">Aisle:</label>
+                  <div class="input-group input-group-sm aisle-input-group" style="width: 120px;" :data-step="ingredient === sortedShoppingList[0] ? '3' : undefined">
+                    <input type="number" class="form-control aisle-input" :value="ingredient.aisle" @focus="showAisleButton(ingredient)" @blur="handleAisleBlur" @input="updateAisleValue" placeholder="##">
+                    <button v-if="activeAisleInputs[ingredient.id]" class="btn btn-outline-secondary btn-sm" type="button" @click="updateGroceryItemAisle(ingredient)"><i class="bi bi-arrow-right"></i></button>
                   </div>
-                  <div class="d-flex gap-2" :data-step="ingredient === sortedShoppingList[0] ? '4' : undefined">
-                    <button class="btn btn-sm btn-primary" @click="increaseShoppingListQuantity(ingredient)" style="width: 40px;">+1</button>
-                    <button class="btn btn-sm btn-secondary" @click="decreaseShoppingListQuantity(ingredient)" style="width: 40px;">-1</button>
-                    <button class="btn btn-sm btn-warning" @click="removeFromShoppingList(ingredient)" style="width: 40px;"><i class="bi bi-x" style="font-size: 1.2em;"></i></button>
-                  </div>
+                  <label class="form-label ms-2 me-1 mb-0 small text-muted">Location:</label>
+                  <select
+                    class="form-select form-select-sm location-select"
+                    :value="ingredient.location || ''"
+                    @change="updateItemLocation(ingredient, $event.target.value)"
+                  >
+                    <option value="">—</option>
+                    <option value="upstairs">Upstairs</option>
+                    <option value="downstairs">Downstairs</option>
+                  </select>
+                </div>
+                <!-- Third line: +/- buttons -->
+                <div class="d-flex justify-content-end gap-2" :data-step="ingredient === sortedShoppingList[0] ? '4' : undefined">
+                  <button class="btn btn-sm btn-primary" @click="increaseShoppingListQuantity(ingredient)" style="width: 40px;">+1</button>
+                  <button class="btn btn-sm btn-secondary" @click="decreaseShoppingListQuantity(ingredient)" style="width: 40px;">-1</button>
+                  <button class="btn btn-sm btn-warning" @click="removeFromShoppingList(ingredient)" style="width: 40px;"><i class="bi bi-x" style="font-size: 1.2em;"></i></button>
                 </div>
               </li>
             </ul>
           </div>
-          
+
           <!-- Empty State -->
           <div v-else class="text-center py-4 text-muted">
             <i class="bi bi-cart3" style="font-size: 3rem; opacity: 0.5;"></i>
@@ -76,7 +99,7 @@
         </div>
       </div>
     </div>
-    
+
     <!-- Quick Details Modal -->
     <div class="modal fade" id="quickDetailsModal" tabindex="-1">
       <div class="modal-dialog modal-dialog-centered">
@@ -108,7 +131,7 @@
         </div>
       </div>
     </div>
-    
+
     <span class="start-tour-button" @click="this.startTour()">
       <i class="bi bi-question-circle"/>
     </span>
@@ -132,34 +155,37 @@ export default {
       quickAddInput: '',
       showSuggestions: false,
       filteredSuggestions: [],
-      
+
       // Modal data for new items
       pendingItemName: '',
       pendingQuantity: 1,
       pendingUnits: '',
       pendingAisle: null,
-      
+
       // Track which aisle inputs are being used
       activeAisleInputs: {},
-      
+
       // Track if user is actively interacting with the shopping list
       userInteracting: false,
-      
+
       // Temporarily store aisle value while editing
-      tempAisleValue: undefined
+      tempAisleValue: undefined,
+
+      // Sort mode: 'aisle' or 'location'
+      sortMode: 'aisle'
     }
   },
-  async mounted() {
+  async mounted () {
     // Close suggestions when clicking outside
     document.addEventListener('click', (e) => {
       if (!this.$refs.quickAddInput || !this.$refs.quickAddInput.contains(e.target)) {
         this.showSuggestions = false;
       }
     });
-    
+
     // Protect against service worker reloads during user interaction
     this.setupReloadProtection();
-    
+
     // Check if migration is needed
     await this.checkAndMigrate();
   },
@@ -171,7 +197,7 @@ export default {
       if (Object.keys(catalog).length > 0) {
         return Object.values(catalog).sort((a, b) => a.name.localeCompare(b.name));
       }
-      
+
       // Fallback to old system during migration period
       if (!this.$store.state.nonMealGroceryItems || !Object.keys(this.$store.state.nonMealGroceryItems).length) {
         return [];
@@ -181,30 +207,33 @@ export default {
           .sort((a, b) => a.name.localeCompare(b.name));
       }
     },
-    
+
     sortedShoppingList () {
-      return [...this.$store.getters.unpurchasedShoppingItems].sort((a, b) => {
-        if (!a.aisle && b.aisle) {
-          return 1;
-        } else if (a.aisle && !b.aisle) {
-          return -1;
-        } else if (!a.aisle && !b.aisle) {
-          return 0;
-        } else if (a.aisle < b.aisle) {
-          return -1;
-        } else if (a.aisle > b.aisle) {
-          return 1;
-        } else {
-          return 0;
-        }
+      const items = [...this.$store.getters.unpurchasedShoppingItems];
+      if (this.sortMode === 'location') {
+        const order = { upstairs: 0, downstairs: 1 };
+        return items.sort((a, b) => {
+          const aHas = a.location in order;
+          const bHas = b.location in order;
+          if (!aHas && !bHas) return 0;
+          if (!aHas) return -1;
+          if (!bHas) return 1;
+          return order[a.location] - order[b.location];
+        });
+      }
+      return items.sort((a, b) => {
+        if (!a.aisle && b.aisle) return 1;
+        if (a.aisle && !b.aisle) return -1;
+        if (!a.aisle && !b.aisle) return 0;
+        return a.aisle - b.aisle;
       });
     }
   },
   methods: {
     // Update suggestions as user types
-    updateSuggestions() {
+    updateSuggestions () {
       const query = this.quickAddInput.toLowerCase().trim();
-      
+
       if (query.length === 0) {
         this.showSuggestions = false;
         this.filteredSuggestions = [];
@@ -214,12 +243,12 @@ export default {
       this.filteredSuggestions = this.groceryItems
         .filter(item => item.name.toLowerCase().includes(query))
         .slice(0, 5); // Show max 5 suggestions
-      
+
       this.showSuggestions = this.filteredSuggestions.length > 0;
     },
 
     // Handle quick add (Enter key or Add button)
-    handleQuickAdd() {
+    handleQuickAdd () {
       const itemName = this.quickAddInput.trim();
       if (!itemName) return;
 
@@ -238,19 +267,19 @@ export default {
     },
 
     // Select item from suggestions dropdown
-    selectSuggestion(suggestion) {
+    selectSuggestion (suggestion) {
       this.addToShoppingList(suggestion);
       this.quickAddInput = '';
       this.showSuggestions = false;
     },
 
     // Show modal for new item details
-    showNewItemModal(itemName) {
+    showNewItemModal (itemName) {
       this.pendingItemName = itemName;
       this.pendingQuantity = 1;
       this.pendingUnits = '';
       this.pendingAisle = null;
-      
+
       // Show Bootstrap modal - try multiple ways to ensure compatibility
       this.$nextTick(() => {
         const modalEl = document.getElementById('quickDetailsModal');
@@ -278,10 +307,9 @@ export default {
     },
 
     // Confirm adding new item from modal
-    confirmAddItem() {
-      
+    confirmAddItem () {
       const groceryId = require('uuid').v4();
-      
+
       // Create grocery catalog entry
       const groceryCatalogItem = {
         id: groceryId,
@@ -337,8 +365,7 @@ export default {
     },
 
     // Add item directly to shopping list
-    addToShoppingList(item) {
-      
+    addToShoppingList (item) {
       const shoppingList = this.$store.state.shoppingList;
       // Find existing item by groceryId (not id)
       const existingItem = shoppingList ? Object.values(shoppingList).find(listItem => listItem.groceryId === item.id) : null;
@@ -350,10 +377,10 @@ export default {
           ...existingItem,
           quantity: existingItem.quantity + (item.quantity || 1)
         };
-        
+
         // Update local state immediately
         this.$store.state.shoppingList[existingItem.id] = updatedItem;
-        
+
         // Update database
         const dbEntry = {
           path: `shopping-list/${existingItem.id}`,
@@ -361,21 +388,22 @@ export default {
         };
         this.$store.dispatch('updateDBValue', dbEntry);
       } else {
-        
         // Add new item to unified shopping list
+        const catalogEntry = this.$store.state.groceryCatalog && this.$store.state.groceryCatalog[item.id];
         const newItem = {
           id: shoppingItemId,
           groceryId: item.id,
           quantity: item.quantity || 1,
           units: item.units || item.defaultUnits || '',
           aisle: item.aisle || item.defaultAisle || 0,
+          location: item.location || (catalogEntry && catalogEntry.defaultLocation) || null,
           source: 'manual',
           purchased: false
         };
-        
+
         // Update local state immediately
         this.$store.state.shoppingList[shoppingItemId] = newItem;
-        
+
         // Update database
         const dbEntry = {
           path: `shopping-list/${shoppingItemId}`,
@@ -390,9 +418,9 @@ export default {
     },
 
     // Increase item quantity in shopping list
-    increaseShoppingListQuantity(item) {
+    increaseShoppingListQuantity (item) {
       this.userInteracting = true;
-      
+
       // Update the unified shopping list item directly
       const dbEntry = {
         path: `shopping-list/${item.id}`,
@@ -402,7 +430,7 @@ export default {
         }
       };
       this.$store.dispatch('updateDBValue', dbEntry);
-      
+
       // Clear interaction flag after operation
       setTimeout(() => {
         this.userInteracting = false;
@@ -412,7 +440,7 @@ export default {
     // Decrease item quantity in shopping list
     decreaseShoppingListQuantity (item) {
       this.userInteracting = true;
-      
+
       if (item.quantity > 1) {
         // Decrease quantity
         const dbEntry = {
@@ -431,7 +459,7 @@ export default {
         };
         this.$store.dispatch('updateDBValue', dbEntry);
       }
-      
+
       // Clear interaction flag after operation
       setTimeout(() => {
         this.userInteracting = false;
@@ -439,16 +467,16 @@ export default {
     },
 
     // Remove item entirely from shopping list
-    removeFromShoppingList(item) {
+    removeFromShoppingList (item) {
       this.userInteracting = true;
-      
+
       // Remove item from list entirely
       const dbEntry = {
         path: `shopping-list/${item.id}`,
         value: null
       };
       this.$store.dispatch('updateDBValue', dbEntry);
-      
+
       // Clear interaction flag after operation
       setTimeout(() => {
         this.userInteracting = false;
@@ -456,13 +484,13 @@ export default {
     },
 
     // Show update button when input is focused
-    showAisleButton(ingredient) {
+    showAisleButton (ingredient) {
       this.activeAisleInputs[ingredient.id] = true;
       this.userInteracting = true;
     },
-    
+
     // Hide update button when input loses focus
-    hideAisleButton(ingredient) {
+    hideAisleButton (ingredient) {
       // Delay hiding to allow button click
       setTimeout(() => {
         this.activeAisleInputs[ingredient.id] = false;
@@ -473,15 +501,15 @@ export default {
         }
       }, 150);
     },
-    
+
     // Track aisle input changes
-    updateAisleValue(event) {
+    updateAisleValue (event) {
       // Store the value temporarily - we'll save it on blur
       this.tempAisleValue = parseFloat(event.target.value) || 0;
     },
-    
+
     // Handle blur event on aisle input - update aisle AND hide button
-    handleAisleBlur(event) {
+    handleAisleBlur (event) {
       const ingredient = this.getIngredientFromInputEvent(event);
       if (ingredient && this.tempAisleValue !== undefined) {
         // Update the ingredient's aisle value
@@ -493,21 +521,21 @@ export default {
       this.hideAisleButton(ingredient);
       this.tempAisleValue = undefined;
     },
-    
+
     // Helper to find ingredient from input event
-    getIngredientFromInputEvent(event) {
+    getIngredientFromInputEvent (event) {
       const inputElement = event.target;
       // Find the ingredient by looking at the input's data or closest list item
       const listItem = inputElement.closest('li');
       const ingredientIndex = Array.from(listItem.parentElement.children).indexOf(listItem);
       return this.sortedShoppingList[ingredientIndex];
     },
-    
+
     // Setup protection against service worker reloads
-    setupReloadProtection() {
+    setupReloadProtection () {
       // Create a flag to prevent reloads
       window.preventReload = false;
-      
+
       // Override the reload by adding an event listener
       window.addEventListener('beforeunload', (e) => {
         if (this.userInteracting) {
@@ -516,10 +544,10 @@ export default {
           return '';
         }
       });
-      
+
       // Store original reload and create protected version
       const originalReload = window.location.reload.bind(window.location);
-      
+
       // Create a custom reload function
       window.safeReload = () => {
         if (this.userInteracting) {
@@ -528,7 +556,7 @@ export default {
           originalReload();
         }
       };
-      
+
       // Listen for service worker updates
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.addEventListener('message', (event) => {
@@ -538,9 +566,9 @@ export default {
         });
       }
     },
-    
+
     // Schedule a delayed reload when user is done
-    scheduleDelayedReload() {
+    scheduleDelayedReload () {
       const checkAndReload = () => {
         if (!this.userInteracting) {
           window.location.reload();
@@ -550,52 +578,72 @@ export default {
       };
       setTimeout(checkAndReload, 1000);
     },
-    
+
     // Check if migration from old system is needed
-    async checkAndMigrate() {
+    async checkAndMigrate () {
       // Debug current state
-      
+
       // Check if we have old data but no new data
       const hasOldData = (this.$store.state.nonMealShoppingList && Object.keys(this.$store.state.nonMealShoppingList).length > 0) ||
                          (this.$store.state.purchasedIngredients && Object.keys(this.$store.state.purchasedIngredients).length > 0);
       const hasNewData = this.$store.state.shoppingList && Object.keys(this.$store.state.shoppingList).length > 0;
       const hasGroceryCatalog = this.$store.state.groceryCatalog && Object.keys(this.$store.state.groceryCatalog).length > 0;
-      
+
       if (hasOldData && !hasNewData) {
         try {
           await this.$store.dispatch('migrateToUnifiedSystem');
-        } catch (error) {
-        }
-      } else if (hasNewData && !hasGroceryCatalog) {
+        } catch (error) { /* migration errors are non-fatal */ }
+      } else if (hasNewData && !hasGroceryCatalog) { /* no action needed */ }
+    },
+
+    updateItemLocation (ingredient, location) {
+      const updatedItem = { ...ingredient, location: location || null };
+
+      // Update local shopping list state
+      this.$store.state.shoppingList[ingredient.id] = updatedItem;
+
+      // Persist shopping list item
+      this.$store.dispatch('updateDBValue', {
+        path: `shopping-list/${ingredient.id}`,
+        value: updatedItem
+      });
+
+      // Also persist as defaultLocation on the grocery catalog entry
+      const groceryId = ingredient.groceryId;
+      if (groceryId && this.$store.state.groceryCatalog && this.$store.state.groceryCatalog[groceryId]) {
+        this.$store.state.groceryCatalog[groceryId].defaultLocation = location || null;
+        this.$store.dispatch('updateDBValue', {
+          path: `grocery-catalog/${groceryId}/defaultLocation`,
+          value: location || null
+        });
       }
     },
 
     updateGroceryItemAisle (ingredient) {
-      
       // Update the local state immediately
       const updatedIngredient = {
         ...ingredient,
         aisle: ingredient.aisle
       };
-      
+
       // Update in local shopping list state
       if (this.$store.state.shoppingList[ingredient.id]) {
         this.$store.state.shoppingList[ingredient.id] = updatedIngredient;
       }
-      
+
       // Update the shopping list item in database
       const shoppingListEntry = {
         path: `shopping-list/${ingredient.id}`,
         value: updatedIngredient
       };
       this.$store.dispatch('updateDBValue', shoppingListEntry);
-      
+
       // Also update the grocery catalog default aisle for future items
       const groceryId = ingredient.groceryId;
       if (groceryId && this.$store.state.groceryCatalog && this.$store.state.groceryCatalog[groceryId]) {
         // Update local grocery catalog state
         this.$store.state.groceryCatalog[groceryId].defaultAisle = ingredient.aisle;
-        
+
         const catalogEntry = {
           path: `grocery-catalog/${groceryId}/defaultAisle`,
           value: ingredient.aisle
@@ -611,7 +659,7 @@ export default {
 
     pluralizedUnits (ingredient) {
       if (!ingredient.units) return '';
-      
+
       // Always pluralize based on the item's quantity
       return pluralize(ingredient.units, ingredient.quantity);
     },
@@ -733,7 +781,7 @@ export default {
   .shopping-list-body {
     max-width: 600px;
     margin: 0 auto 30vh;
-    
+
     // Suggestions dropdown styling
     .suggestions-dropdown {
       position: relative;
@@ -743,7 +791,7 @@ export default {
       background: white;
       box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
       z-index: 1000;
-      
+
       .suggestion-item {
         padding: 0.75rem;
         cursor: pointer;
@@ -751,27 +799,27 @@ export default {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        
+
         &:hover {
           background-color: #f8f9fa;
         }
-        
+
         &:last-child {
           border-bottom: none;
         }
-        
+
         .suggestion-name {
           font-weight: 500;
           color: #212529;
         }
-        
+
         .suggestion-details {
           font-size: 0.875rem;
           color: #6c757d;
         }
       }
     }
-    
+
     // Empty state styling
     .text-muted {
       i {
@@ -779,15 +827,20 @@ export default {
         margin-bottom: 1rem;
       }
     }
-    
+
     // Modal styling
     .modal-content {
       border-radius: 0.5rem;
     }
-    
+
     // Prevent iOS zoom on aisle inputs
     .aisle-input {
       font-size: 16px !important;
+    }
+
+    .location-select {
+      font-size: 16px !important;
+      width: auto;
     }
   }
 }

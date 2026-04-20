@@ -7,28 +7,28 @@
           <!-- Quick Add Section -->
           <div class="my-3" data-step="1">
             <div class="input-group mb-2">
-              <input 
-                type="text" 
-                class="form-control" 
-                placeholder="Add item to shopping list..." 
+              <input
+                type="text"
+                class="form-control"
+                placeholder="Add item to shopping list..."
                 v-model="quickAddInput"
                 @keyup.enter="handleQuickAdd"
                 @input="updateSuggestions"
                 ref="quickAddInput"
               >
-              <button 
-                class="btn btn-primary" 
-                :disabled="!quickAddInput.trim()" 
+              <button
+                class="btn btn-primary"
+                :disabled="!quickAddInput.trim()"
                 @click="handleQuickAdd"
               >
                 Add
               </button>
             </div>
-            
+
             <!-- Suggestions Dropdown -->
             <div v-if="showSuggestions && filteredSuggestions.length" class="suggestions-dropdown">
-              <div 
-                v-for="suggestion in filteredSuggestions" 
+              <div
+                v-for="suggestion in filteredSuggestions"
                 :key="suggestion.id"
                 class="suggestion-item"
                 @click="selectSuggestion(suggestion)"
@@ -52,7 +52,7 @@
               </li>
             </ul>
           </div>
-          
+
           <!-- Empty State -->
           <div v-else class="text-center py-4 text-muted">
             <i class="bi bi-cart3" style="font-size: 3rem; opacity: 0.5;"></i>
@@ -61,7 +61,7 @@
         </div>
       </div>
     </div>
-    
+
     <!-- Quick Details Modal -->
     <div class="modal fade" id="quickDetailsModal" tabindex="-1">
       <div class="modal-dialog modal-dialog-centered">
@@ -93,7 +93,7 @@
         </div>
       </div>
     </div>
-    
+
     <span class="start-tour-button" @click="this.startTour()">
       <i class="bi bi-question-circle"/>
     </span>
@@ -113,13 +113,13 @@ export default {
       quickAddInput: '',
       showSuggestions: false,
       filteredSuggestions: [],
-      
+
       // Modal data for new items
       pendingItemName: '',
       pendingQuantity: 1,
       pendingUnits: '',
       pendingAisle: null,
-      
+
       // Legacy data (kept for compatibility)
       showDeleteButton: null,
       buttonClicked: false
@@ -128,7 +128,7 @@ export default {
   components: {
     Header
   },
-  mounted() {
+  mounted () {
     // Close suggestions when clicking outside
     document.addEventListener('click', (e) => {
       if (!this.$refs.quickAddInput || !this.$refs.quickAddInput.contains(e.target)) {
@@ -147,7 +147,7 @@ export default {
           .sort((a, b) => a.name.localeCompare(b.name));
       }
     },
-    
+
     // Shopping list from store
     sortedShoppingList () {
       return [...this.$store.getters.unpurchasedIngredients]
@@ -156,9 +156,9 @@ export default {
   },
   methods: {
     // Update suggestions as user types
-    updateSuggestions() {
+    updateSuggestions () {
       const query = this.quickAddInput.toLowerCase().trim();
-      
+
       if (query.length === 0) {
         this.showSuggestions = false;
         this.filteredSuggestions = [];
@@ -168,12 +168,12 @@ export default {
       this.filteredSuggestions = this.nonMealGroceryItems
         .filter(item => item.name.toLowerCase().includes(query))
         .slice(0, 5); // Show max 5 suggestions
-      
+
       this.showSuggestions = this.filteredSuggestions.length > 0;
     },
 
     // Handle quick add (Enter key or Add button)
-    handleQuickAdd() {
+    handleQuickAdd () {
       const itemName = this.quickAddInput.trim();
       if (!itemName) return;
 
@@ -192,19 +192,19 @@ export default {
     },
 
     // Select item from suggestions dropdown
-    selectSuggestion(suggestion) {
+    selectSuggestion (suggestion) {
       this.addToShoppingList(suggestion);
       this.quickAddInput = '';
       this.showSuggestions = false;
     },
 
     // Show modal for new item details
-    showNewItemModal(itemName) {
+    showNewItemModal (itemName) {
       this.pendingItemName = itemName;
       this.pendingQuantity = 1;
       this.pendingUnits = '';
       this.pendingAisle = null;
-      
+
       // Show Bootstrap modal - try multiple ways to ensure compatibility
       this.$nextTick(() => {
         const modalEl = document.getElementById('quickDetailsModal');
@@ -233,9 +233,9 @@ export default {
     },
 
     // Confirm adding new item from modal
-    confirmAddItem() {
+    confirmAddItem () {
       const newId = require('uuid').v4();
-      
+
       // Create new grocery item object
       const newItem = {
         id: newId,
@@ -292,7 +292,7 @@ export default {
     },
 
     // Add item directly to shopping list
-    addToShoppingList(item) {
+    addToShoppingList (item) {
       const nonMealShoppingList = this.$store.state.nonMealShoppingList;
       const existingItem = nonMealShoppingList ? nonMealShoppingList[item.id] : null;
 
@@ -326,10 +326,10 @@ export default {
     },
 
     // Increase item quantity in shopping list
-    increaseShoppingListQuantity(item) {
+    increaseShoppingListQuantity (item) {
       const correspondingItem = this.correspondingItemInNonMealGroceryItems(item);
       const quantityToAdd = correspondingItem ? correspondingItem.quantity : 1;
-      
+
       const dbEntry = {
         path: `non-meal-shopping-list/${item.id}`,
         value: {
@@ -381,7 +381,7 @@ export default {
       } else {
         units = item.units;
       }
-      
+
       // Always pluralize based on the item's quantity
       return units ? pluralize(units, item.quantity) : '';
     },
@@ -461,7 +461,7 @@ export default {
   .groceries-body {
     max-width: 600px;
     margin: 0 auto;
-    
+
     // Suggestions dropdown
     .suggestions-dropdown {
       position: relative;
@@ -471,7 +471,7 @@ export default {
       background: white;
       box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
       z-index: 1000;
-      
+
       .suggestion-item {
         padding: 0.75rem;
         cursor: pointer;
@@ -479,27 +479,27 @@ export default {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        
+
         &:hover {
           background-color: #f8f9fa;
         }
-        
+
         &:last-child {
           border-bottom: none;
         }
-        
+
         .suggestion-name {
           font-weight: 500;
           color: #212529;
         }
-        
+
         .suggestion-details {
           font-size: 0.875rem;
           color: #6c757d;
         }
       }
     }
-    
+
     // Empty state styling
     .text-muted {
       i {
@@ -507,12 +507,12 @@ export default {
         margin-bottom: 1rem;
       }
     }
-    
+
     // Keep existing modal and button styles
     .modal-content {
       border-radius: 0.5rem;
     }
-    
+
     // Legacy styles (can be removed later if needed)
     .scrollable-list-wrapper {
       position: relative;

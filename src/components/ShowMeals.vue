@@ -164,17 +164,17 @@ export default {
 
       // Update meal with new drawnDates array system
       let currentDrawnDates = meal.drawnDates || [];
-      
+
       // Migration: if no drawnDates but has lastDrawn, initialize with that history
       if (currentDrawnDates.length === 0 && meal.lastDrawn) {
         currentDrawnDates = [meal.lastDrawn];
       }
-      
+
       const newTimestamp = date.getTime();
-      
+
       // Add new date to front of array, keep old dates for history
       const updatedDrawnDates = [newTimestamp, ...currentDrawnDates.filter(date => date !== newTimestamp)];
-      
+
       const drawnMealForUpdate = {
         path: `meals/${meal.id}`,
         value: {
@@ -304,8 +304,8 @@ export default {
     },
     formatLastDrawnDate (lastDrawnTimestamp) {
       const date = new Date(lastDrawnTimestamp);
-      return new Intl.DateTimeFormat('en-US', { 
-        month: 'short', 
+      return new Intl.DateTimeFormat('en-US', {
+        month: 'short',
         day: 'numeric'
       }).format(date);
     },
@@ -330,11 +330,11 @@ export default {
     isInThePast (timestamp) {
       const drawnDate = new Date(timestamp);
       const today = new Date();
-      
+
       // Compare dates (not times) to handle timezone issues
       const drawnDateOnly = new Date(drawnDate.getFullYear(), drawnDate.getMonth(), drawnDate.getDate());
       const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-      
+
       return drawnDateOnly < todayOnly;
     },
   },
