@@ -172,17 +172,20 @@ export default createStore({
               id: item.id,
               name: item.name,
               defaultUnits: item.units || item.defaultUnits || '',
-              defaultAisle: item.aisle || item.defaultAisle || 0
+              defaultAisle: item.aisle || item.defaultAisle || 0,
+              defaultLocation: item.location || item.defaultLocation || null
             };
           }
 
           if (remainingQuantity > 0) {
+            const catalogEntry = state.groceryCatalog[item.id];
             state.shoppingList[shoppingItemId] = {
               id: shoppingItemId,
               groceryId: item.id,
               quantity: remainingQuantity,
               units: item.units || item.defaultUnits || '',
               aisle: item.aisle || item.defaultAisle || 0,
+              location: item.location || (catalogEntry && catalogEntry.defaultLocation) || null,
               source: 'meal',
               purchased: false
             };
@@ -388,9 +391,12 @@ export default createStore({
             id: item.id,
             name: item.name,
             defaultUnits: item.units || item.defaultUnits || '',
-            defaultAisle: item.aisle || item.defaultAisle || 0
+            defaultAisle: item.aisle || item.defaultAisle || 0,
+            defaultLocation: item.location || item.defaultLocation || null
           };
         }
+
+        const catalogEntry = context.state.groceryCatalog[item.id];
 
         context.state.shoppingList[shoppingItemId] = {
           id: shoppingItemId,
@@ -398,6 +404,7 @@ export default createStore({
           quantity: item.quantity,
           units: item.units || item.defaultUnits || '',
           aisle: item.aisle || item.defaultAisle || 0,
+          location: item.location || (catalogEntry && catalogEntry.defaultLocation) || null,
           source: 'meal',
           mealId: item.mealId,
           purchased: false
