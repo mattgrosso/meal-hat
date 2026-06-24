@@ -117,13 +117,14 @@ export default {
             this.minDaysBetween = meal.minDaysBetween;
             if (meal.ingredients) {
               this.ingredients = meal.ingredients.map((ingredient) => {
-                const groceryItem = this.groceryItemsAsArray.find((item) => item.id === ingredient.groceryItemId);
+                const grocery = this.groceryById(ingredient.groceryItemId);
 
-                if (groceryItem) {
+                if (grocery) {
                   return {
-                    name: groceryItem.name,
+                    name: grocery.name,
                     quantity: ingredient.quantity,
-                    units: groceryItem.units
+                    units: grocery.units,
+                    aisle: grocery.aisle
                   };
                 } else {
                   return null;
@@ -148,62 +149,91 @@ export default {
         this.$refs[`ingredient-${this.ingredients.length - 1}-name`][0].focus();
       });
     },
-    addNewIngredientsToGroceryItems () {
-      this.ingredients.forEach((ingredient) => {
-        const existingIngredient = this.groceryItemsAsArray.find((item) => item.name === ingredient.name);
-
-        if (ingredient.name && !existingIngredient) {
-          const newId = uuidv4();
-
-          const newIngredient = {
-            id: newId,
-            aisle: ingredient.aisle || 0,
-            name: ingredient.name,
-            units: ingredient.units
-          };
-
-          // Add to both old system (for compatibility) and new unified system
-          const groceryItemEntry = {
-            path: `grocery-items/${newId}`,
-            value: newIngredient
-          };
-
-          const groceryCatalogEntry = {
-            path: `grocery-catalog/${newId}`,
-            value: {
-              id: newId,
-              name: ingredient.name,
-              defaultUnits: ingredient.units,
-              defaultAisle: ingredient.aisle || 0
-            }
-          };
-
-          this.$store.dispatch('updateDBValue', groceryItemEntry);
-          this.$store.dispatch('updateDBValue', groceryCatalogEntry);
-        }
-      });
+    // Normalize an ingredient name for matching so trivial variations (case,
+    // surrounding whitespace) don't spawn duplicate grocery entries that then
+    // can't merge on the shopping list.
+    normalizeName (name) {
+      return (name || '').trim().toLowerCase();
     },
-    parseIngredients () {
-      return this.ingredients.map((ingredient) => {
-        const groceryItem = this.groceryItemsAsArray.find((item) => item.name === ingredient.name);
+    // Find an existing grocery entry by normalized name. Prefers the unified
+    // catalog (the reliably-loaded source) and falls back to the deprecated
+    // grocery-items list during migration.
+    findExistingGroceryId (name) {
+      const target = this.normalizeName(name);
+      if (!target) {
+        return null;
+      }
 
-        if (groceryItem) {
-          return {
-            groceryItemId: groceryItem.id,
-            quantity: ingredient.quantity
-          };
-        } else {
-          return null;
+      const inCatalog = Object.values(this.$store.state.groceryCatalog || {})
+        .find((item) => this.normalizeName(item.name) === target);
+      if (inCatalog) {
+        return inCatalog.id;
+      }
+
+      const inOld = this.groceryItemsAsArray.find((item) => this.normalizeName(item.name) === target);
+      return inOld ? inOld.id : null;
+    },
+    // Resolve a grocery entry's display details by id, from whichever store has it.
+    groceryById (id) {
+      const catalog = this.$store.state.groceryCatalog || {};
+      if (catalog[id]) {
+        return { name: catalog[id].name, units: catalog[id].defaultUnits, aisle: catalog[id].defaultAisle };
+      }
+      const old = this.$store.state.groceryItems || {};
+      if (old[id]) {
+        return { name: old[id].name, units: old[id].units, aisle: old[id].aisle };
+      }
+      return null;
+    },
+    // Turn the ingredient form rows into meal ingredient references
+    // ({ groceryItemId, quantity }), reusing an existing grocery entry whenever the
+    // name matches and creating a new one (in the catalog + legacy list) otherwise.
+    // Returns the references directly, so we never depend on the DB listener having
+    // synced a just-created entry back into local state before we save the meal.
+    resolveIngredients () {
+      const resolved = [];
+      const createdThisMeal = {}; // normalized name -> id, so repeated rows reuse one entry
+
+      this.ingredients.forEach((ingredient) => {
+        const key = this.normalizeName(ingredient.name);
+        if (!key) {
+          return;
         }
-      }).filter((ingredient) => ingredient);
+
+        let groceryId = createdThisMeal[key] || this.findExistingGroceryId(ingredient.name);
+
+        if (!groceryId) {
+          groceryId = uuidv4();
+          const displayName = ingredient.name.trim();
+
+          const catalogValue = {
+            id: groceryId,
+            name: displayName,
+            defaultUnits: ingredient.units || '',
+            defaultAisle: ingredient.aisle || 0
+          };
+          this.$store.commit('addToGroceryCatalog', catalogValue);
+          this.$store.dispatch('updateDBValue', { path: `grocery-catalog/${groceryId}`, value: catalogValue });
+
+          // Keep the legacy grocery-items list in sync for backward compatibility.
+          this.$store.dispatch('updateDBValue', {
+            path: `grocery-items/${groceryId}`,
+            value: { id: groceryId, name: displayName, units: ingredient.units || '', aisle: ingredient.aisle || 0 }
+          });
+
+          createdThisMeal[key] = groceryId;
+        }
+
+        resolved.push({ groceryItemId: groceryId, quantity: ingredient.quantity });
+      });
+
+      return resolved;
     },
     async submitMeal () {
-      this.addNewIngredientsToGroceryItems();
-
       const meal = {
         name: this.name,
         minDaysBetween: this.minDaysBetween,
-        ingredients: this.parseIngredients()
+        ingredients: this.resolveIngredients()
       };
 
       if (this.mealId) {

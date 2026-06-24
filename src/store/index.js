@@ -328,6 +328,63 @@ export default createStore({
       return false;
     },
 
+    // Read-only: report grocery entries that share a normalized name (likely the
+    // same ingredient split across multiple ids), with how heavily each is
+    // referenced, so duplicates can be reviewed before any merge. Writes nothing.
+    analyzeIngredientDuplicates (context) {
+      const norm = (s) => (s || '').trim().toLowerCase();
+      const catalog = context.state.groceryCatalog || {};
+      const meals = context.state.meals || [];
+      const shoppingList = context.state.shoppingList || {};
+
+      // Count references to each grocery id across meals and the shopping list.
+      const refCounts = {};
+      meals.forEach((m) => (m.ingredients || []).forEach((ing) => {
+        refCounts[ing.groceryItemId] = (refCounts[ing.groceryItemId] || 0) + 1;
+      }));
+      Object.values(shoppingList).forEach((item) => {
+        if (item.groceryId) {
+          refCounts[item.groceryId] = (refCounts[item.groceryId] || 0) + 1;
+        }
+      });
+
+      // Group catalog entries by normalized name.
+      const groups = {};
+      Object.values(catalog).forEach((item) => {
+        const key = norm(item.name);
+        if (!key) return;
+        (groups[key] = groups[key] || []).push(item);
+      });
+
+      // Keep only groups with more than one entry — those are the duplicates.
+      const clusters = Object.entries(groups)
+        .filter(([, items]) => items.length > 1)
+        .map(([key, items]) => {
+          // Canonical = the most-referenced entry (ties keep catalog order).
+          const sorted = [...items].sort((a, b) => (refCounts[b.id] || 0) - (refCounts[a.id] || 0));
+          const canonical = sorted[0];
+          return {
+            normalizedName: key,
+            canonicalId: canonical.id,
+            entries: sorted.map((it) => ({
+              id: it.id,
+              name: it.name,
+              aisle: it.defaultAisle,
+              refs: refCounts[it.id] || 0,
+              canonical: it.id === canonical.id
+            }))
+          };
+        })
+        .sort((a, b) => b.entries.length - a.entries.length);
+
+      return {
+        catalogCount: Object.keys(catalog).length,
+        duplicateClusters: clusters.length,
+        redundantEntries: clusters.reduce((n, c) => n + c.entries.length - 1, 0),
+        clusters
+      };
+    },
+
     // Generate shopping list items from drawn meals
     async generateShoppingListFromMeals (context) {
       console.log('Generating shopping list from drawn meals...');
