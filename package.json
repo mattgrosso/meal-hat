@@ -7,7 +7,7 @@
     "serve": "nodemon --watch .env --exec \"vue-cli-service serve\"",
     "build": "yarn update-version && vue-cli-service build",
     "lint": "vue-cli-service lint && stylelint '**/*.vue' --formatter verbose --fix",
-    "deploy": "yarn build && surge dist/",
+    "deploy": "yarn build && aws s3 sync dist/ s3://meal-hat --profile personal-deploy && aws cloudfront create-invalidation --distribution-id E1C9X1FV3WBDN6 --paths '/*' --profile personal-deploy > invalidation_output.txt",
     "test": "playwright test",
     "test:headed": "playwright test --headed",
     "test:debug": "playwright test --debug",
