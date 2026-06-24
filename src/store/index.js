@@ -385,6 +385,122 @@ export default createStore({
       };
     },
 
+    // Read-only: find catalog entries that are LIKELY the same ingredient but
+    // named differently — close spellings (typos: "mozarella" vs "mozzarella")
+    // and "one name contains the other" sharing a meaningful word ("mozzarella"
+    // vs "mozzarella cheese"). Generic-word-only overlaps (e.g. plain "cheese")
+    // are filtered out. These are HEURISTIC candidates for human review, not
+    // automatic merges. Writes nothing.
+    findSimilarGroceries (context) {
+      const norm = (s) => (s || '').trim().toLowerCase();
+      // Generic grocery words that shouldn't, on their own, make two items "similar".
+      const STOP = new Set(['cheese', 'sauce', 'fresh', 'ground', 'sliced', 'shredded',
+        'organic', 'large', 'small', 'whole', 'can', 'canned', 'jar', 'bag', 'box',
+        'of', 'the', 'and', 'frozen', 'dried', 'raw', 'mix', 'powder', 'boneless', 'skinless']);
+      const tokenize = (s) => norm(s).split(/[^a-z0-9]+/).filter(Boolean);
+      const lev = (a, b) => {
+        const m = a.length; const n = b.length;
+        if (!m) return n;
+        if (!n) return m;
+        let prev = Array.from({ length: n + 1 }, (_, j) => j);
+        for (let i = 1; i <= m; i++) {
+          const curr = [i];
+          for (let j = 1; j <= n; j++) {
+            curr[j] = Math.min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+          }
+          prev = curr;
+        }
+        return prev[n];
+      };
+
+      const meta = Object.values(context.state.groceryCatalog || {})
+        .filter((i) => i && i.name)
+        .map((i) => {
+          const toks = tokenize(i.name);
+          return { id: i.id, name: i.name, norm: norm(i.name), toks: new Set(toks), sig: toks.filter((t) => !STOP.has(t)) };
+        });
+
+      const pairs = [];
+      for (let i = 0; i < meta.length; i++) {
+        for (let j = i + 1; j < meta.length; j++) {
+          const A = meta[i]; const B = meta[j];
+          if (A.norm === B.norm) continue; // exact-normalized dupes handled separately
+          const reasons = [];
+
+          const d = lev(A.norm, B.norm);
+          if (Math.max(A.norm.length, B.norm.length) >= 4 && d > 0 && d <= 2) {
+            reasons.push(`close spelling (edit distance ${d})`);
+          }
+
+          const aSub = [...A.toks].every((t) => B.toks.has(t));
+          const bSub = [...B.toks].every((t) => A.toks.has(t));
+          if (aSub || bSub) {
+            const smaller = aSub ? A : B;
+            if (smaller.sig.length) reasons.push('one name contains the other');
+          }
+
+          if (reasons.length) {
+            pairs.push({ aId: A.id, a: A.name, bId: B.id, b: B.name, reasons });
+          }
+        }
+      }
+      return { candidatePairs: pairs.length, pairs };
+    },
+
+    // Apply approved merges. `mapping` is { oldId: canonicalId }. Repoints meal
+    // ingredient references and shopping-list items from each old id to its
+    // canonical id, then deletes the orphaned catalog (and legacy) entries — all
+    // with surgical, key-scoped writes. Never auto-decides what to merge.
+    async mergeDuplicateGroceries (context, { mapping }) {
+      const remap = (id) => (mapping && mapping[id]) || id;
+      const oldIds = Object.keys(mapping || {}).filter((id) => remap(id) !== id);
+      if (!oldIds.length) {
+        return { mealsChanged: 0, shoppingItemsChanged: 0, entriesRemoved: 0 };
+      }
+
+      // 1) Meals: repoint references, merging any that now collapse onto one id.
+      let mealsChanged = 0;
+      for (const meal of (context.state.meals || [])) {
+        if (!meal.ingredients || !meal.ingredients.length) continue;
+        let touched = false;
+        const byId = {};
+        meal.ingredients.forEach((ing) => {
+          const newId = remap(ing.groceryItemId);
+          if (newId !== ing.groceryItemId) touched = true;
+          if (byId[newId]) {
+            byId[newId].quantity = (Number(byId[newId].quantity) || 0) + (Number(ing.quantity) || 0);
+          } else {
+            byId[newId] = { groceryItemId: newId, quantity: ing.quantity };
+          }
+        });
+        if (touched) {
+          await context.dispatch('updateDBValue', { path: `meals/${meal.id}`, value: { ...meal, ingredients: Object.values(byId) } });
+          mealsChanged++;
+        }
+      }
+
+      // 2) Shopping list: repoint groceryId on any referencing items.
+      const shoppingUpdates = {};
+      Object.values(context.state.shoppingList || {}).forEach((item) => {
+        if (item.groceryId && remap(item.groceryId) !== item.groceryId) {
+          shoppingUpdates[item.id] = { ...item, groceryId: remap(item.groceryId) };
+        }
+      });
+      const shoppingItemsChanged = Object.keys(shoppingUpdates).length;
+      if (shoppingItemsChanged) {
+        await context.dispatch('mergeDBValue', { path: 'shopping-list', value: shoppingUpdates });
+      }
+
+      // 3) Delete the orphaned catalog + legacy grocery-items entries.
+      const catalogDeletes = {};
+      const legacyDeletes = {};
+      oldIds.forEach((id) => { catalogDeletes[id] = null; legacyDeletes[id] = null; });
+      await context.dispatch('mergeDBValue', { path: 'grocery-catalog', value: catalogDeletes });
+      await context.dispatch('mergeDBValue', { path: 'grocery-items', value: legacyDeletes });
+
+      return { mealsChanged, shoppingItemsChanged, entriesRemoved: oldIds.length };
+    },
+
     // Generate shopping list items from drawn meals
     async generateShoppingListFromMeals (context) {
       console.log('Generating shopping list from drawn meals...');
