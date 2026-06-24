@@ -115,24 +115,27 @@ export default {
     }
   },
   methods: {
-    drawMeals () {
+    async drawMeals () {
       const mealsToAdd = [];
 
-      this.allDatesInRange.forEach(async (date) => {
+      this.allDatesInRange.forEach((date) => {
         const randomMeal = this.getRandomMealForDate(date, mealsToAdd);
 
         if (!randomMeal) {
           this.message = `No meals available for ${date.toDateString()}`;
           return;
         }
-        // TODO: If more than one copy of the same meal is drawn in one call of drawMeals,
-        // we may have trouble because the DB entries might not update in time.
 
         mealsToAdd.push({
           randomMeal: randomMeal,
           date: date
         });
       });
+
+      // Collect every database write so we can wait for them all to land before
+      // regenerating the shopping list. The regeneration re-reads drawn meals
+      // from the database, so the new draws must be persisted first.
+      const writes = [];
 
       mealsToAdd.forEach((entry) => {
         const dbEntry = {
@@ -143,7 +146,7 @@ export default {
           }
         }
 
-        this.$store.dispatch('setDBValue', dbEntry);
+        writes.push(this.$store.dispatch('setDBValue', dbEntry));
 
         // Update meal with new drawnDates array system
         let currentDrawnDates = entry.randomMeal.drawnDates || [];
@@ -168,11 +171,12 @@ export default {
           }
         }
 
-        this.$store.dispatch('updateDBValue', drawnMealForUpdate);
+        writes.push(this.$store.dispatch('updateDBValue', drawnMealForUpdate));
       })
 
-      // Regenerate shopping list from newly drawn meals
-      this.$store.dispatch('generateShoppingListFromMeals');
+      // Wait for the draws to persist, then regenerate the shopping list from them.
+      await Promise.all(writes);
+      await this.$store.dispatch('generateShoppingListFromMeals');
 
       this.$router.push('/');
     },

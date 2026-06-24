@@ -1,6 +1,6 @@
 import { createStore } from 'vuex';
 import { initializeApp } from "firebase/app";
-import { getDatabase, onValue, ref, set, get } from "firebase/database";
+import { getDatabase, onValue, ref, set, get, update } from "firebase/database";
 import { getAuth, GoogleAuthProvider, signInWithPopup } from "firebase/auth";
 import { v4 as uuidv4 } from 'uuid';
 import router from '@/router';
@@ -301,14 +301,15 @@ export default createStore({
       const migrationSuccess = context.getters.migrateToUnifiedSystem;
 
       if (migrationSuccess) {
-        // Save the new unified shopping list to database
-        await context.dispatch('updateDBValue', {
+        // Merge the migrated items in rather than overwriting the nodes, so a
+        // concurrent edit (e.g. another device that already migrated, or a manual
+        // item added mid-migration) can't be clobbered.
+        await context.dispatch('mergeDBValue', {
           path: 'shopping-list',
           value: context.state.shoppingList
         });
 
-        // Save the updated grocery catalog to database
-        await context.dispatch('updateDBValue', {
+        await context.dispatch('mergeDBValue', {
           path: 'grocery-catalog',
           value: context.state.groceryCatalog
         });
@@ -331,11 +332,48 @@ export default createStore({
     async generateShoppingListFromMeals (context) {
       console.log('Generating shopping list from drawn meals...');
 
-      // Use drawnMealsWithHistory as the primary source, fallback to drawnMeals
-      const drawnMealsToUse = context.state.drawnMealsWithHistory || context.state.drawnMeals;
+      if (!context.state.meals) {
+        console.log('No meals data available');
+        return;
+      }
 
-      if (!drawnMealsToUse || !context.state.meals) {
-        console.log('No drawn meals or meals data available');
+      // Re-read the authoritative drawn meals AND shopping list from the database
+      // before touching anything.
+      //
+      // Drawn meals: the caller (e.g. drawMeals) writes the new draws to the
+      // database and the listener only updates local state after a round-trip, so
+      // this device's drawnMeals can be stale at this instant. Reading them back
+      // here means a meal drawn moments ago is reflected in the shopping list now,
+      // not just on the next regeneration.
+      //
+      // Shopping list: regenerating rewrites the meal-sourced items, and we must
+      // base that on what's actually stored — not on possibly-stale memory — so we
+      // never wipe items added on another device or by someone else sharing this
+      // hat. If we can't confirm either, we fall back / abort rather than risk
+      // generating from stale data or overwriting good data.
+      let drawnMealsToUse = context.state.drawnMealsWithHistory || context.state.drawnMeals;
+      if (context.state.databaseTopKey) {
+        try {
+          const drawnSnapshot = await get(ref(db, `${context.state.databaseTopKey}/drawnMeals`));
+          const drawnData = drawnSnapshot.val();
+          if (drawnData && typeof drawnData === 'object') {
+            drawnMealsToUse = Object.keys(drawnData).map(key => drawnData[key]);
+          }
+        } catch (error) {
+          console.error('Could not refresh drawn meals before regenerating; using local state:', error);
+        }
+
+        try {
+          const snapshot = await get(ref(db, `${context.state.databaseTopKey}/shopping-list`));
+          context.commit('setShoppingList', snapshot.val() || {});
+        } catch (error) {
+          console.error('Could not refresh shopping list before regenerating; aborting to avoid data loss:', error);
+          return;
+        }
+      }
+
+      if (!drawnMealsToUse) {
+        console.log('No drawn meals data available');
         return;
       }
 
@@ -373,21 +411,25 @@ export default createStore({
         }
       });
 
-      // Remove existing meal ingredients from shopping list (keep manual items)
-      const existingShoppingList = { ...context.state.shoppingList };
-      Object.keys(existingShoppingList).forEach(itemId => {
-        if (existingShoppingList[itemId].source === 'meal') {
-          delete context.state.shoppingList[itemId];
+      // Build surgical, key-scoped updates instead of overwriting the whole list.
+      // Each entry here targets one item by key; sibling items (including manual
+      // ones and anything added elsewhere) are left untouched.
+      const shoppingListUpdates = {};
+      const catalogUpdates = {};
+
+      // Queue removal of the previously-generated meal items only. Manual items
+      // (source !== 'meal') are never queued, so they survive the regeneration.
+      Object.values(context.state.shoppingList || {}).forEach(item => {
+        if (item && item.source === 'meal') {
+          shoppingListUpdates[item.id] = null; // null tells Firebase update() to delete this key
         }
       });
 
-      // Add new meal ingredients to shopping list
+      // Queue the freshly-generated meal items.
       Object.values(mealIngredients).forEach(item => {
-        const shoppingItemId = require('uuid').v4();
-
-        // Ensure grocery catalog entry exists
+        // Ensure a grocery catalog entry exists for this item.
         if (!context.state.groceryCatalog[item.id]) {
-          context.state.groceryCatalog[item.id] = {
+          catalogUpdates[item.id] = {
             id: item.id,
             name: item.name,
             defaultUnits: item.units || item.defaultUnits || '',
@@ -396,9 +438,10 @@ export default createStore({
           };
         }
 
-        const catalogEntry = context.state.groceryCatalog[item.id];
+        const catalogEntry = catalogUpdates[item.id] || context.state.groceryCatalog[item.id];
+        const shoppingItemId = uuidv4();
 
-        context.state.shoppingList[shoppingItemId] = {
+        shoppingListUpdates[shoppingItemId] = {
           id: shoppingItemId,
           groceryId: item.id,
           quantity: item.quantity,
@@ -411,18 +454,29 @@ export default createStore({
         };
       });
 
-      // Save to database
-      await context.dispatch('updateDBValue', {
-        path: 'shopping-list',
-        value: context.state.shoppingList
+      // Apply the same changes to local state so the UI updates immediately.
+      Object.entries(shoppingListUpdates).forEach(([id, value]) => {
+        if (value === null) {
+          context.commit('removeFromShoppingList', id);
+        } else {
+          context.commit('addToShoppingList', value);
+        }
       });
+      Object.values(catalogUpdates).forEach(entry => context.commit('addToGroceryCatalog', entry));
 
-      await context.dispatch('updateDBValue', {
-        path: 'grocery-catalog',
-        value: context.state.groceryCatalog
-      });
+      // Persist surgically. update() merges the given keys into each node and
+      // leaves every other key alone — so no full-collection overwrite, and no
+      // clobbering of items this device never knew about.
+      const writes = [];
+      if (Object.keys(shoppingListUpdates).length) {
+        writes.push(context.dispatch('mergeDBValue', { path: 'shopping-list', value: shoppingListUpdates }));
+      }
+      if (Object.keys(catalogUpdates).length) {
+        writes.push(context.dispatch('mergeDBValue', { path: 'grocery-catalog', value: catalogUpdates }));
+      }
+      await Promise.all(writes);
 
-      console.log('Generated', Object.keys(mealIngredients).length, 'meal ingredients for shopping list');
+      console.log('Regenerated', Object.keys(mealIngredients).length, 'meal ingredients for shopping list');
     },
 
     async login (context) {
@@ -729,6 +783,13 @@ export default createStore({
     },
     async updateDBValue (context, dbEntry) {
       return set(ref(db, `${context.state.databaseTopKey}/${dbEntry.path}`), removeNaNAndUndefined(dbEntry.value));
+    },
+    // Surgically merge a map of child keys into a node. Unlike updateDBValue's
+    // set(), this only touches the keys present in dbEntry.value (a value of null
+    // deletes that key) and leaves every sibling key untouched — use this for any
+    // shared collection where a full overwrite could clobber concurrent edits.
+    async mergeDBValue (context, dbEntry) {
+      return update(ref(db, `${context.state.databaseTopKey}/${dbEntry.path}`), removeNaNAndUndefined(dbEntry.value));
     },
     async updateUserDBValue (context, dbEntry) {
       const userDatabaseTopKey = context.getters.primaryDatabaseTopKey;
