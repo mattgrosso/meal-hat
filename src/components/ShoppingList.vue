@@ -140,6 +140,7 @@
 
 <script>
 import pluralize from 'pluralize';
+import { Modal } from 'bootstrap';
 import Shepherd from 'shepherd.js';
 import 'shepherd.js/dist/css/shepherd.css';
 import Header from '@/components/Header.vue';
@@ -280,29 +281,13 @@ export default {
       this.pendingUnits = '';
       this.pendingAisle = null;
 
-      // Show Bootstrap modal - try multiple ways to ensure compatibility
+      // Use Bootstrap's Modal API directly. Relying on a global window.bootstrap
+      // (which our ESM build never sets) forced a manual show that Bootstrap's own
+      // data-bs-dismiss handler then couldn't close, leaving the modal stuck on top
+      // of the page and the whole screen unresponsive.
       this.$nextTick(() => {
         const modalEl = document.getElementById('quickDetailsModal');
-        try {
-          // Try using Bootstrap 5 syntax
-          if (window.bootstrap && window.bootstrap.Modal) {
-            const modal = new window.bootstrap.Modal(modalEl);
-            modal.show();
-          } else if (window.Bootstrap && window.Bootstrap.Modal) {
-            const modal = new window.Bootstrap.Modal(modalEl);
-            modal.show();
-          } else {
-            // Fallback: manually show modal
-            modalEl.classList.add('show');
-            modalEl.style.display = 'block';
-            document.body.classList.add('modal-open');
-          }
-        } catch (error) {
-          // Fallback: manually show modal
-          modalEl.classList.add('show');
-          modalEl.style.display = 'block';
-          document.body.classList.add('modal-open');
-        }
+        Modal.getOrCreateInstance(modalEl).show();
       });
     },
 
@@ -342,24 +327,7 @@ export default {
 
       // Close modal and clear inputs
       const modalEl = document.getElementById('quickDetailsModal');
-      try {
-        if (window.bootstrap && window.bootstrap.Modal) {
-          const modal = window.bootstrap.Modal.getInstance(modalEl);
-          if (modal) {
-            modal.hide();
-          }
-        } else {
-          // Fallback: manually hide modal
-          modalEl.classList.remove('show');
-          modalEl.style.display = 'none';
-          document.body.classList.remove('modal-open');
-        }
-      } catch (error) {
-        // Fallback: manually hide modal
-        modalEl.classList.remove('show');
-        modalEl.style.display = 'none';
-        document.body.classList.remove('modal-open');
-      }
+      Modal.getOrCreateInstance(modalEl).hide();
       this.quickAddInput = '';
       this.showSuggestions = false;
     },
