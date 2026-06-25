@@ -178,17 +178,27 @@ export default {
   },
   async mounted () {
     // Close suggestions when clicking outside
-    document.addEventListener('click', (e) => {
+    this.handleDocumentClick = (e) => {
       if (!this.$refs.quickAddInput || !this.$refs.quickAddInput.contains(e.target)) {
         this.showSuggestions = false;
       }
-    });
+    };
+    document.addEventListener('click', this.handleDocumentClick);
 
     // Protect against service worker reloads during user interaction
     this.setupReloadProtection();
 
     // Check if migration is needed
     await this.checkAndMigrate();
+  },
+  beforeUnmount () {
+    // Remove the listeners added in mounted / setupReloadProtection so they don't
+    // accumulate on every visit to this page.
+    document.removeEventListener('click', this.handleDocumentClick);
+    window.removeEventListener('beforeunload', this.handleBeforeUnload);
+    if (this.handleServiceWorkerMessage && 'serviceWorker' in navigator) {
+      navigator.serviceWorker.removeEventListener('message', this.handleServiceWorkerMessage);
+    }
   },
   computed: {
     // All existing grocery items for suggestions
@@ -505,13 +515,14 @@ export default {
       window.preventReload = false;
 
       // Override the reload by adding an event listener
-      window.addEventListener('beforeunload', (e) => {
+      this.handleBeforeUnload = (e) => {
         if (this.userInteracting) {
           e.preventDefault();
           e.returnValue = '';
           return '';
         }
-      });
+      };
+      window.addEventListener('beforeunload', this.handleBeforeUnload);
 
       // Store original reload and create protected version
       const originalReload = window.location.reload.bind(window.location);
@@ -527,11 +538,12 @@ export default {
 
       // Listen for service worker updates
       if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.addEventListener('message', (event) => {
+        this.handleServiceWorkerMessage = (event) => {
           if (event.data && event.data.type === 'SKIP_WAITING') {
             window.safeReload();
           }
-        });
+        };
+        navigator.serviceWorker.addEventListener('message', this.handleServiceWorkerMessage);
       }
     },
 

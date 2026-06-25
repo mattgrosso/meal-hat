@@ -34,67 +34,29 @@ const routes = [
   {
     path: '/login',
     component: Login,
-    meta: {
-      requiresLogin: false
-    },
+    meta: { requiresLogin: false },
   },
   {
     path: '/',
     name: 'Home',
     component: Home,
-    meta: {
-      requiresLogin: true
-    },
-    beforeEnter: (to, from, next) => {
-      if (!loggedIn()) {
-        next('/login');
-      } else {
-        next();
-      }
-    }
+    meta: { requiresLogin: true }
   },
   {
     path: '/add-meal/:id?',
     name: 'AddMeal',
     component: AddMeal,
-    meta: {
-      requiresLogin: true
-    },
-    beforeEnter: (to, from, next) => {
-      if (!loggedIn()) {
-        next('/login');
-      } else {
-        next();
-      }
-    }
+    meta: { requiresLogin: true }
   },
   {
     path: '/draw-meals',
     component: DrawMeals,
-    meta: {
-      requiresLogin: true
-    },
-    beforeEnter: (to, from, next) => {
-      if (!loggedIn()) {
-        next('/login');
-      } else {
-        next();
-      }
-    }
+    meta: { requiresLogin: true }
   },
   {
     path: '/show-meals',
     component: ShowMeals,
-    meta: {
-      requiresLogin: true
-    },
-    beforeEnter: (to, from, next) => {
-      if (!loggedIn()) {
-        next('/login');
-      } else {
-        next();
-      }
-    }
+    meta: { requiresLogin: true }
   },
   {
     path: '/add-groceries',
@@ -104,37 +66,29 @@ const routes = [
     path: '/shopping-list',
     name: 'ShoppingList',
     component: ShoppingList,
-    meta: {
-      requiresLogin: true
-    },
-    beforeEnter: (to, from, next) => {
-      if (!loggedIn()) {
-        next('/login');
-      } else {
-        next();
-      }
-    }
+    meta: { requiresLogin: true }
   },
   {
     path: '/meal-hats/:sharedMealHatName?',
     name: 'MealHats',
     component: MealHats,
-    meta: {
-      requiresLogin: true
-    },
-    beforeEnter: (to, from, next) => {
-      if (!loggedIn()) {
-        next('/login');
-      } else {
-        next();
-      }
-    }
+    meta: { requiresLogin: true }
   }
 ];
 
 const router = createRouter({
   history: createWebHashHistory(),
   routes
+});
+
+// Single auth guard for every route that requires login — replaces the identical
+// beforeEnter block that used to be copy-pasted onto each protected route.
+router.beforeEach((to, from, next) => {
+  if (to.meta.requiresLogin && !loggedIn()) {
+    next('/login');
+  } else {
+    next();
+  }
 });
 
 export default router;

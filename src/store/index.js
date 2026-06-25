@@ -60,9 +60,6 @@ export default createStore({
     getMeal: (state) => (id) => {
       return state.meals.find((meal) => meal.id === id);
     },
-    getUserEmail (state) {
-      return state.userEmail;
-    },
     databaseTopKey (state) {
       return state.databaseTopKey;
     },
@@ -241,18 +238,8 @@ export default createStore({
         state.shoppingList[shoppingItem.id] = shoppingItem;
       }
     },
-    updateShoppingListItem (state, { id, updates }) {
-      if (state.shoppingList[id]) {
-        state.shoppingList[id] = { ...state.shoppingList[id], ...updates };
-      }
-    },
     removeFromShoppingList (state, itemId) {
       delete state.shoppingList[itemId];
-    },
-    markItemPurchased (state, { itemId, purchased = true }) {
-      if (state.shoppingList[itemId]) {
-        state.shoppingList[itemId].purchased = purchased;
-      }
     },
     setGroceryItems (state, groceryItems) {
       state.groceryItems = groceryItems;
