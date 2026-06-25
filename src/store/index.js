@@ -49,11 +49,7 @@ export default createStore({
     groceryCatalog: {}, // Single source for all grocery items: id → { id, name, defaultUnits, defaultAisle, defaultLocation }
     shoppingList: {}, // Unified shopping list: id → { groceryId, quantity, units, aisle, location, source, mealId?, purchased }
 
-    // DEPRECATED - keeping only for backward compatibility during initialization
-    groceryItems: null,
-    nonMealShoppingList: null,
-    purchasedIngredients: {},
-    nonMealGroceryItems: null,
+    // Hats this user belongs to — backs the MealHats sharing screen.
     mealHatsList: null
   },
   getters: {
@@ -74,16 +70,9 @@ export default createStore({
     shoppingListItems: (state) => {
       return Object.values(state.shoppingList || {})
         .map(item => {
-          // Try to get grocery item from catalog, with fallbacks
           let groceryItem = state.groceryCatalog[item.groceryId];
 
-          // Fallback to old systems during migration
-          if (!groceryItem && item.groceryId) {
-            groceryItem = (state.groceryItems && state.groceryItems[item.groceryId]) ||
-                         (state.nonMealGroceryItems && state.nonMealGroceryItems[item.groceryId]);
-          }
-
-          // If still no grocery item found, try to use item's own properties
+          // If the catalog has no entry, synthesize one from the item's own fields.
           if (!groceryItem) {
             groceryItem = {
               id: item.groceryId || item.id,
@@ -102,98 +91,6 @@ export default createStore({
     },
     unpurchasedShoppingItems: (state, getters) => {
       return getters.shoppingListItems.filter(item => !item.purchased);
-    },
-
-    // MIGRATION HELPERS
-    migrateToUnifiedSystem: (state) => {
-      console.log('Starting migration to unified shopping list system...');
-
-      // Migrate nonMealShoppingList items to unified shoppingList
-      if (state.nonMealShoppingList && typeof state.nonMealShoppingList === 'object') {
-        Object.values(state.nonMealShoppingList).forEach(item => {
-          const shoppingItemId = require('uuid').v4();
-
-          // Ensure grocery catalog entry exists
-          if (!state.groceryCatalog[item.id]) {
-            state.groceryCatalog[item.id] = {
-              id: item.id,
-              name: item.name,
-              defaultUnits: item.units || '',
-              defaultAisle: item.aisle || 0
-            };
-          }
-
-          state.shoppingList[shoppingItemId] = {
-            id: shoppingItemId,
-            groceryId: item.id,
-            quantity: item.quantity || 1,
-            units: item.units || '',
-            aisle: item.aisle || 0,
-            source: 'manual',
-            purchased: false
-          };
-        });
-        console.log('Migrated', Object.keys(state.nonMealShoppingList).length, 'manual items');
-      }
-
-      // Migrate drawnIngredients to unified shoppingList
-      if (state.drawnMeals && state.meals && (state.groceryItems || state.groceryCatalog)) {
-        const ingredients = {};
-
-        state.drawnMeals.forEach(drawnMeal => {
-          const meal = state.meals.find(meal => meal.id === drawnMeal.mealId);
-          if (meal && meal.ingredients) {
-            meal.ingredients.forEach(ingredient => {
-              const groceryItem = state.groceryCatalog[ingredient.groceryItemId] ||
-                                (state.groceryItems && state.groceryItems[ingredient.groceryItemId]);
-              if (groceryItem) {
-                const id = groceryItem.id;
-                if (ingredients[id]) {
-                  ingredients[id].quantity += ingredient.quantity;
-                } else {
-                  ingredients[id] = { ...groceryItem, quantity: ingredient.quantity };
-                }
-              }
-            });
-          }
-        });
-
-        // Add meal ingredients to unified shopping list
-        Object.values(ingredients).forEach(item => {
-          const shoppingItemId = require('uuid').v4();
-          const purchasedAmount = state.purchasedIngredients[item.id] || 0;
-          const remainingQuantity = item.quantity - purchasedAmount;
-
-          // Ensure grocery catalog entry exists
-          if (!state.groceryCatalog[item.id]) {
-            state.groceryCatalog[item.id] = {
-              id: item.id,
-              name: item.name,
-              defaultUnits: item.units || item.defaultUnits || '',
-              defaultAisle: item.aisle || item.defaultAisle || 0,
-              defaultLocation: item.location || item.defaultLocation || null
-            };
-          }
-
-          if (remainingQuantity > 0) {
-            const catalogEntry = state.groceryCatalog[item.id];
-            state.shoppingList[shoppingItemId] = {
-              id: shoppingItemId,
-              groceryId: item.id,
-              quantity: remainingQuantity,
-              units: item.units || item.defaultUnits || '',
-              aisle: item.aisle || item.defaultAisle || 0,
-              location: item.location || (catalogEntry && catalogEntry.defaultLocation) || null,
-              source: 'meal',
-              purchased: false
-            };
-          }
-        });
-        console.log('Migrated', Object.keys(ingredients).length, 'meal ingredients');
-      }
-
-      console.log('Migration complete! Unified shopping list has', Object.keys(state.shoppingList).length, 'items');
-      return true;
     },
   },
   mutations: {
@@ -241,25 +138,6 @@ export default createStore({
     removeFromShoppingList (state, itemId) {
       delete state.shoppingList[itemId];
     },
-    setGroceryItems (state, groceryItems) {
-      state.groceryItems = groceryItems;
-    },
-    setNonMealShoppingList (state, nonMealShoppingList) {
-      state.nonMealShoppingList = nonMealShoppingList;
-    },
-    setPurchasedIngredients (state, purchasedIngredients) {
-      state.purchasedIngredients = purchasedIngredients;
-    },
-    purchaseIngredient (state, config) {
-      if (state.purchasedIngredients[config.ingredientId]) {
-        state.purchasedIngredients[config.ingredientId] += config.quantity;
-      } else {
-        state.purchasedIngredients[config.ingredientId] = config.quantity;
-      }
-    },
-    setNonMealGroceryItems (state, nonMealGroceryItems) {
-      state.nonMealGroceryItems = nonMealGroceryItems;
-    },
     setMealHatsList (state, mealHatsList) {
       state.mealHatsList = mealHatsList;
     },
@@ -267,55 +145,12 @@ export default createStore({
       state.meals = null;
       state.drawnMealsWithHistory = null;
       state.drawnMeals = null;
-
-      // Clear new unified data
       state.groceryCatalog = {};
       state.shoppingList = {};
-
-      // Clear deprecated data
-      state.groceryItems = null;
-      state.nonMealShoppingList = null;
-      state.purchasedIngredients = {};
-      state.nonMealGroceryItems = null;
       state.mealHatsList = null;
     }
   },
   actions: {
-    // Migrate from old split system to unified system
-    async migrateToUnifiedSystem (context) {
-      console.log('Migrating to unified shopping list system...');
-
-      // Run the migration
-      const migrationSuccess = context.getters.migrateToUnifiedSystem;
-
-      if (migrationSuccess) {
-        // Merge the migrated items in rather than overwriting the nodes, so a
-        // concurrent edit (e.g. another device that already migrated, or a manual
-        // item added mid-migration) can't be clobbered.
-        await context.dispatch('mergeDBValue', {
-          path: 'shopping-list',
-          value: context.state.shoppingList
-        });
-
-        await context.dispatch('mergeDBValue', {
-          path: 'grocery-catalog',
-          value: context.state.groceryCatalog
-        });
-
-        // Clear old data from database
-        await context.dispatch('updateDBValue', { path: 'non-meal-shopping-list', value: null });
-        await context.dispatch('updateDBValue', { path: 'purchased-ingredients', value: {} });
-
-        // Clear old data from state
-        context.commit('setNonMealShoppingList', null);
-        context.commit('setPurchasedIngredients', {});
-
-        console.log('Migration completed and saved to database');
-        return true;
-      }
-      return false;
-    },
-
     // Read-only: report grocery entries that share a normalized name (likely the
     // same ingredient split across multiple ids), with how heavily each is
     // referenced, so duplicates can be reviewed before any merge. Writes nothing.
@@ -371,12 +206,10 @@ export default createStore({
         await context.dispatch('mergeDBValue', { path: 'shopping-list', value: shoppingUpdates });
       }
 
-      // 3) Delete the orphaned catalog + legacy grocery-items entries.
+      // 3) Delete the orphaned catalog entries.
       const catalogDeletes = {};
-      const legacyDeletes = {};
-      oldIds.forEach((id) => { catalogDeletes[id] = null; legacyDeletes[id] = null; });
+      oldIds.forEach((id) => { catalogDeletes[id] = null; });
       await context.dispatch('mergeDBValue', { path: 'grocery-catalog', value: catalogDeletes });
-      await context.dispatch('mergeDBValue', { path: 'grocery-items', value: legacyDeletes });
 
       return { mealsChanged, shoppingItemsChanged, entriesRemoved: oldIds.length };
     },
@@ -434,8 +267,7 @@ export default createStore({
       const mealIngredients = aggregateMealIngredients({
         drawnMeals: drawnMealsToUse,
         getMeal: (id) => context.getters.getMeal(id),
-        catalog: context.state.groceryCatalog,
-        legacyItems: context.state.groceryItems
+        catalog: context.state.groceryCatalog
       });
 
       // Build surgical, key-scoped updates instead of overwriting the whole list.
@@ -546,15 +378,8 @@ export default createStore({
       context.commit('setDrawnMealsWithHistory', null);
       context.commit('setDrawnMeals', null);
 
-      // Clear new unified data structures
       context.commit('setGroceryCatalog', {});
       context.commit('setShoppingList', {});
-
-      // Clear deprecated data
-      context.commit('setGroceryItems', null);
-      context.commit('setNonMealShoppingList', null);
-      context.commit('setPurchasedIngredients', {});
-      context.commit('setNonMealGroceryItems', null);
       context.commit('setMealHatsList', null);
 
       window.localStorage.removeItem('mealHatDatabaseTopKey');
@@ -669,46 +494,6 @@ export default createStore({
         });
       }
 
-      // If there's no groceryItems in the state, fetch it from the database.
-      if (!context.state.groceryItems) {
-        onValue(ref(db, `${context.state.databaseTopKey}/grocery-items`), (snapshot) => {
-          const data = snapshot.val();
-
-          // Commit the fetched groceryItems to the state.
-          context.commit('setGroceryItems', data);
-        });
-      }
-
-      // If there's no nonMealShoppingList in the state, fetch it from the database.
-      if (!context.state.nonMealShoppingList) {
-        onValue(ref(db, `${context.state.databaseTopKey}/non-meal-shopping-list`), (snapshot) => {
-          const data = snapshot.val();
-
-          // Commit the fetched nonMealShoppingList to the state.
-          context.commit('setNonMealShoppingList', data);
-        });
-      }
-
-      // If there's no purchasedIngredients in the state, fetch it from the database.
-      if (!context.state.purchasedIngredients || Object.keys(context.state.purchasedIngredients).length === 0) {
-        onValue(ref(db, `${context.state.databaseTopKey}/purchased-ingredients`), (snapshot) => {
-          const data = snapshot.val();
-
-          // Commit the fetched purchasedIngredients to the state.
-          context.commit('setPurchasedIngredients', data);
-        });
-      }
-
-      // If there's no nonMealGroceryItems in the state, fetch it from the database.
-      if (!context.state.nonMealGroceryItems) {
-        onValue(ref(db, `${context.state.databaseTopKey}/non-meal-grocery-items`), (snapshot) => {
-          const data = snapshot.val();
-
-          // Commit the fetched nonMealGroceryItems to the state.
-          context.commit('setNonMealGroceryItems', data);
-        });
-      }
-
       // If there's no mealHatsList in the state, fetch it from the database.
       if (!context.state.mealHatsList && context.getters.primaryDatabaseTopKey) {
         onValue(ref(db, `${context.getters.primaryDatabaseTopKey}/meal-hats-list`), (snapshot) => {
@@ -743,45 +528,11 @@ export default createStore({
         });
       }
 
-      // INITIALIZE NEW UNIFIED DATA STRUCTURES
-      // Initialize grocery catalog from existing groceryItems and nonMealGroceryItems
+      // Load the unified grocery catalog.
       if (Object.keys(context.state.groceryCatalog).length === 0) {
         onValue(ref(db, `${context.state.databaseTopKey}/grocery-catalog`), (snapshot) => {
-          const data = snapshot.val();
-          context.commit('setGroceryCatalog', data);
+          context.commit('setGroceryCatalog', snapshot.val());
         });
-
-        // Migration: populate catalog from old data if new structure doesn't exist
-        if (!context.state.groceryCatalog || Object.keys(context.state.groceryCatalog).length === 0) {
-          // Merge old groceryItems and nonMealGroceryItems into unified catalog
-          const mergedCatalog = {};
-
-          if (context.state.groceryItems) {
-            Object.values(context.state.groceryItems).forEach(item => {
-              mergedCatalog[item.id] = {
-                id: item.id,
-                name: item.name,
-                defaultUnits: item.units || 'units',
-                defaultAisle: item.aisle || null
-              };
-            });
-          }
-
-          if (context.state.nonMealGroceryItems) {
-            Object.values(context.state.nonMealGroceryItems).forEach(item => {
-              mergedCatalog[item.id] = {
-                id: item.id,
-                name: item.name,
-                defaultUnits: item.units || 'units',
-                defaultAisle: item.aisle || null
-              };
-            });
-          }
-
-          if (Object.keys(mergedCatalog).length > 0) {
-            context.commit('setGroceryCatalog', mergedCatalog);
-          }
-        }
       }
 
       // Initialize unified shopping list
@@ -791,16 +542,6 @@ export default createStore({
           context.commit('setShoppingList', data || {});
         });
       }
-    },
-    purchaseIngredient (context, config) {
-      context.commit('purchaseIngredient', config);
-
-      const dbEntry = {
-        path: 'purchased-ingredients',
-        value: context.state.purchasedIngredients
-      };
-
-      context.dispatch('updateDBValue', dbEntry);
     },
     async setDBValue (context, dbEntry) {
       const timestamp = Date.now();

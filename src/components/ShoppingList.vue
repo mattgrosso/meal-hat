@@ -187,9 +187,6 @@ export default {
 
     // Protect against service worker reloads during user interaction
     this.setupReloadProtection();
-
-    // Check if migration is needed
-    await this.checkAndMigrate();
   },
   beforeUnmount () {
     // Remove the listeners added in mounted / setupReloadProtection so they don't
@@ -201,22 +198,10 @@ export default {
     }
   },
   computed: {
-    // All existing grocery items for suggestions
+    // All catalog grocery items, for the quick-add suggestions.
     groceryItems () {
-      // Use unified grocery catalog, with fallback to old system for backward compatibility
       const catalog = this.$store.state.groceryCatalog || {};
-      if (Object.keys(catalog).length > 0) {
-        return Object.values(catalog).sort((a, b) => a.name.localeCompare(b.name));
-      }
-
-      // Fallback to old system during migration period
-      if (!this.$store.state.nonMealGroceryItems || !Object.keys(this.$store.state.nonMealGroceryItems).length) {
-        return [];
-      } else {
-        return Object.keys(this.$store.state.nonMealGroceryItems)
-          .map((key) => this.$store.state.nonMealGroceryItems[key])
-          .sort((a, b) => a.name.localeCompare(b.name));
-      }
+      return Object.values(catalog).sort((a, b) => a.name.localeCompare(b.name));
     },
 
     sortedShoppingList () {
@@ -557,23 +542,6 @@ export default {
         }
       };
       setTimeout(checkAndReload, 1000);
-    },
-
-    // Check if migration from old system is needed
-    async checkAndMigrate () {
-      // Debug current state
-
-      // Check if we have old data but no new data
-      const hasOldData = (this.$store.state.nonMealShoppingList && Object.keys(this.$store.state.nonMealShoppingList).length > 0) ||
-                         (this.$store.state.purchasedIngredients && Object.keys(this.$store.state.purchasedIngredients).length > 0);
-      const hasNewData = this.$store.state.shoppingList && Object.keys(this.$store.state.shoppingList).length > 0;
-      const hasGroceryCatalog = this.$store.state.groceryCatalog && Object.keys(this.$store.state.groceryCatalog).length > 0;
-
-      if (hasOldData && !hasNewData) {
-        try {
-          await this.$store.dispatch('migrateToUnifiedSystem');
-        } catch (error) { /* migration errors are non-fatal */ }
-      } else if (hasNewData && !hasGroceryCatalog) { /* no action needed */ }
     },
 
     updateItemLocation (ingredient, location) {

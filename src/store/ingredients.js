@@ -8,26 +8,20 @@ export function normalizeName (name) {
   return (name || '').trim().toLowerCase();
 }
 
-// Find an existing grocery id by normalized name. Prefers the unified catalog
-// (the reliably-loaded source) and falls back to the deprecated grocery-items
-// list during migration. `catalog` and `legacyItems` are id -> entry maps.
-export function findGroceryIdByName (name, catalog = {}, legacyItems = {}) {
+// Find an existing grocery id by normalized name in the catalog (id -> entry map).
+export function findGroceryIdByName (name, catalog = {}) {
   const target = normalizeName(name);
   if (!target) {
     return null;
   }
-  const inCatalog = Object.values(catalog || {}).find((item) => normalizeName(item.name) === target);
-  if (inCatalog) {
-    return inCatalog.id;
-  }
-  const inLegacy = Object.values(legacyItems || {}).find((item) => normalizeName(item.name) === target);
-  return inLegacy ? inLegacy.id : null;
+  const match = Object.values(catalog || {}).find((item) => normalizeName(item.name) === target);
+  return match ? match.id : null;
 }
 
 // Aggregate the ingredients of upcoming drawn meals into a map keyed by grocery
 // id, summing quantities for ingredients shared across meals. `getMeal` resolves
-// a meal by id; `catalog`/`legacyItems` resolve a grocery entry by id.
-export function aggregateMealIngredients ({ drawnMeals, getMeal, catalog = {}, legacyItems = {}, now = new Date() }) {
+// a meal by id; `catalog` resolves a grocery entry by id.
+export function aggregateMealIngredients ({ drawnMeals, getMeal, catalog = {}, now = new Date() }) {
   const mealIngredients = {};
   if (!drawnMeals) {
     return mealIngredients;
@@ -42,8 +36,7 @@ export function aggregateMealIngredients ({ drawnMeals, getMeal, catalog = {}, l
     const meal = getMeal(drawnMeal.mealId);
     if (meal && meal.ingredients) {
       meal.ingredients.forEach((ingredient) => {
-        const groceryItem = catalog[ingredient.groceryItemId] ||
-          (legacyItems && legacyItems[ingredient.groceryItemId]);
+        const groceryItem = catalog[ingredient.groceryItemId];
         if (groceryItem) {
           const id = groceryItem.id;
           if (mealIngredients[id]) {

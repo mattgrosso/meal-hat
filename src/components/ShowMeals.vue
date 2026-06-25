@@ -81,12 +81,8 @@ export default {
       return Object.values(this.$store.state.meals)
         .sort((a, b) => a.name.localeCompare(b.name));
     },
-    groceryItemsAsArray () {
-      if (!this.$store.state.groceryItems) {
-        return [];
-      } else {
-        return Object.keys(this.$store.state.groceryItems).map((key) => this.$store.state.groceryItems[key]);
-      }
+    catalogAsArray () {
+      return Object.values(this.$store.state.groceryCatalog || {});
     },
     datesWithMeals () {
       if (!this.$store.state.drawnMealsWithHistory) {
@@ -198,9 +194,9 @@ export default {
       this.showScheduleModal = false
     },
     getGroceryItems (meal) {
-      return meal.ingredients.map((ingredient) => {
-        return this.groceryItemsAsArray.find((groceryItem) => groceryItem.id === ingredient.groceryItemId);
-      });
+      return meal.ingredients
+        .map((ingredient) => this.catalogAsArray.find((groceryItem) => groceryItem.id === ingredient.groceryItemId))
+        .filter(Boolean); // drop any ingredient whose grocery entry can't be resolved
     },
     startTour () {
       const tour = new Shepherd.Tour({

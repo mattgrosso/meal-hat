@@ -26,21 +26,15 @@ describe('findGroceryIdByName', () => {
     a: { id: 'a', name: 'Onion' },
     b: { id: 'b', name: 'Garlic' }
   };
-  const legacy = {
-    c: { id: 'c', name: 'Carrot' }
-  };
 
   it('matches case- and whitespace-insensitively (the dedup guarantee)', () => {
     expect(findGroceryIdByName('onion', catalog)).toBe('a');
     expect(findGroceryIdByName('  ONION  ', catalog)).toBe('a');
-  });
-  it('prefers the catalog, then falls back to the legacy list', () => {
-    expect(findGroceryIdByName('Garlic', catalog, legacy)).toBe('b');
-    expect(findGroceryIdByName('carrot', catalog, legacy)).toBe('c');
+    expect(findGroceryIdByName('Garlic', catalog)).toBe('b');
   });
   it('returns null for no match or empty name', () => {
-    expect(findGroceryIdByName('Pepper', catalog, legacy)).toBeNull();
-    expect(findGroceryIdByName('   ', catalog, legacy)).toBeNull();
+    expect(findGroceryIdByName('Pepper', catalog)).toBeNull();
+    expect(findGroceryIdByName('   ', catalog)).toBeNull();
     expect(findGroceryIdByName('', catalog)).toBeNull();
   });
 });
@@ -77,19 +71,6 @@ describe('aggregateMealIngredients', () => {
     const result = aggregateMealIngredients({ drawnMeals: drawn, getMeal, catalog, now });
     expect(result.beef).toBeUndefined(); // chili was in the past
     expect(result.onion.quantity).toBe(3); // only soup
-  });
-
-  it('falls back to the legacy grocery-items map when catalog lacks the id', () => {
-    const legacy = { milk: { id: 'milk', name: 'Milk' } };
-    const mealsWithLegacy = { latte: { id: 'latte', ingredients: [{ groceryItemId: 'milk', quantity: 1 }] } };
-    const result = aggregateMealIngredients({
-      drawnMeals: [{ mealId: 'latte', assignedDate: '2026-06-26' }],
-      getMeal: (id) => mealsWithLegacy[id],
-      catalog: {},
-      legacyItems: legacy,
-      now
-    });
-    expect(result.milk.quantity).toBe(1);
   });
 
   it('tags each ingredient with the meal it came from and ignores unmatched ids', () => {

@@ -149,28 +149,24 @@ export default {
     normalizeName (name) {
       return normalizeGroceryName(name);
     },
-    // Find an existing grocery entry by normalized name (catalog first, then the
-    // deprecated grocery-items list). Delegates to the shared pure helper.
+    // Find an existing grocery entry by normalized name. Delegates to the shared
+    // pure helper.
     findExistingGroceryId (name) {
-      return findGroceryIdByName(name, this.$store.state.groceryCatalog, this.$store.state.groceryItems);
+      return findGroceryIdByName(name, this.$store.state.groceryCatalog);
     },
-    // Resolve a grocery entry's display details by id, from whichever store has it.
+    // Resolve a grocery entry's display details by id from the catalog.
     groceryById (id) {
       const catalog = this.$store.state.groceryCatalog || {};
       if (catalog[id]) {
         return { name: catalog[id].name, units: catalog[id].defaultUnits, aisle: catalog[id].defaultAisle };
       }
-      const old = this.$store.state.groceryItems || {};
-      if (old[id]) {
-        return { name: old[id].name, units: old[id].units, aisle: old[id].aisle };
-      }
       return null;
     },
     // Turn the ingredient form rows into meal ingredient references
-    // ({ groceryItemId, quantity }), reusing an existing grocery entry whenever the
-    // name matches and creating a new one (in the catalog + legacy list) otherwise.
-    // Returns the references directly, so we never depend on the DB listener having
-    // synced a just-created entry back into local state before we save the meal.
+    // ({ groceryItemId, quantity }), reusing an existing catalog entry whenever the
+    // name matches and creating a new one otherwise. Returns the references directly,
+    // so we never depend on the DB listener having synced a just-created entry back
+    // into local state before we save the meal.
     resolveIngredients () {
       const resolved = [];
       const createdThisMeal = {}; // normalized name -> id, so repeated rows reuse one entry
@@ -195,12 +191,6 @@ export default {
           };
           this.$store.commit('addToGroceryCatalog', catalogValue);
           this.$store.dispatch('updateDBValue', { path: `grocery-catalog/${groceryId}`, value: catalogValue });
-
-          // Keep the legacy grocery-items list in sync for backward compatibility.
-          this.$store.dispatch('updateDBValue', {
-            path: `grocery-items/${groceryId}`,
-            value: { id: groceryId, name: displayName, units: ingredient.units || '', aisle: ingredient.aisle || 0 }
-          });
 
           createdThisMeal[key] = groceryId;
         }
