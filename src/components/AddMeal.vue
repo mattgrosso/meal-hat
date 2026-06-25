@@ -52,6 +52,7 @@ import { v4 as uuidv4 } from 'uuid';
 import Shepherd from 'shepherd.js';
 import 'shepherd.js/dist/css/shepherd.css';
 import Header from '@/components/Header.vue';
+import { normalizeName as normalizeGroceryName, findGroceryIdByName } from '@/store/ingredients';
 
 export default {
   name: 'AddMeals',
@@ -88,13 +89,6 @@ export default {
     }
   },
   computed: {
-    groceryItemsAsArray () {
-      if (!this.$store.state.groceryItems) {
-        return [];
-      } else {
-        return Object.keys(this.$store.state.groceryItems).map((key) => this.$store.state.groceryItems[key]);
-      }
-    },
     headerText () {
       return this.mealId ? 'Edit Meal' : 'Add Meal';
     },
@@ -153,25 +147,12 @@ export default {
     // surrounding whitespace) don't spawn duplicate grocery entries that then
     // can't merge on the shopping list.
     normalizeName (name) {
-      return (name || '').trim().toLowerCase();
+      return normalizeGroceryName(name);
     },
-    // Find an existing grocery entry by normalized name. Prefers the unified
-    // catalog (the reliably-loaded source) and falls back to the deprecated
-    // grocery-items list during migration.
+    // Find an existing grocery entry by normalized name (catalog first, then the
+    // deprecated grocery-items list). Delegates to the shared pure helper.
     findExistingGroceryId (name) {
-      const target = this.normalizeName(name);
-      if (!target) {
-        return null;
-      }
-
-      const inCatalog = Object.values(this.$store.state.groceryCatalog || {})
-        .find((item) => this.normalizeName(item.name) === target);
-      if (inCatalog) {
-        return inCatalog.id;
-      }
-
-      const inOld = this.groceryItemsAsArray.find((item) => this.normalizeName(item.name) === target);
-      return inOld ? inOld.id : null;
+      return findGroceryIdByName(name, this.$store.state.groceryCatalog, this.$store.state.groceryItems);
     },
     // Resolve a grocery entry's display details by id, from whichever store has it.
     groceryById (id) {

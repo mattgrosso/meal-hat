@@ -4,6 +4,7 @@ import { getDatabase, onValue, ref, set, get, update } from "firebase/database";
 import { getAuth, GoogleAuthProvider, signInWithPopup } from "firebase/auth";
 import { v4 as uuidv4 } from 'uuid';
 import router from '@/router';
+import { analyzeDuplicates, findSimilar, aggregateMealIngredients, remapMealIngredients } from './ingredients';
 
 const firebaseConfig = {
   apiKey: process.env.VUE_APP_GOOGLE_API_KEY,
@@ -332,57 +333,11 @@ export default createStore({
     // same ingredient split across multiple ids), with how heavily each is
     // referenced, so duplicates can be reviewed before any merge. Writes nothing.
     analyzeIngredientDuplicates (context) {
-      const norm = (s) => (s || '').trim().toLowerCase();
-      const catalog = context.state.groceryCatalog || {};
-      const meals = context.state.meals || [];
-      const shoppingList = context.state.shoppingList || {};
-
-      // Count references to each grocery id across meals and the shopping list.
-      const refCounts = {};
-      meals.forEach((m) => (m.ingredients || []).forEach((ing) => {
-        refCounts[ing.groceryItemId] = (refCounts[ing.groceryItemId] || 0) + 1;
-      }));
-      Object.values(shoppingList).forEach((item) => {
-        if (item.groceryId) {
-          refCounts[item.groceryId] = (refCounts[item.groceryId] || 0) + 1;
-        }
+      return analyzeDuplicates({
+        catalog: context.state.groceryCatalog,
+        meals: context.state.meals,
+        shoppingList: context.state.shoppingList
       });
-
-      // Group catalog entries by normalized name.
-      const groups = {};
-      Object.values(catalog).forEach((item) => {
-        const key = norm(item.name);
-        if (!key) return;
-        (groups[key] = groups[key] || []).push(item);
-      });
-
-      // Keep only groups with more than one entry — those are the duplicates.
-      const clusters = Object.entries(groups)
-        .filter(([, items]) => items.length > 1)
-        .map(([key, items]) => {
-          // Canonical = the most-referenced entry (ties keep catalog order).
-          const sorted = [...items].sort((a, b) => (refCounts[b.id] || 0) - (refCounts[a.id] || 0));
-          const canonical = sorted[0];
-          return {
-            normalizedName: key,
-            canonicalId: canonical.id,
-            entries: sorted.map((it) => ({
-              id: it.id,
-              name: it.name,
-              aisle: it.defaultAisle,
-              refs: refCounts[it.id] || 0,
-              canonical: it.id === canonical.id
-            }))
-          };
-        })
-        .sort((a, b) => b.entries.length - a.entries.length);
-
-      return {
-        catalogCount: Object.keys(catalog).length,
-        duplicateClusters: clusters.length,
-        redundantEntries: clusters.reduce((n, c) => n + c.entries.length - 1, 0),
-        clusters
-      };
     },
 
     // Read-only: find catalog entries that are LIKELY the same ingredient but
@@ -392,59 +347,7 @@ export default createStore({
     // are filtered out. These are HEURISTIC candidates for human review, not
     // automatic merges. Writes nothing.
     findSimilarGroceries (context) {
-      const norm = (s) => (s || '').trim().toLowerCase();
-      // Generic grocery words that shouldn't, on their own, make two items "similar".
-      const STOP = new Set(['cheese', 'sauce', 'fresh', 'ground', 'sliced', 'shredded',
-        'organic', 'large', 'small', 'whole', 'can', 'canned', 'jar', 'bag', 'box',
-        'of', 'the', 'and', 'frozen', 'dried', 'raw', 'mix', 'powder', 'boneless', 'skinless']);
-      const tokenize = (s) => norm(s).split(/[^a-z0-9]+/).filter(Boolean);
-      const lev = (a, b) => {
-        const m = a.length; const n = b.length;
-        if (!m) return n;
-        if (!n) return m;
-        let prev = Array.from({ length: n + 1 }, (_, j) => j);
-        for (let i = 1; i <= m; i++) {
-          const curr = [i];
-          for (let j = 1; j <= n; j++) {
-            curr[j] = Math.min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
-          }
-          prev = curr;
-        }
-        return prev[n];
-      };
-
-      const meta = Object.values(context.state.groceryCatalog || {})
-        .filter((i) => i && i.name)
-        .map((i) => {
-          const toks = tokenize(i.name);
-          return { id: i.id, name: i.name, norm: norm(i.name), toks: new Set(toks), sig: toks.filter((t) => !STOP.has(t)) };
-        });
-
-      const pairs = [];
-      for (let i = 0; i < meta.length; i++) {
-        for (let j = i + 1; j < meta.length; j++) {
-          const A = meta[i]; const B = meta[j];
-          if (A.norm === B.norm) continue; // exact-normalized dupes handled separately
-          const reasons = [];
-
-          const d = lev(A.norm, B.norm);
-          if (Math.max(A.norm.length, B.norm.length) >= 4 && d > 0 && d <= 2) {
-            reasons.push(`close spelling (edit distance ${d})`);
-          }
-
-          const aSub = [...A.toks].every((t) => B.toks.has(t));
-          const bSub = [...B.toks].every((t) => A.toks.has(t));
-          if (aSub || bSub) {
-            const smaller = aSub ? A : B;
-            if (smaller.sig.length) reasons.push('one name contains the other');
-          }
-
-          if (reasons.length) {
-            pairs.push({ aId: A.id, a: A.name, bId: B.id, b: B.name, reasons });
-          }
-        }
-      }
-      return { candidatePairs: pairs.length, pairs };
+      return findSimilar(context.state.groceryCatalog);
     },
 
     // Apply approved merges. `mapping` is { oldId: canonicalId }. Repoints meal
@@ -462,19 +365,9 @@ export default createStore({
       let mealsChanged = 0;
       for (const meal of (context.state.meals || [])) {
         if (!meal.ingredients || !meal.ingredients.length) continue;
-        let touched = false;
-        const byId = {};
-        meal.ingredients.forEach((ing) => {
-          const newId = remap(ing.groceryItemId);
-          if (newId !== ing.groceryItemId) touched = true;
-          if (byId[newId]) {
-            byId[newId].quantity = (Number(byId[newId].quantity) || 0) + (Number(ing.quantity) || 0);
-          } else {
-            byId[newId] = { groceryItemId: newId, quantity: ing.quantity };
-          }
-        });
+        const { ingredients, touched } = remapMealIngredients(meal.ingredients, remap);
         if (touched) {
-          await context.dispatch('updateDBValue', { path: `meals/${meal.id}`, value: { ...meal, ingredients: Object.values(byId) } });
+          await context.dispatch('updateDBValue', { path: `meals/${meal.id}`, value: { ...meal, ingredients } });
           mealsChanged++;
         }
       }
@@ -550,38 +443,12 @@ export default createStore({
         return;
       }
 
-      const mealIngredients = {};
-
-      // Filter to only include meals from today forward (not past meals)
-      const today = new Date();
-      today.setHours(0, 0, 0, 0); // Start of today
-
-      const upcomingMeals = drawnMealsToUse.filter(drawnMeal => {
-        const mealDate = new Date(drawnMeal.assignedDate);
-        return mealDate >= today;
-      });
-
-      // Collect all ingredients from upcoming drawn meals only
-      upcomingMeals.forEach(drawnMeal => {
-        const meal = context.getters.getMeal(drawnMeal.mealId);
-        if (meal && meal.ingredients) {
-          meal.ingredients.forEach(ingredient => {
-            const groceryItem = context.state.groceryCatalog[ingredient.groceryItemId] ||
-                              (context.state.groceryItems && context.state.groceryItems[ingredient.groceryItemId]);
-            if (groceryItem) {
-              const id = groceryItem.id;
-              if (mealIngredients[id]) {
-                mealIngredients[id].quantity += ingredient.quantity;
-              } else {
-                mealIngredients[id] = {
-                  ...groceryItem,
-                  quantity: ingredient.quantity,
-                  mealId: drawnMeal.mealId
-                };
-              }
-            }
-          });
-        }
+      // Collect (and sum) the ingredients of upcoming drawn meals, keyed by grocery id.
+      const mealIngredients = aggregateMealIngredients({
+        drawnMeals: drawnMealsToUse,
+        getMeal: (id) => context.getters.getMeal(id),
+        catalog: context.state.groceryCatalog,
+        legacyItems: context.state.groceryItems
       });
 
       // Build surgical, key-scoped updates instead of overwriting the whole list.
