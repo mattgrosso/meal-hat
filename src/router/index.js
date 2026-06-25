@@ -12,7 +12,7 @@ const loggedIn = () => {
   const databaseTopKeyFromLocalStorage = window.localStorage.getItem('mealHatDatabaseTopKey');
   const userEmailFromLocalStorage = window.localStorage.getItem('mealHatUserEmail');
 
-  if (store.getters.databaseTopKey && store.getters.userEmail) {
+  if (store.getters.databaseTopKey && store.state.userEmail) {
     store.dispatch('initializeDB');
     return true;
   } else if (databaseTopKeyFromLocalStorage && userEmailFromLocalStorage) {
@@ -20,8 +20,8 @@ const loggedIn = () => {
     store.commit('setUserEmail', userEmailFromLocalStorage);
     store.dispatch('initializeDB');
     return true;
-  } else if (store.getters.userEmail) {
-    const topKey = store.state.mostRecentDatabase || store.getters.userEmail;
+  } else if (store.state.userEmail) {
+    const topKey = store.state.mostRecentDatabase || store.state.userEmail;
     store.dispatch('updateDatabaseTopKey', topKey);
     store.dispatch('initializeDB');
     return true;
