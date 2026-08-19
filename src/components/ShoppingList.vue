@@ -742,7 +742,7 @@ export default {
     .suggestions-dropdown {
       position: relative;
       border: 1px solid #ced4da;
-      border-top: none;
+      border-top: 0;
       border-radius: 0 0 0.375rem 0.375rem;
       background: white;
       box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
@@ -761,7 +761,7 @@ export default {
         }
 
         &:last-child {
-          border-bottom: none;
+          border-bottom: 0;
         }
 
         .suggestion-name {

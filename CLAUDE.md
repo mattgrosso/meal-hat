@@ -128,6 +128,22 @@ upload it over `s3://meal-hat/service-worker.js`, let clients shed the bad
 worker, then `yarn deploy` to restore the real one. It is NOT currently
 deployed.
 
+## Toolchain
+
+**Node is pinned to 22.22.3** (`.tool-versions`), raised from 18.4.0 on
+2026-08-19. The old pin could not install at all: `stylelint-scss` and
+`stylelint-config-sass-guidelines` require `>=18.12.0`, so `yarn install` failed
+with "incompatible module". It stayed invisible because the committed
+`node_modules` kept working.
+
+**`.yarnrc` sets `--ignore-engines`.** `@achrinza/node-ipc`, a transitive
+dependency of `@vue/cli-service`'s dev server, declares `engines.node` as an
+enumeration ending at 19 and is unmaintained; it runs fine on 22. Nothing else
+in the tree has an upper bound. The flag is blunt — it silences engine checks
+for every package — so delete it the day the Vue CLI dev server goes away, and
+re-run a clean install to see what it was covering. Same call, same caveat, as
+the Cinema Roll repo.
+
 ## Deploy (AWS S3 + CloudFront)
 
 `yarn deploy` builds, then `aws s3 sync dist/ s3://meal-hat` and invalidates
