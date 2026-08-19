@@ -36,7 +36,17 @@ module.exports = defineConfig({
       ],
     },
     workboxOptions: {
-      // Configure Workbox (used for service worker) here
+      // A new service worker installs into the "waiting" state and does not
+      // take over until every tab controlled by the old one has closed. The
+      // update handler in registerServiceWorker.js responded to that by calling
+      // location.reload() — but reloading does NOT promote a waiting worker, so
+      // the page came back on the OLD cached bundle, the update fired again, and
+      // it reloaded again. Roughly three times a second, indefinitely.
+      //
+      // It only showed up when a deploy actually happened, which is why two
+      // quiet months hid it.
+      skipWaiting: true,
+      clientsClaim: true,
     },
   },
 })
