@@ -7,6 +7,7 @@ import {
   withDrawnDate,
   drawnTooRecently,
   datesInRange,
+  isoDaysAgo,
   DRAWN_DATES_KEPT
 } from '../../src/store/schedule.js';
 
@@ -163,6 +164,27 @@ describe('drawnTooRecently', () => {
     const meal = { minDaysBetween: 14, lastDrawn: new Date(2026, 7, 15).getTime() };
 
     expect(drawnTooRecently(meal, '2026-08-19')).toBe(true);
+  });
+});
+
+describe('isoDaysAgo', () => {
+  it('counts back whole calendar days', () => {
+    expect(isoDaysAgo(1, new Date(2026, 7, 19))).toBe('2026-08-18');
+    expect(isoDaysAgo(19, new Date(2026, 7, 19))).toBe('2026-07-31');
+  });
+
+  it('crosses a year boundary', () => {
+    expect(isoDaysAgo(1, new Date(2026, 0, 1))).toBe('2025-12-31');
+  });
+
+  it('is unmoved by a DST change inside the window', () => {
+    // Subtracting days * 86400000 would land an hour off and, at the wrong
+    // time of day, on the wrong date entirely.
+    expect(isoDaysAgo(7, new Date(2026, 10, 4))).toBe('2026-10-28');
+  });
+
+  it('handles zero', () => {
+    expect(isoDaysAgo(0, new Date(2026, 7, 19))).toBe('2026-08-19');
   });
 });
 

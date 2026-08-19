@@ -155,6 +155,28 @@ the older stored shapes (`toDateString()` strings, epoch numbers) indefinitely.
 Pass **Date objects** to `VDatePicker`, not ISO strings — v-calendar makes the
 same UTC-midnight mistake and will highlight the wrong day.
 
+### drawnMeals is windowed, not whole
+
+`initializeDB` subscribes to a trailing window (`DRAWN_MEALS_WINDOW_DAYS`, 400)
+via `orderByChild('assignedDate')`, not to the entire node. It used to load
+everything ever drawn — 461 rows at migration time, growing with the calendar
+rather than with use — to render a 7-day schedule and some calendar marks.
+
+Two things make that safe, and both matter:
+
+- **`.indexOn: "assignedDate"`** in `database.rules.json`. Without it Firebase
+  still answers the query, by downloading the whole node and filtering on the
+  client — the exact cost the query exists to avoid — and only warns. Its
+  absence is invisible in behaviour and expensive in practice.
+- **The `migrateDrawnMealDates` action**, gated on a per-hat marker at
+  `<hat>/schema/drawnMealsDateFormat`. The query orders by the stored string, so
+  it cannot be trusted until every `assignedDate` in that hat is ISO. An
+  unmigrated hat is read in full (as before), repaired in one atomic write, and
+  marked; thereafter it is queried. That gating is why the migration and the
+  query could ship together instead of waiting for every device to visit.
+
+If you widen the window or add another query, check the index covers it.
+
 ## Idea backlog
 
 See `BACKLOG.md`. (It replaced `FeatureIdeas.md` and `todos.md`, which had

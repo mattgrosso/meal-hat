@@ -30,7 +30,21 @@
 
     "$hat": {
       ".read": "auth != null",
-      ".write": "auth != null"
+      ".write": "auth != null",
+
+      "drawnMeals": {
+        // The client loads only a trailing window of the schedule, via
+        // orderByChild('assignedDate'). Without this index Firebase still
+        // ANSWERS the query — by downloading the whole node and filtering on the
+        // client, which is exactly the cost the query exists to avoid — and
+        // warns about it in the console rather than failing. So its absence is
+        // silent in behaviour and expensive in practice.
+        //
+        // Only meaningful because assignedDate is ISO YYYY-MM-DD, which sorts
+        // lexically. The old toDateString() form ordered "Fri" before "Mon"
+        // before "Sat"; the client migrates a hat before it queries it.
+        ".indexOn": "assignedDate"
+      }
     }
   }
 }

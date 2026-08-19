@@ -7,23 +7,11 @@ exist. What survived from those files is folded in below.
 
 Last reviewed 2026-08-19.
 
+**Done since:** drawnMeals is now loaded as a bounded 400-day window rather than
+in full (461 rows migrated to ISO, 247 loaded, and it stops growing). See the
+service-worker and dates sections of `CLAUDE.md` for the traps involved.
+
 ## Next up
-
-**Stop loading the whole draw history.** `initializeDB` subscribes to all of
-`drawnMeals` with no constraint, so every page load pulls every meal ever drawn.
-Growth is O(time) — it gets worse whether or not the hat changes. The fix is a
-range query (`orderByChild('assignedDate').startAt(...)`), which needs two
-things first:
-
-1. A one-time migration of existing `assignedDate` values to ISO. New writes are
-   already ISO and reads tolerate both, but Firebase would order the old
-   `"Wed Aug 19 2026"` strings alphabetically, so the query can't be trusted
-   until they're all converted.
-2. `.indexOn: "assignedDate"` in `database.rules.json`.
-
-Optionally then archive or drop rows older than the window. Worth doing on its
-own merits: the calendar's `disabled-dates` currently maps the entire history on
-every render.
 
 **Lazy-load the heavy dependencies.** Biggest speed win available, no behaviour
 change:

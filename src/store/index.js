@@ -1,11 +1,24 @@
 import { createStore } from 'vuex';
 import { initializeApp } from "firebase/app";
-import { getDatabase, onValue, ref, set, get, update } from "firebase/database";
+import { getDatabase, onValue, ref, set, get, update, query, orderByChild, startAt } from "firebase/database";
 import { getAuth, GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut } from "firebase/auth";
 import { v4 as uuidv4 } from 'uuid';
 import router from '@/router';
 import { analyzeDuplicates, findSimilar, aggregateMealIngredients, remapMealIngredients } from './ingredients';
-import { withDrawnDate, compareByDate, isUpcoming } from './schedule';
+import { withDrawnDate, compareByDate, isUpcoming, toISODate, isoDaysAgo } from './schedule';
+
+// How far back drawnMeals is loaded.
+//
+// The schedule shows the last 7 days and the calendar only needs enough history
+// to mark days that already have a meal, so this is generous rather than
+// necessary. What matters is that it is BOUNDED: the node was previously
+// subscribed whole, so every page load pulled every meal ever drawn and the cost
+// grew with the calendar rather than with the hat.
+const DRAWN_MEALS_WINDOW_DAYS = 400;
+
+// Bumped when the shape of stored data changes in a way the client must repair.
+// Kept per-hat, since hats are shared and migrate independently.
+const DRAWN_MEALS_SCHEMA = 'iso';
 
 const firebaseConfig = {
   apiKey: process.env.VUE_APP_GOOGLE_API_KEY,
@@ -496,7 +509,21 @@ export default createStore({
 
       // If there are no drawnMealsWithHistory and drawnMeals in the state, fetch them from the database.
       if (!context.state.drawnMealsWithHistory && !context.state.drawnMeals) {
-        onValue(ref(db, `${context.state.databaseTopKey}/drawnMeals`), (snapshot) => {
+        // Bounded to a window rather than the whole node. This used to subscribe
+        // to every meal ever drawn — growth measured in calendar time, not in
+        // how much the hat is used — and then throw nearly all of it away: the
+        // schedule renders 7 days, the calendar just marks days that are taken.
+        //
+        // Only safe once assignedDate is ISO everywhere in this hat, because the
+        // query orders by the stored string. If the migration hasn't run (or
+        // failed), fall back to the unfiltered read.
+        const migrated = await context.dispatch('migrateDrawnMealDates');
+        const drawnMealsRef = ref(db, `${context.state.databaseTopKey}/drawnMeals`);
+        const source = migrated
+          ? query(drawnMealsRef, orderByChild('assignedDate'), startAt(isoDaysAgo(DRAWN_MEALS_WINDOW_DAYS)))
+          : drawnMealsRef;
+
+        onValue(source, (snapshot) => {
           const data = snapshot.val();
 
           let sortedByDate = [];
@@ -634,6 +661,70 @@ export default createStore({
       if (!Object.keys(updates).length) return;
 
       await update(ref(db, context.state.databaseTopKey), updates);
+    },
+
+    /**
+     * Rewrite any legacy `assignedDate` on this hat to ISO, once.
+     *
+     * Needed before drawnMeals can be range-queried: Firebase orders by the
+     * stored string, and the old toDateString() form ("Wed Aug 19 2026") sorts
+     * alphabetically — "Fri" before "Mon" before "Sat" — which is nonsense as a
+     * date order. Reads elsewhere tolerate both formats; the QUERY cannot.
+     *
+     * Gated on a per-hat marker so the app can switch to the query in the same
+     * release that ships the migration, instead of waiting for every device to
+     * have visited once. A hat that hasn't been migrated is read in full (as it
+     * always was), repaired, and marked; after that it is queried.
+     *
+     * Idempotent, and one atomic write. Records whose date cannot be parsed are
+     * left alone rather than nulled — but the marker is still set, because
+     * retrying forever would be worse than one unparseable row.
+     *
+     * Returns true once the hat is known to be ISO-only.
+     */
+    async migrateDrawnMealDates (context) {
+      const topKey = context.state.databaseTopKey;
+      if (!topKey) return false;
+
+      try {
+        const marker = await get(ref(db, `${topKey}/schema/drawnMealsDateFormat`));
+        if (marker.val() === DRAWN_MEALS_SCHEMA) return true;
+
+        const snapshot = await get(ref(db, `${topKey}/drawnMeals`));
+        const rows = snapshot.val() || {};
+
+        const updates = {};
+        let unparseable = 0;
+
+        Object.entries(rows).forEach(([key, row]) => {
+          if (!row || typeof row !== 'object') return;
+
+          const iso = toISODate(row.assignedDate);
+          if (!iso) {
+            unparseable++;
+            return;
+          }
+          if (iso !== row.assignedDate) {
+            updates[`drawnMeals/${key}/assignedDate`] = iso;
+          }
+        });
+
+        updates['schema/drawnMealsDateFormat'] = DRAWN_MEALS_SCHEMA;
+
+        await update(ref(db, topKey), updates);
+
+        console.log(
+          `Migrated ${Object.keys(updates).length - 1} drawn meal dates to ISO` +
+          (unparseable ? ` (${unparseable} left alone — unreadable date)` : '')
+        );
+
+        return true;
+      } catch (error) {
+        // Fall back to loading the node whole. Slower, but correct — better than
+        // a range query returning a partial schedule.
+        console.error('Could not migrate drawn meal dates; loading unfiltered:', error);
+        return false;
+      }
     },
 
     /**

@@ -139,6 +139,18 @@ export function drawnTooRecently (meal, isoDate) {
   return days < meal.minDaysBetween;
 }
 
+/**
+ * The ISO date `days` before today — the lower bound of what gets loaded.
+ *
+ * Built by walking the Date's own day counter rather than subtracting
+ * milliseconds, so a DST change in the window doesn't shift the answer.
+ */
+export function isoDaysAgo (days, now = new Date()) {
+  const date = fromISODate(todayISO(now));
+  date.setDate(date.getDate() - days);
+  return toISODate(date);
+}
+
 /** Every calendar day from start to end, inclusive, as ISO dates. */
 export function datesInRange (start, end) {
   const first = fromISODate(start);
