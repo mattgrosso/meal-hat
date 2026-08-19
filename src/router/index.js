@@ -1,12 +1,22 @@
 import { createRouter, createWebHashHistory } from 'vue-router';
 import store from '@/store';
+
+// Every screen is loaded on demand rather than bundled into one chunk.
+//
+// These were static imports, so opening the app downloaded all seven screens —
+// including the shopping list, far and away the largest — before it could show
+// you tonight's dinner. Home is the only route most visits ever touch.
+//
+// Login stays static: it is the fallback for an unauthenticated visit, and a
+// chunk fetch is a poor thing to depend on at that moment.
 import Login from '@/components/Login.vue';
-import Home from '@/components/Home.vue';
-import AddMeal from '@/components/AddMeal.vue';
-import DrawMeals from '@/components/DrawMeals.vue';
-import ShowMeals from '@/components/ShowMeals.vue';
-import ShoppingList from '@/components/ShoppingList.vue';
-import MealHats from '@/components/MealHats.vue';
+
+const Home = () => import(/* webpackChunkName: "home" */ '@/components/Home.vue');
+const AddMeal = () => import(/* webpackChunkName: "add-meal" */ '@/components/AddMeal.vue');
+const DrawMeals = () => import(/* webpackChunkName: "draw-meals" */ '@/components/DrawMeals.vue');
+const ShowMeals = () => import(/* webpackChunkName: "show-meals" */ '@/components/ShowMeals.vue');
+const ShoppingList = () => import(/* webpackChunkName: "shopping-list" */ '@/components/ShoppingList.vue');
+const MealHats = () => import(/* webpackChunkName: "meal-hats" */ '@/components/MealHats.vue');
 
 const loggedIn = () => {
   const databaseTopKeyFromLocalStorage = window.localStorage.getItem('mealHatDatabaseTopKey');

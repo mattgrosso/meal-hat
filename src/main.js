@@ -4,8 +4,10 @@ import store from './store';
 import router from './router';
 import "bootstrap/dist/css/bootstrap.min.css";
 import "bootstrap";
-import VCalendar from 'v-calendar';
-import 'v-calendar/style.css';
+// v-calendar is NOT registered globally any more. It was app.use()'d here, so
+// its component set and stylesheet loaded on every visit, while only Draw Meals
+// and Show Meals ever render a date picker. Those two pull it in themselves, as
+// an async component.
 import './registerServiceWorker'
 
 const app = createApp(App);
@@ -13,7 +15,5 @@ const app = createApp(App);
 app.use(store);
 
 app.use(router);
-
-app.use(VCalendar, {});
 
 app.mount("#app");

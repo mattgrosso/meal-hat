@@ -27,15 +27,29 @@
 </template>
 
 <script>
-import Shepherd from 'shepherd.js';
-import 'shepherd.js/dist/css/shepherd.css';
+import { defineAsyncComponent } from 'vue';
+// Shepherd is loaded ON DEMAND, inside startTour().
+//
+// It was a static import here and in five other components, so the tour library
+// and its stylesheet were downloaded by every visit — to power a "?" button most
+// visits never press.
 import Header from '@/components/Header.vue';
 import { todayISO, fromISODate, datesInRange, drawnTooRecently } from '@/store/schedule';
 
 export default {
   name: 'DrawMeals',
   components: {
-    Header
+    Header,
+    // v-calendar, loaded only when this screen is. It used to be registered
+    // globally in main.js, so every visit paid for it whether or not a date
+    // picker was ever rendered.
+    VDatePicker: defineAsyncComponent(async () => {
+      const [{ DatePicker }] = await Promise.all([
+        import(/* webpackChunkName: "calendar" */ 'v-calendar'),
+        import(/* webpackChunkName: "calendar" */ 'v-calendar/style.css')
+      ]);
+      return DatePicker;
+    })
   },
   data () {
     return {
@@ -177,7 +191,12 @@ export default {
 
       return this.$store.getters.getMeal(id) ? this.$store.getters.getMeal(id) : { name: 'No meal found' };
     },
-    startTour () {
+    async startTour () {
+      const [{ default: Shepherd }] = await Promise.all([
+        import(/* webpackChunkName: "tour" */ 'shepherd.js'),
+        import(/* webpackChunkName: "tour" */ 'shepherd.js/dist/css/shepherd.css')
+      ]);
+
       const tour = new Shepherd.Tour({
         defaultStepOptions: {
           classes: 'mx-auto col-9',

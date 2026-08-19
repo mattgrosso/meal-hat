@@ -49,8 +49,11 @@
 </template>
 
 <script>
-import Shepherd from 'shepherd.js';
-import 'shepherd.js/dist/css/shepherd.css';
+// Shepherd is loaded ON DEMAND, inside startTour().
+//
+// It was a static import here and in five other components, so the tour library
+// and its stylesheet were downloaded by every visit — to power a "?" button most
+// visits never press.
 import Header from '@/components/Header.vue';
 import Modal from '@/components/Modal.vue';
 
@@ -173,7 +176,12 @@ export default {
       this.showCreateHatModal = false;
       this.newHat = '';
     },
-    startTour () {
+    async startTour () {
+      const [{ default: Shepherd }] = await Promise.all([
+        import(/* webpackChunkName: "tour" */ 'shepherd.js'),
+        import(/* webpackChunkName: "tour" */ 'shepherd.js/dist/css/shepherd.css')
+      ]);
+
       const tour = new Shepherd.Tour({
         defaultStepOptions: {
           classes: 'mx-auto col-9',
