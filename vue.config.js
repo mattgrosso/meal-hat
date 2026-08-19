@@ -36,17 +36,71 @@ module.exports = defineConfig({
       ],
     },
     workboxOptions: {
-      // A new service worker installs into the "waiting" state and does not
-      // take over until every tab controlled by the old one has closed. The
-      // update handler in registerServiceWorker.js responded to that by calling
-      // location.reload() — but reloading does NOT promote a waiting worker, so
-      // the page came back on the OLD cached bundle, the update fired again, and
-      // it reloaded again. Roughly three times a second, indefinitely.
+      // Three settings, all load-bearing after the 2026-08-19 reload loop.
       //
-      // It only showed up when a deploy actually happened, which is why two
-      // quiet months hid it.
+      // What happened: a new worker installs into the "waiting" state and does
+      // not take over until every tab controlled by the old one closes.
+      // registerServiceWorker's updated() answered that with location.reload(),
+      // but reloading does NOT promote a waiting worker — so the page returned
+      // on the old cached bundle, register-service-worker saw
+      // registration.waiting still sitting there, fired updated() again, and
+      // reloaded again. About three times a second, indefinitely.
+      //
+      // skipWaiting is what breaks that cycle: the worker activates on install
+      // and never occupies the `waiting` slot the re-fire branch keys on.
       skipWaiting: true,
       clientsClaim: true,
+
+      // Precache NOTHING. This is the part that decides whether a stuck client
+      // can ever recover.
+      //
+      // The default manifest was 1.25MB across 8 entries (the vendor chunk and
+      // its stylesheet), and installing that takes far longer than the ~300ms
+      // the loop left between reloads — so the corrected worker was aborted
+      // mid-install every time and could never take over. The 2KB throwaway
+      // worker that eventually broke the loop won purely on install speed.
+      //
+      // An empty manifest makes install effectively instantaneous, so recovery
+      // no longer depends on someone's connection or on catching them at the
+      // right moment.
+      exclude: [/.*/],
+
+      // Offline is served entirely by runtime caching instead: each response is
+      // cached the first time it is used. Measured, after an earlier attempt
+      // that precached only index.html turned out to precache nothing at all
+      // and left navigateFallback pointing at an entry that never existed —
+      // assets cached, HTML did not, so a cold offline start would have failed.
+      //
+      // Everything below except the navigation is hash-named, so a cache hit
+      // can never be stale: a new build asks for a new filename.
+      runtimeCaching: [
+        {
+          // The app shell. NetworkFirst, so an online visit always gets the
+          // current HTML (and with it the current bundle names), while an
+          // offline one falls back to the last copy that worked.
+          urlPattern: ({ request }) => request.mode === 'navigate',
+          handler: 'NetworkFirst',
+          options: { cacheName: 'meal-hat-pages', networkTimeoutSeconds: 4 },
+        },
+        {
+          urlPattern: /\/(js|css)\/.*\.(js|css)$/,
+          handler: 'StaleWhileRevalidate',
+          options: { cacheName: 'meal-hat-assets' },
+        },
+        {
+          urlPattern: /\/img\/.*\.(png|jpg|jpeg|svg|gif|webp)$/,
+          handler: 'CacheFirst',
+          options: {
+            cacheName: 'meal-hat-images',
+            expiration: { maxEntries: 60, maxAgeSeconds: 60 * 60 * 24 * 30 },
+          },
+        },
+        {
+          urlPattern: /^https:\/\/fonts\.(googleapis|gstatic)\.com\//,
+          handler: 'StaleWhileRevalidate',
+          options: { cacheName: 'meal-hat-fonts' },
+        },
+      ],
     },
   },
 })

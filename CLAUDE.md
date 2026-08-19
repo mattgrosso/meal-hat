@@ -94,18 +94,39 @@ Two consequences to respect:
 
 ### Service worker (read before deploying)
 
-`workboxOptions` sets `skipWaiting` + `clientsClaim`, and `updated()` reloads at
-most once per tab. Both are load-bearing: without them a new worker installs
-into the waiting state, the update handler's `location.reload()` fails to
-promote it, the page returns on the old cached bundle, and it reloads about
-three times a second forever. That happened live on 2026-08-19.
+On 2026-08-19 a deploy put the live app into a reload loop, ~3 page loads per
+second, indefinitely. A new worker installs into the **waiting** state;
+`updated()` answered that with `location.reload()`, but reloading does not
+promote a waiting worker, so the page returned on the old cached bundle,
+`register-service-worker` saw `registration.waiting` still there, fired
+`updated()` again, and reloaded again.
 
-**`kill-service-worker.js` is currently deployed as `service-worker.js`** — it
-unregisters itself and clears caches, which is how clients escaped the loop. It
-must stay until everyone has opened the app once; restoring the real worker
-early re-poisons anyone still carrying the bad one. Until then the app runs
-from the network with no offline cache. To restore: `yarn deploy` (or sync
-`dist/`), which puts the generated worker back.
+Three things keep it dead, all load-bearing:
+
+- **`skipWaiting` + `clientsClaim`** — the worker activates on install and never
+  occupies the `waiting` slot the re-fire branch keys on. Verified by
+  measurement: a fresh registration reports `everSatInWaiting: false` and
+  reaches `activated` in under a millisecond.
+- **`exclude: [/.*/]` — precache nothing.** This is what makes a *stuck* client
+  recoverable. The default manifest was 1.25MB, which cannot finish installing
+  inside the ~300ms the loop left between reloads, so the corrected worker was
+  aborted mid-install every time. Zero install payload wins that race on any
+  connection. Do not reintroduce precaching without re-checking this.
+- **`updated()` reloads at most once per tab** (sessionStorage). Belt and
+  braces: if promotion ever fails again the cost is one wasted reload, not a
+  loop.
+
+Offline comes from **runtime caching**, not precaching: `meal-hat-pages`
+(NetworkFirst, the app shell), `meal-hat-assets`, `meal-hat-images`,
+`meal-hat-fonts`. An earlier attempt precached only `index.html` and turned out
+to precache nothing at all, leaving `navigateFallback` bound to an entry that
+never existed — assets cached, HTML did not, and a cold offline start would have
+failed. If you change caching, verify `caches.match('/')` actually hits.
+
+`kill-service-worker.js` is kept as the remedy if a bad worker ever ships again:
+upload it over `s3://meal-hat/service-worker.js`, let clients shed the bad
+worker, then `yarn deploy` to restore the real one. It is NOT currently
+deployed.
 
 ## Deploy (AWS S3 + CloudFront)
 
