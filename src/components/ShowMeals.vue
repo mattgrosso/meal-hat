@@ -71,9 +71,9 @@ export default {
     return {
       showScheduleModal: false,
       mealToSchedule: null,
-      // todayISO, not toISOString().slice(0, 10) — that is UTC, and preselected
-      // tomorrow from late afternoon onwards in US timezones.
-      dateToSchedule: todayISO()
+      // A Date at LOCAL midnight, not an ISO string: v-calendar reads a bare
+      // 'YYYY-MM-DD' as UTC midnight and highlights the previous day.
+      dateToSchedule: fromISODate(todayISO())
     }
   },
   computed: {

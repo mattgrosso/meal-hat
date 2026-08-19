@@ -41,10 +41,14 @@ export default {
     return {
       message: null,
       dateRange: {
-        // todayISO, not toISOString().slice(0, 10) — the latter is UTC, so from
-        // late afternoon onwards in US timezones it preselected TOMORROW.
-        start: todayISO(),
-        end: todayISO()
+        // Date objects at LOCAL midnight, not ISO strings. v-calendar parses a
+        // bare 'YYYY-MM-DD' as UTC midnight, so it highlighted the day BEFORE
+        // the one the label showed. (The previous seed,
+        // toISOString().slice(0, 10), was doubly wrong: also UTC, so from late
+        // afternoon onwards in US timezones it started on TOMORROW.)
+        // Everything downstream normalizes via toISODate, which takes Dates.
+        start: fromISODate(todayISO()),
+        end: fromISODate(todayISO())
       }
     }
   },

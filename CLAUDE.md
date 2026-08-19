@@ -144,7 +144,18 @@ non-interactive/non-TTY shell. It works fine in a real terminal. To build from a
 non-TTY context, run `npx vue-cli-service build` directly (skips the bump), then
 sync + invalidate manually.
 
+## Dates
+
+Calendar dates are ISO `YYYY-MM-DD`, handled by **`src/store/schedule.js`**.
+Use it rather than hand-rolling — `new Date('2026-08-19')` parses as UTC
+midnight, which is the previous day anywhere west of Greenwich, and that had
+already produced four separate off-by-one bugs. `toISODate` stays tolerant of
+the older stored shapes (`toDateString()` strings, epoch numbers) indefinitely.
+
+Pass **Date objects** to `VDatePicker`, not ISO strings — v-calendar makes the
+same UTC-midnight mistake and will highlight the wrong day.
+
 ## Idea backlog
 
-See `FeatureIdeas.md` and `todos.md` for the running wish list (grocery
-autosuggest, deleting drawn meals, hat cleanup, styling).
+See `BACKLOG.md`. (It replaced `FeatureIdeas.md` and `todos.md`, which had
+drifted — most of what was in them had already been built.)
