@@ -1,0 +1,36 @@
+// Realtime Database security rules.
+//
+// Before this file existed the rules lived only in the Firebase console, and
+// they left the database open: an unauthenticated GET of /.json?shallow=true
+// returned every top-level key, and those keys are email addresses.
+//
+// The model: every top-level key is a HAT. A user's own hat is their email with
+// punctuation replaced by '-' (mattgrosso-gmail-com); shared hats are whatever
+// name their creator typed. Sharing is by name — anyone who knows a hat's name
+// can join it from the MealHats screen. These rules keep that, and only that.
+//
+// Root read is denied, so hats can no longer be enumerated: you have to know
+// the name already. That is also why src/store/index.js may not hold a
+// root-scoped read (fenced by tests/unit/no-root-database-reads.spec.js) — it
+// used to subscribe to the whole database just to build a list of hat names,
+// which handed every signed-in client every other account's meals, shopping
+// list and grocery catalog.
+//
+// This is NOT a membership model. A signed-in user who guesses a hat name can
+// still read and write it, exactly as the app's sharing has always worked.
+// Closing that would need a per-hat member list, which is a product change
+// rather than a rules change.
+{
+  "rules": {
+    // Denied at the root: no enumerating hats, no writing the whole database.
+    // Read and write grants cascade DOWNWARD in these rules, so the grant on
+    // $hat below still applies — a parent's false does not veto a child's true.
+    ".read": false,
+    ".write": false,
+
+    "$hat": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    }
+  }
+}

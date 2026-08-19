@@ -1,7 +1,7 @@
 import { createStore } from 'vuex';
 import { initializeApp } from "firebase/app";
 import { getDatabase, onValue, ref, set, get, update } from "firebase/database";
-import { getAuth, GoogleAuthProvider, signInWithPopup } from "firebase/auth";
+import { getAuth, GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut } from "firebase/auth";
 import { v4 as uuidv4 } from 'uuid';
 import router from '@/router';
 import { analyzeDuplicates, findSimilar, aggregateMealIngredients, remapMealIngredients } from './ingredients';
@@ -32,7 +32,25 @@ const removeNaNAndUndefined = (obj) => {
 
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
-// const auth = getAuth();
+
+// Auth has to be initialized HERE, at boot, not only inside the login action.
+//
+// Sign-in state is restored from localStorage by the router's loggedIn(), which
+// is enough to decide what to render but tells Firebase nothing. Until getAuth()
+// runs, the Auth SDK never rehydrates its persisted session, so the database
+// client sends its requests with no token at all. That was invisible while the
+// rules were open. Under rules that require `auth != null` it would mean every
+// returning user silently reads nothing: past the route guard, into an app with
+// no meals and no explanation.
+const auth = getAuth(app);
+
+// Resolves with the restored user (or null) the first time Firebase reports auth
+// state. Restoration is asynchronous, so anything that touches the database has
+// to wait for this or it races the token.
+let markAuthReady;
+const authReady = new Promise((resolve) => { markAuthReady = resolve; });
+
+onAuthStateChanged(auth, (user) => markAuthReady(user));
 
 export default createStore({
   state: {
@@ -40,7 +58,6 @@ export default createStore({
     databaseTopKey: null,
     mostRecentDatabase: null,
     showTutorial: null,
-    allHatsList: null,
     meals: null,
     drawnMealsWithHistory: null,
     drawnMeals: null,
@@ -105,9 +122,6 @@ export default createStore({
     },
     setShowTutorial (state, value) {
       state.showTutorial = value;
-    },
-    setAllHatsList (state, allHatsList) {
-      state.allHatsList = allHatsList;
     },
     setMeals (state, meals) {
       state.meals = meals;
@@ -339,7 +353,10 @@ export default createStore({
     },
 
     async login (context) {
-      const auth = getAuth();
+      // Uses the module-level auth instance created at boot — a second
+      // getAuth() here returns the same one, but shadowing it made it look as
+      // though auth only existed during login, which is how the session-restore
+      // gap went unnoticed.
       const provider = new GoogleAuthProvider();
       // provider.addScope('https://www.googleapis.com/auth/calendar');
 
@@ -373,7 +390,6 @@ export default createStore({
       context.commit('setDatabaseTopKey', null);
       context.commit('setMostRecentDatabase', null);
       context.commit('setShowTutorial', null);
-      context.commit('setAllHatsList', null);
       context.commit('setMeals', null);
       context.commit('setDrawnMealsWithHistory', null);
       context.commit('setDrawnMeals', null);
@@ -384,6 +400,11 @@ export default createStore({
 
       window.localStorage.removeItem('mealHatDatabaseTopKey');
       window.localStorage.removeItem('mealHatUserEmail');
+
+      // Actually end the Firebase session too. Clearing local state alone left
+      // the browser holding a live token that still satisfied the database
+      // rules — logged out of the app, still authenticated to the data.
+      signOut(auth).catch((error) => console.error('Could not sign out:', error));
     },
     updateDatabaseTopKey (context, email) {
       const parsedEmail = email.replaceAll(/[-!$%@^&*()_+|~=`{}[\]:";'<>?,./]/g, "-");
@@ -417,6 +438,27 @@ export default createStore({
         return;
       }
 
+      // Wait for Firebase to finish restoring the session before reading
+      // anything. The route guard let us this far on the strength of
+      // localStorage; the database rules want a token.
+      //
+      // Wait on the promise, but READ THE LIVE VALUE. On a first-ever visit
+      // authReady resolves with null, and login() dispatches this action right
+      // after the popup succeeds — trusting the resolved value would sign the
+      // user out at the very moment they signed in.
+      await authReady;
+      const authUser = auth.currentUser;
+
+      // localStorage says signed in, Firebase disagrees — the session really has
+      // lapsed. Say so and send them to log in again, rather than leaving an
+      // app that looks logged in and quietly reads nothing.
+      if (!authUser) {
+        console.warn('Stored session has no Firebase user; signing out.');
+        context.dispatch('logout');
+        router.push('/login');
+        return;
+      }
+
       // Check if the databaseTopKey exists in the database.
       try {
         const snapshot = await get(ref(db, context.state.databaseTopKey));
@@ -432,16 +474,6 @@ export default createStore({
         }
       } catch (error) {
         console.error('Error checking databaseTopKey: ', error);
-      }
-
-      // If there are isn't a list of all hats in the state, fetch them from the database.
-      if (!context.state.allHatsList) {
-        onValue(ref(db), (snapshot) => {
-          const keys = Object.keys(snapshot.val());
-
-          // Commit the list of all hats to the state.
-          context.commit('setAllHatsList', keys);
-        });
       }
 
       // If there are no meals in the state, fetch them from the database.
@@ -562,6 +594,33 @@ export default createStore({
     async updateUserDBValue (context, dbEntry) {
       const userDatabaseTopKey = context.getters.primaryDatabaseTopKey;
       return set(ref(db, `${userDatabaseTopKey}/${dbEntry.path}`), removeNaNAndUndefined(dbEntry.value));
+    },
+    // Does a hat with this name already exist?
+    //
+    // This used to be answered from `allHatsList`, which was filled by an
+    // onValue subscription on the DATABASE ROOT — every signed-in client
+    // downloaded every other account's meals, shopping lists and grocery
+    // catalogs, in full and on every session, just to call Object.keys() on the
+    // result. That is both the privacy hole (the root was readable
+    // unauthenticated, so those keys — which are email addresses — were public)
+    // and the reason the root could not be closed off in the security rules.
+    //
+    // One targeted read instead. It is only asked when someone types a hat name
+    // into "Add a hat", and if the answer is yes they are about to load that
+    // hat anyway.
+    //
+    // Returns false rather than throwing if the read is refused: a denied
+    // lookup should send you down the "create it?" path, not break the screen.
+    async hatExists (context, hatName) {
+      if (!hatName) return false;
+
+      try {
+        const snapshot = await get(ref(db, hatName));
+        return snapshot.exists();
+      } catch (error) {
+        console.error('Could not check whether the hat exists:', error);
+        return false;
+      }
     },
     async createNewHat (context, dBTitle) {
       if (!dBTitle) {

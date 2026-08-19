@@ -67,10 +67,12 @@ export default {
       newHat: ''
     }
   },
-  mounted () {
+  async mounted () {
     if (this.$route.params.sharedMealHatName) {
       this.newHat = this.$route.params.sharedMealHatName;
-      this.addHatToList();
+      // Awaited: the existence check is a database round-trip now, so switching
+      // before it settles would navigate away mid-join.
+      await this.addHatToList();
       this.switchToMealHat(this.$route.params.sharedMealHatName);
     }
   },
@@ -124,7 +126,7 @@ export default {
       const createHat = true;
       this.addHatToList("event", createHat);
     },
-    addHatToList (event, createHat) {
+    async addHatToList (event, createHat) {
       if (!this.newHat) {
         this.closeAllModals();
         return;
@@ -132,7 +134,9 @@ export default {
 
       const newHat = this.newHat.replaceAll(/[-!$%@^&*()_+|~=`{}[\]:";'<>?,./]/g, "-");
 
-      if (!createHat && !this.$store.state.allHatsList.includes(newHat)) {
+      // One targeted lookup, rather than testing against a client-side copy of
+      // every hat in the database.
+      if (!createHat && !await this.$store.dispatch('hatExists', newHat)) {
         this.closeJoinHatModal();
         this.showCreateHatModal = true;
         return;
