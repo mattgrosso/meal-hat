@@ -5,6 +5,7 @@ import { getAuth, GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signO
 import { v4 as uuidv4 } from 'uuid';
 import router from '@/router';
 import { analyzeDuplicates, findSimilar, aggregateMealIngredients, remapMealIngredients } from './ingredients';
+import { withDrawnDate, compareByDate, isUpcoming } from './schedule';
 
 const firebaseConfig = {
   apiKey: process.env.VUE_APP_GOOGLE_API_KEY,
@@ -503,21 +504,13 @@ export default createStore({
 
           // If data exists and it's an object, convert it to an array and sort it by date.
           if (data && typeof data === 'object') {
-            const drawnMealsArray = Object.keys(data).map((key) => data[key]);
+            sortedByDate = Object.values(data).sort(compareByDate);
 
-            sortedByDate = drawnMealsArray.sort((a, b) => {
-              return new Date(a.assignedDate) - new Date(b.assignedDate);
-            });
-
-            // Filter the sorted array to only include meals with future dates.
-            futureDates = sortedByDate.filter((meal) => {
-              const mealDate = new Date(meal.assignedDate).getTime();
-              const today = new Date().getTime();
-              const difference = mealDate - today;
-              const oneDayAgo = -86400000;
-
-              return difference > oneDayAgo;
-            });
+            // Only meals still to come. This used to subtract raw timestamps and
+            // compare against -86400000, which meant "within the last 24 hours"
+            // rather than "today or later" — so whether yesterday's dinner still
+            // counted depended on what time of day you looked.
+            futureDates = sortedByDate.filter((meal) => isUpcoming(meal.assignedDate));
           }
 
           // Commit the fetched drawnMealsWithHistory and drawnMeals to the state.
@@ -595,6 +588,89 @@ export default createStore({
       const userDatabaseTopKey = context.getters.primaryDatabaseTopKey;
       return set(ref(db, `${userDatabaseTopKey}/${dbEntry.path}`), removeNaNAndUndefined(dbEntry.value));
     },
+    /**
+     * Put meals on dates — the whole draw, in ONE atomic write.
+     *
+     * `assignments` is [{ meal, isoDate }].
+     *
+     * Previously each caller looped and issued two set() calls per day: one to
+     * append the drawnMeals record, one to rewrite the meal with its new
+     * drawnDates. A fortnight's draw was 28 separate round-trips, and any
+     * failure partway through left half a schedule with nothing to say so.
+     *
+     * Firebase update() with slash-separated keys applies every path or none,
+     * so a draw now lands completely or not at all. It also only touches the
+     * keys named here — sibling meals and anyone else's concurrent edits are
+     * left alone, which set() on a parent node could not promise.
+     */
+    async applyDraw (context, { assignments }) {
+      if (!context.state.databaseTopKey || !assignments?.length) return;
+
+      const updates = {};
+
+      // Several days can land on the SAME meal within one draw, so accumulate
+      // the meal's drawnDates across the batch instead of deriving each one from
+      // the original record — otherwise the last write would drop the others.
+      const mealsInFlight = {};
+
+      assignments.forEach(({ meal, isoDate }) => {
+        if (!meal?.id || !isoDate) return;
+
+        const drawnMealId = `${Date.now()}-${uuidv4()}`;
+        updates[`drawnMeals/${drawnMealId}`] = {
+          id: drawnMealId,
+          mealId: meal.id,
+          assignedDate: isoDate
+        };
+
+        const current = mealsInFlight[meal.id] || meal;
+        mealsInFlight[meal.id] = withDrawnDate(current, isoDate);
+      });
+
+      Object.values(mealsInFlight).forEach((meal) => {
+        updates[`meals/${meal.id}`] = removeNaNAndUndefined({ ...meal });
+      });
+
+      if (!Object.keys(updates).length) return;
+
+      await update(ref(db, context.state.databaseTopKey), updates);
+    },
+
+    /**
+     * Move or remove existing schedule rows, and their meals' drawn history,
+     * in ONE atomic write.
+     *
+     * `rows` is [{ id, mealId, assignedDate }] to write, or [{ id, value: null }]
+     * to delete. `meals` is the already-updated meal records.
+     *
+     * Reordering the schedule used to be four independent set() calls and
+     * deleting a meal two, with no ordering guarantee between them. An
+     * interruption could leave the schedule showing one arrangement while the
+     * meals' drawnDates recorded another — and since drawnDates drives
+     * minDaysBetween, that quietly changes what can be drawn next time.
+     */
+    async reassignDrawnMeals (context, { rows = [], meals = [] }) {
+      if (!context.state.databaseTopKey) return;
+
+      const updates = {};
+
+      rows.forEach((row) => {
+        if (!row?.id) return;
+        updates[`drawnMeals/${row.id}`] = row.value === null
+          ? null
+          : removeNaNAndUndefined({ id: row.id, mealId: row.mealId, assignedDate: row.assignedDate });
+      });
+
+      meals.forEach((meal) => {
+        if (!meal?.id) return;
+        updates[`meals/${meal.id}`] = removeNaNAndUndefined({ ...meal });
+      });
+
+      if (!Object.keys(updates).length) return;
+
+      await update(ref(db, context.state.databaseTopKey), updates);
+    },
+
     // Does a hat with this name already exist?
     //
     // This used to be answered from `allHatsList`, which was filled by an

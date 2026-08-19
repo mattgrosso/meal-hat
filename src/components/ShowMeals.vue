@@ -59,6 +59,7 @@ import Shepherd from 'shepherd.js';
 import 'shepherd.js/dist/css/shepherd.css';
 import Header from '@/components/Header.vue';
 import Modal from '@/components/Modal.vue';
+import { toISODate, fromISODate, todayISO, isUpcoming } from '@/store/schedule';
 
 export default {
   name: 'ShowMeals',
@@ -70,7 +71,9 @@ export default {
     return {
       showScheduleModal: false,
       mealToSchedule: null,
-      dateToSchedule: new Date().toISOString().slice(0, 10)
+      // todayISO, not toISOString().slice(0, 10) — that is UTC, and preselected
+      // tomorrow from late afternoon onwards in US timezones.
+      dateToSchedule: todayISO()
     }
   },
   computed: {
@@ -85,28 +88,29 @@ export default {
       return Object.values(this.$store.state.groceryCatalog || {});
     },
     datesWithMeals () {
-      if (!this.$store.state.drawnMealsWithHistory) {
-        return [];
-      } else {
-        return this.$store.state.drawnMealsWithHistory.map((drawnMeal) => {
-          return new Date(drawnMeal.assignedDate);
-        });
-      }
+      return (this.$store.state.drawnMealsWithHistory || [])
+        .map((drawnMeal) => fromISODate(drawnMeal.assignedDate))
+        .filter(Boolean);
     },
     attributes () {
       if (!this.$store.state.drawnMeals || !this.$store.state.drawnMeals.length) {
         return [];
       }
 
-      const assignedMeals = this.$store.state.drawnMealsWithHistory.map((meal) => {
-        return {
-          highlight: {
-            color: 'green',
-            fillMode: 'outline',
-          },
-          dates: [new Date(meal.assignedDate)]
-        }
-      });
+      const assignedMeals = (this.$store.state.drawnMealsWithHistory || [])
+        .map((meal) => {
+          const date = fromISODate(meal.assignedDate);
+          if (!date) return null;
+
+          return {
+            highlight: {
+              color: 'green',
+              fillMode: 'outline',
+            },
+            dates: [date]
+          };
+        })
+        .filter(Boolean);
 
       return [
         ...assignedMeals,
@@ -144,54 +148,25 @@ export default {
     hideScheduleModal () {
       this.showScheduleModal = false;
     },
-    scheduleMeal () {
+    async scheduleMeal () {
       const meal = this.mealToSchedule;
-      const date = new Date(this.dateToSchedule);
+      const isoDate = toISODate(this.dateToSchedule);
+      if (!meal || !isoDate) return;
 
-      const dbEntry = {
-        path: "drawnMeals",
-        value: {
-          mealId: meal.id,
-          assignedDate: date.toDateString()
-        }
-      }
-
-      this.$store.dispatch('setDBValue', dbEntry);
-
-      // Update meal with new drawnDates array system
-      let currentDrawnDates = meal.drawnDates || [];
-
-      // Migration: if no drawnDates but has lastDrawn, initialize with that history
-      if (currentDrawnDates.length === 0 && meal.lastDrawn) {
-        currentDrawnDates = [meal.lastDrawn];
-      }
-
-      const newTimestamp = date.getTime();
-
-      // Add new date to front of array, keep old dates for history
-      const updatedDrawnDates = [newTimestamp, ...currentDrawnDates.filter(date => date !== newTimestamp)];
-
-      const drawnMealForUpdate = {
-        path: `meals/${meal.id}`,
-        value: {
-          ...meal,
-          drawnDates: updatedDrawnDates,
-          // Keep lastDrawn for backward compatibility during transition
-          lastDrawn: newTimestamp
-        }
-      }
-
-      this.$store.dispatch('updateDBValue', drawnMealForUpdate);
+      // Same atomic path the bulk draw uses. This used to be a hand-copied
+      // duplicate of DrawMeals' drawnDates bookkeeping — two copies that had to
+      // be kept in step by hand, which is how they came to disagree.
+      await this.$store.dispatch('applyDraw', { assignments: [{ meal, isoDate }] });
 
       // Regenerate shopping list from newly scheduled meal
-      this.$store.dispatch('generateShoppingListFromMeals');
+      await this.$store.dispatch('generateShoppingListFromMeals');
 
+      this.showScheduleModal = false;
       this.$router.push('/');
       this.$emit('showToast', {
         delay: 3000,
-        message: `Scheduled ${meal.name} for ${new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric' }).format(date)}`
+        message: `Scheduled ${meal.name} for ${new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric' }).format(fromISODate(isoDate))}`
       });
-      this.showScheduleModal = false
     },
     getGroceryItems (meal) {
       return meal.ingredients
@@ -298,19 +273,27 @@ export default {
 
       tour.start();
     },
-    formatLastDrawnDate (lastDrawnTimestamp) {
-      const date = new Date(lastDrawnTimestamp);
+    // These take whatever getLastDrawnDate returns, which is now an ISO date
+    // string rather than an epoch number. fromISODate matters here: new Date on
+    // a bare 'YYYY-MM-DD' is UTC midnight, i.e. the previous day locally, so
+    // every "last drawn" label would have read a day early.
+    formatLastDrawnDate (lastDrawn) {
+      const date = fromISODate(lastDrawn);
+      if (!date) return '';
+
       return new Intl.DateTimeFormat('en-US', {
         month: 'short',
         day: 'numeric'
       }).format(date);
     },
-    daysSinceLastDrawn (lastDrawnTimestamp) {
-      const lastDrawnDate = new Date(lastDrawnTimestamp);
-      const today = new Date();
-      const diffTime = Math.abs(today - lastDrawnDate);
-      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-      return diffDays;
+    daysSinceLastDrawn (lastDrawn) {
+      const lastDrawnDate = fromISODate(lastDrawn);
+      if (!lastDrawnDate) return 0;
+
+      // Whole calendar days, so the answer doesn't change as the clock moves
+      // through the day.
+      const today = fromISODate(todayISO());
+      return Math.abs(Math.round((today - lastDrawnDate) / (1000 * 60 * 60 * 24)));
     },
     getLastDrawnDate (meal) {
       // New system: use drawnDates array (most recent first)
@@ -323,15 +306,10 @@ export default {
       }
       return null;
     },
-    isInThePast (timestamp) {
-      const drawnDate = new Date(timestamp);
-      const today = new Date();
-
-      // Compare dates (not times) to handle timezone issues
-      const drawnDateOnly = new Date(drawnDate.getFullYear(), drawnDate.getMonth(), drawnDate.getDate());
-      const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-
-      return drawnDateOnly < todayOnly;
+    isInThePast (date) {
+      // isUpcoming counts today as still to come, so its negation is exactly
+      // "strictly before today" — the comparison this used to hand-roll.
+      return !isUpcoming(date);
     },
   },
 }

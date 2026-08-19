@@ -30,6 +30,7 @@
 import Shepherd from 'shepherd.js';
 import 'shepherd.js/dist/css/shepherd.css';
 import Header from '@/components/Header.vue';
+import { todayISO, fromISODate, datesInRange, drawnTooRecently } from '@/store/schedule';
 
 export default {
   name: 'DrawMeals',
@@ -40,8 +41,10 @@ export default {
     return {
       message: null,
       dateRange: {
-        start: new Date().toISOString().slice(0, 10),
-        end: new Date().toISOString().slice(0, 10)
+        // todayISO, not toISOString().slice(0, 10) — the latter is UTC, so from
+        // late afternoon onwards in US timezones it preselected TOMORROW.
+        start: todayISO(),
+        end: todayISO()
       }
     }
   },
@@ -50,57 +53,47 @@ export default {
       return this.dateRange.start && this.dateRange.end;
     },
     formattedStartDate () {
-      return this.dateRange.start ? new Date(this.dateRange.start).toDateString() : null;
+      // fromISODate, not new Date(iso) — the latter parses as UTC midnight and
+      // rendered the day BEFORE the one that was picked.
+      return this.formatLong(this.dateRange.start);
     },
     formattedEndDate () {
-      if (this.dateRange.end) {
-        return new Date(this.dateRange.end).toDateString();
-      } else if (this.dateRange.start) {
-        return new Date(this.dateRange.start).toDateString();
-      } else {
-        return null;
-      }
+      return this.formatLong(this.dateRange.end ?? this.dateRange.start);
     },
     allDatesInRange () {
-      const dates = [];
-      const startDate = this.dateRange.start;
-      const endDate = this.dateRange.end;
-      const currentDate = new Date(startDate);
-
-      while (currentDate <= endDate) {
-        dates.push(new Date(currentDate));
-        currentDate.setDate(currentDate.getDate() + 1);
-      }
-
-      return dates;
+      // Was a hand-rolled cursor comparing a Date against a string, which only
+      // worked because the string coerced. datesInRange also holds its footing
+      // across a DST change, where adding 24h at a time can repeat a day.
+      return datesInRange(this.dateRange.start, this.dateRange.end);
     },
     datesWithMeals () {
-      if (!this.$store.state.drawnMealsWithHistory) {
-        return [];
-      } else {
-        return this.$store.state.drawnMealsWithHistory.map((drawnMeal) => {
-          return new Date(drawnMeal.assignedDate);
-        });
-      }
+      return (this.$store.state.drawnMealsWithHistory || [])
+        .map((drawnMeal) => fromISODate(drawnMeal.assignedDate))
+        .filter(Boolean);
     },
     attributes () {
       if (!this.$store.state.drawnMeals || !this.$store.state.drawnMeals.length) {
         return [];
       }
 
-      const assignedMeals = this.$store.state.drawnMealsWithHistory.map((meal) => {
-        return {
-          highlight: {
-            color: 'green',
-            fillMode: 'outline',
-          },
-          popover: {
-            label: this.getMeal(meal.mealId).name,
-            visibility: 'click'
-          },
-          dates: [new Date(meal.assignedDate)]
-        }
-      });
+      const assignedMeals = (this.$store.state.drawnMealsWithHistory || [])
+        .map((meal) => {
+          const date = fromISODate(meal.assignedDate);
+          if (!date) return null;
+
+          return {
+            highlight: {
+              color: 'green',
+              fillMode: 'outline',
+            },
+            popover: {
+              label: this.getMeal(meal.mealId).name,
+              visibility: 'click'
+            },
+            dates: [date]
+          };
+        })
+        .filter(Boolean);
 
       return [
         ...assignedMeals,
@@ -116,110 +109,62 @@ export default {
   },
   methods: {
     async drawMeals () {
-      const mealsToAdd = [];
+      const assignments = [];
+      const unfilled = [];
 
-      this.allDatesInRange.forEach((date) => {
-        const randomMeal = this.getRandomMealForDate(date, mealsToAdd);
+      this.allDatesInRange.forEach((isoDate) => {
+        const meal = this.getRandomMealForDate(isoDate, assignments);
 
-        if (!randomMeal) {
-          this.message = `No meals available for ${date.toDateString()}`;
+        if (!meal) {
+          unfilled.push(isoDate);
           return;
         }
 
-        mealsToAdd.push({
-          randomMeal: randomMeal,
-          date: date
-        });
+        assignments.push({ meal, isoDate });
       });
 
-      // Collect every database write so we can wait for them all to land before
-      // regenerating the shopping list. The regeneration re-reads drawn meals
-      // from the database, so the new draws must be persisted first.
-      const writes = [];
+      // Say which days came up empty, and how many — the old message named only
+      // whichever day failed last, so a range that mostly failed looked like a
+      // single bad day.
+      this.message = unfilled.length
+        ? `No meal available for ${unfilled.length} of ${this.allDatesInRange.length} days (${unfilled.map(this.formatShort).join(', ')}). Add more meals, or shorten how long they wait between repeats.`
+        : null;
 
-      mealsToAdd.forEach((entry) => {
-        const dbEntry = {
-          path: "drawnMeals",
-          value: {
-            mealId: entry.randomMeal.id,
-            assignedDate: entry.date.toDateString()
-          }
-        }
+      if (!assignments.length) return;
 
-        writes.push(this.$store.dispatch('setDBValue', dbEntry));
-
-        // Update meal with new drawnDates array system
-        let currentDrawnDates = entry.randomMeal.drawnDates || [];
-
-        // Migration: if no drawnDates but has lastDrawn, initialize with that history
-        if (currentDrawnDates.length === 0 && entry.randomMeal.lastDrawn) {
-          currentDrawnDates = [entry.randomMeal.lastDrawn];
-        }
-
-        const newTimestamp = entry.date.getTime();
-
-        // Add new date to front of array, keep old dates for history
-        const updatedDrawnDates = [newTimestamp, ...currentDrawnDates.filter(date => date !== newTimestamp)];
-
-        const drawnMealForUpdate = {
-          path: `meals/${entry.randomMeal.id}`,
-          value: {
-            ...entry.randomMeal,
-            drawnDates: updatedDrawnDates,
-            // Keep lastDrawn for backward compatibility during transition
-            lastDrawn: newTimestamp
-          }
-        }
-
-        writes.push(this.$store.dispatch('updateDBValue', drawnMealForUpdate));
-      })
-
-      // Wait for the draws to persist, then regenerate the shopping list from them.
-      await Promise.all(writes);
+      // One atomic write for the whole draw, then regenerate the shopping list
+      // from it. The regeneration re-reads drawn meals from the database, so the
+      // draw has to have landed first.
+      await this.$store.dispatch('applyDraw', { assignments });
       await this.$store.dispatch('generateShoppingListFromMeals');
 
       this.$router.push('/');
     },
-    mealDrawnTooRecently (meal, date) {
-      // Get the most recent drawn date using new or old system
-      let lastDrawnTimestamp = null;
-      if (meal.drawnDates && meal.drawnDates.length > 0) {
-        lastDrawnTimestamp = meal.drawnDates[0]; // Most recent in new system
-      } else if (meal.lastDrawn) {
-        lastDrawnTimestamp = meal.lastDrawn; // Fallback to old system
-      }
-
-      if (!lastDrawnTimestamp) {
-        return false; // Never drawn before
-      }
-
-      const lastDrawnNum = new Date(lastDrawnTimestamp).getTime();
-      const dateNum = new Date(date).getTime();
-      const daysSinceLastDrawn = Math.abs(Math.floor((dateNum - lastDrawnNum) / (1000 * 60 * 60 * 24)));
-      return daysSinceLastDrawn < meal.minDaysBetween;
+    formatShort (isoDate) {
+      const date = fromISODate(isoDate);
+      return date ? date.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' }) : isoDate;
     },
-    getRandomMealForDate (date, mealsAlreadyDrawn) {
-      const mealIdsAlreadyDrawn = mealsAlreadyDrawn.map((meal) => meal.randomMeal.id);
+    formatLong (value) {
+      const date = fromISODate(value);
+      return date ? date.toDateString() : null;
+    },
+    getRandomMealForDate (isoDate, alreadyAssigned) {
+      const takenIds = new Set(alreadyAssigned.map(({ meal }) => meal.id));
 
       const allMeals = this.$store.state.meals;
-      if (typeof allMeals !== 'object') {
+      if (typeof allMeals !== 'object' || allMeals === null) {
         return null;
       }
-      const allMealsArray = Object.keys(allMeals).map((key) => allMeals[key]);
-      const filteredMealsArray = allMealsArray.filter((meal) => {
-        return !this.mealDrawnTooRecently(meal, date);
-      }).filter((meal) => {
-        return !mealIdsAlreadyDrawn.includes(meal.id);
+
+      const eligible = Object.values(allMeals).filter((meal) => {
+        return !drawnTooRecently(meal, isoDate) && !takenIds.has(meal.id);
       });
 
-      if (!filteredMealsArray.length) {
+      if (!eligible.length) {
         return null;
       }
 
-      const randomIndex = Math.floor(Math.random() * filteredMealsArray.length);
-      const randomMeal = filteredMealsArray[randomIndex];
-
-      return randomMeal;
+      return eligible[Math.floor(Math.random() * eligible.length)];
     },
     getMeal (id) {
       if (!id) {

@@ -35,6 +35,7 @@
 
 <script>
 import draggable from 'vuedraggable';
+import { toISODate, fromISODate, compareByDate, withDrawnDate } from '@/store/schedule';
 
 export default {
   name: 'DrawnMealSchedule',
@@ -54,6 +55,7 @@ export default {
       } else {
         const oneWeekAgo = new Date();
         oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+        const cutoff = toISODate(oneWeekAgo);
 
         return this.$store.state.drawnMealsWithHistory.map((drawnMeal) => {
           return {
@@ -61,7 +63,8 @@ export default {
             meal: this.$store.getters.getMeal(drawnMeal.mealId)
           }
         }).filter((drawnMeal) => {
-          return drawnMeal.meal && new Date(drawnMeal.assignedDate) >= oneWeekAgo;
+          const date = toISODate(drawnMeal.assignedDate);
+          return drawnMeal.meal && date && date >= cutoff;
         });
       }
     }
@@ -70,56 +73,58 @@ export default {
     startDrag (event) {
       this.drag = true;
     },
-    endDrag (event) {
+    async endDrag (event) {
       this.drag = false;
 
       // Get the dragged item and the item at the new index.
       const draggedItem = this.drawnMeals[event.newIndex];
       const itemAtNewIndex = this.drawnMeals[event.oldIndex];
 
-      // Get the meals that are being swapped
+      // The two meals trade places; the DATES stay where they are.
       const meal1 = draggedItem.meal;
       const meal2 = itemAtNewIndex.meal;
-      const date1 = new Date(draggedItem.assignedDate).getTime();
-      const date2 = new Date(itemAtNewIndex.assignedDate).getTime();
+      const date1 = toISODate(draggedItem.assignedDate);
+      const date2 = toISODate(itemAtNewIndex.assignedDate);
 
       // Swap the meal and mealId of the dragged item and the item at the new index.
       [draggedItem.meal, itemAtNewIndex.meal] = [itemAtNewIndex.meal, draggedItem.meal];
       [draggedItem.mealId, itemAtNewIndex.mealId] = [itemAtNewIndex.mealId, draggedItem.mealId];
 
-      // Update drawn meals assignments
-      const draggedItemDbEntry = {
-        path: `drawnMeals/${draggedItem.id}`,
-        value: {
-          assignedDate: draggedItem.assignedDate,
-          mealId: draggedItem.mealId,
-          id: draggedItem.id
-        }
-      }
-
-      const itemAtNewIndexDbEntry = {
-        path: `drawnMeals/${itemAtNewIndex.id}`,
-        value: {
-          assignedDate: itemAtNewIndex.assignedDate,
-          mealId: itemAtNewIndex.mealId,
-          id: itemAtNewIndex.id
-        }
-      }
-
-      this.$store.dispatch('updateDBValue', draggedItemDbEntry);
-      this.$store.dispatch('updateDBValue', itemAtNewIndexDbEntry);
-
-      // Update each meal's drawnDates array to reflect the new assignments
-      this.updateMealDrawnDates(meal1, date1, date2);
-      this.updateMealDrawnDates(meal2, date2, date1);
+      // One atomic write for the whole swap. This was four separate set() calls
+      // — two schedule rows and two meals — so an interruption could leave the
+      // schedule showing one arrangement and the meals' drawn history another.
+      await this.$store.dispatch('reassignDrawnMeals', {
+        rows: [
+          { id: draggedItem.id, mealId: draggedItem.mealId, assignedDate: date1 },
+          { id: itemAtNewIndex.id, mealId: itemAtNewIndex.mealId, assignedDate: date2 }
+        ],
+        meals: [
+          withDrawnDate(this.replaceDrawnDate(meal1, date1, date2), date2),
+          withDrawnDate(this.replaceDrawnDate(meal2, date2, date1), date1)
+        ]
+      });
 
       // Regenerate shopping list since meal dates may have changed
-      this.$store.dispatch('generateShoppingListFromMeals');
+      await this.$store.dispatch('generateShoppingListFromMeals');
+    },
+    // Drop the date a meal is moving OFF, so withDrawnDate can add the one it is
+    // moving ON to without leaving the old one behind.
+    replaceDrawnDate (meal, oldDate, newDate) {
+      if (!meal) return meal;
+
+      const drawnDates = (meal.drawnDates || [])
+        .map(toISODate)
+        .filter((date) => date && date !== oldDate && date !== newDate);
+
+      return { ...meal, drawnDates };
     },
     formatDate (dateString) {
-      const options = { weekday: 'short', month: 'numeric', day: 'numeric' };
-      const date = new Date(dateString);
-      return date.toLocaleDateString('en-US', options);
+      // fromISODate, not new Date(): a bare 'YYYY-MM-DD' parses as UTC midnight,
+      // which renders as the previous day anywhere west of Greenwich.
+      const date = fromISODate(dateString);
+      if (!date) return '';
+
+      return date.toLocaleDateString('en-US', { weekday: 'short', month: 'numeric', day: 'numeric' });
     },
     toggleDeleteButton (drawnMeal) {
       if (this.selectedMeal.id === drawnMeal.id) {
@@ -128,77 +133,20 @@ export default {
         this.selectedMeal = drawnMeal;
       }
     },
-    deleteMeal (drawnMeal) {
-      // Remove from drawn meals table
-      const dbEntry = {
-        path: `drawnMeals/${drawnMeal.id}`,
-        value: null
-      }
-
-      this.$store.dispatch('updateDBValue', dbEntry);
-
-      // Remove this date from the meal's drawnDates array
+    async deleteMeal (drawnMeal) {
+      const isoDate = toISODate(drawnMeal.assignedDate);
       const meal = drawnMeal.meal;
-      const dateToRemove = new Date(drawnMeal.assignedDate).getTime();
 
-      if (meal && meal.id) {
-        let updatedDrawnDates = [];
-
-        if (meal.drawnDates) {
-          console.log('Using new system - current drawnDates:', meal.drawnDates);
-
-          // More robust date matching - compare by date only, not exact timestamp
-          const dateToRemoveDay = new Date(dateToRemove);
-          const targetDateString = dateToRemoveDay.toDateString();
-
-          updatedDrawnDates = meal.drawnDates.filter(timestamp => {
-            const existingDateString = new Date(timestamp).toDateString();
-            const matches = existingDateString === targetDateString;
-            return !matches;
-          });
-        } else if (meal.lastDrawn && meal.lastDrawn === dateToRemove) {
-          // Old system: if we're removing the lastDrawn date, clear it
-          updatedDrawnDates = [];
-        } else if (meal.lastDrawn) {
-          // Old system: keep existing lastDrawn if we're not removing that specific date
-          updatedDrawnDates = [meal.lastDrawn];
-        }
-
-        const mealUpdateEntry = {
-          path: `meals/${meal.id}`,
-          value: {
-            ...meal,
-            drawnDates: updatedDrawnDates,
-            lastDrawn: updatedDrawnDates.length > 0 ? updatedDrawnDates[0] : null
-          }
-        }
-
-        this.$store.dispatch('updateDBValue', mealUpdateEntry);
-      }
+      // Remove the schedule row and roll back the meal's drawn history together,
+      // so a meal can never be left marked as drawn for a day it is no longer on
+      // (which would keep it ineligible under minDaysBetween for no reason).
+      await this.$store.dispatch('reassignDrawnMeals', {
+        rows: [{ id: drawnMeal.id, value: null }],
+        meals: meal && meal.id ? [this.replaceDrawnDate(meal, isoDate, isoDate)] : []
+      });
 
       // Regenerate shopping list to remove ingredients from deleted meal
-      this.$store.dispatch('generateShoppingListFromMeals');
-    },
-    updateMealDrawnDates (meal, oldDate, newDate) {
-      if (!meal || !meal.id) return;
-
-      const currentDrawnDates = meal.drawnDates || [];
-
-      // Remove the old date and add the new date
-      const updatedDrawnDates = currentDrawnDates.filter(date => date !== oldDate);
-      updatedDrawnDates.unshift(newDate); // Add new date to front
-
-      const mealUpdateEntry = {
-        path: `meals/${meal.id}`,
-        value: {
-          ...meal,
-          drawnDates: updatedDrawnDates,
-          // Keep lastDrawn in sync for backward compatibility
-          lastDrawn: updatedDrawnDates[0]
-        }
-      }
-
-      this.$store.dispatch('updateDBValue', mealUpdateEntry);
+      await this.$store.dispatch('generateShoppingListFromMeals');
     },
     nextMeal (drawnMeal) {
       const now = new Date();
@@ -206,7 +154,7 @@ export default {
       const cutOffTime = new Date();
       cutOffTime.setHours(18, 0, 0, 0);
 
-      this.drawnMeals.sort((a, b) => new Date(a.assignedDate) - new Date(b.assignedDate));
+      this.drawnMeals.sort(compareByDate);
 
       const nextMeal = this.drawnMeals.find(meal => {
         const mealDate = new Date(meal.assignedDate);
