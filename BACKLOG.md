@@ -30,6 +30,39 @@ subtly wrong, so it needs a careful visual pass.
 
 ## Features
 
+**Bug report button** (requested 2026-08-19). Port the pattern from Cinema Roll —
+`src/components/BugReportButton.vue`, `src/utils/bugReports.js`, and the two
+triage scripts. Four parts:
+
+1. A fixed bottom-left button (Cinema Roll moved it there from bottom-right,
+   after a report) opening a modal with one textarea. 40px+ tap target, `:active`
+   not `:hover`.
+2. `submitBugReport` pushes to a top-level `bugReports/` node: transcript,
+   `serverTimestamp()`, reporter email, url, userAgent, screen size, DPR, plus a
+   **stringified** app-state snapshot. Stringified deliberately — RTDB silently
+   drops empty-object keys, so a nested object can lose fields with no warning.
+3. An offline stash in localStorage, drained on next submit and on app launch.
+   `bugReports/` sits outside the account root, so it can't use any
+   account-scoped write path.
+4. `yarn fetch-bug-reports` / `yarn resolve-bug-report <id>` via the Admin SDK,
+   which needs `FIREBASE_ADMIN_KEY_PATH` in a gitignored `.env.local`. Meal Hat
+   has no Admin SDK scripts yet, so this part is new setup rather than a port.
+
+**Security detail that does not carry over.** Cinema Roll's rule is
+`bugReports: { ".read": false, ".write": true }`. Meal Hat's rules match every
+top-level key with `$hat`, granting read AND write to any signed-in user — so a
+`bugReports` node would be **readable by everyone with an account**, which is
+wrong for reports that carry email addresses and app state. It needs its own
+explicit rule ABOVE the wildcard: `".read": false, ".write": "auth != null"`.
+Check `$hat` doesn't also match it — in RTDB a named child takes precedence over
+a `$wildcard` sibling, so an explicit `bugReports` block is enough, but verify
+with an unauthenticated and a signed-in read before trusting it.
+
+**What to snapshot.** Cinema Roll learned to include live screen state, not just
+persisted state, after a report it could not diagnose. The Meal Hat equivalent
+is worth thinking about up front: current hat, meal count, drawn-meal count,
+shopping-list size and `source` split, sort mode, and the route.
+
 **Make checking off stick.** The red X works, but it deletes rather than
 remembers — and `generateShoppingListFromMeals` rebuilds every `source: 'meal'`
 item from all upcoming drawn meals, with no idea you already bought anything. So
