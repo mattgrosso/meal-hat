@@ -67,6 +67,46 @@ items and items added on other devices**. To make that safe:
   collections; use per-key `updateDBValue` (`path: shopping-list/<id>`) for
   single-item changes (as the manual add/edit paths do).
 
+### Security rules
+
+Rules live in **`database.rules.json`** (wired up by `firebase.json`) and deploy
+with `firebase deploy --only database`. Before 2026-08-19 they existed only in
+the Firebase console and left the database open — an unauthenticated
+`GET /.json?shallow=true` returned every top-level key, and those keys are email
+addresses.
+
+Now: root read and write denied; each `$hat` readable and writable by any signed
+-in user. That is the sharing model the app has always had (know a hat's name,
+join it). It is **not** a membership model — closing that needs a per-hat member
+list, which is a product change.
+
+Two consequences to respect:
+
+- **Never read the database root.** `initializeDB` used to subscribe to it just
+  to build a list of hat names, which handed every client every other account's
+  data. Use a targeted read (see the `hatExists` action).
+  `tests/unit/no-root-database-reads.spec.js` fences this.
+- **Auth must be live, not just remembered.** The router's `loggedIn()` decides
+  from localStorage, which tells Firebase nothing. `getAuth()` therefore runs at
+  module scope in the store and `initializeDB` awaits the restored session
+  before reading — otherwise the database client sends requests with no token
+  and every read silently returns nothing.
+
+### Service worker (read before deploying)
+
+`workboxOptions` sets `skipWaiting` + `clientsClaim`, and `updated()` reloads at
+most once per tab. Both are load-bearing: without them a new worker installs
+into the waiting state, the update handler's `location.reload()` fails to
+promote it, the page returns on the old cached bundle, and it reloads about
+three times a second forever. That happened live on 2026-08-19.
+
+**`kill-service-worker.js` is currently deployed as `service-worker.js`** — it
+unregisters itself and clears caches, which is how clients escaped the loop. It
+must stay until everyone has opened the app once; restoring the real worker
+early re-poisons anyone still carrying the bad one. Until then the app runs
+from the network with no offline cache. To restore: `yarn deploy` (or sync
+`dist/`), which puts the generated worker back.
+
 ## Deploy (AWS S3 + CloudFront)
 
 `yarn deploy` builds, then `aws s3 sync dist/ s3://meal-hat` and invalidates
