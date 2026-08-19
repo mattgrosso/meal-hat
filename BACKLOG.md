@@ -16,10 +16,23 @@ service-worker and dates sections of `CLAUDE.md` for the traps involved.
 
 ## Next up
 
-**Bootstrap CSS is 30KB gzipped of the remaining 200KB** and is imported whole
-in `main.js`. Importing only the components in use, or moving to Bootstrap's
-Sass entry points, is the next real slice — but it is fiddly and easy to get
-subtly wrong, so it needs a careful visual pass.
+**Optional: drop responsive variants of the Bootstrap utilities.** Measured, and
+deliberately not taken. The utilities API is 7.9KB gzipped of the CSS that
+remains, most of it responsive variants generated at six breakpoints — and the
+templates use exactly ONE breakpoint class, `col-md-2`, which comes from the
+grid rather than the utilities API. Disabling responsive utilities measured
+22.5KB -> 18.5KB gzipped.
+
+Not done because the failure mode is silent: a missing component renders
+obviously unstyled, but a `d-md-none` added later would just quietly do nothing.
+4KB against a 200KB critical path did not seem worth that. The patch is four
+lines (`@each` over `$utilities` setting `responsive: false`, after
+`bootstrap/scss/utilities` and before `utilities/api`).
+
+**Dead classes in the templates.** `md-col-8` (DrawnMealSchedule) and `md-col-4`
+(ShowMeals) are not Bootstrap classes — Bootstrap's form is `col-md-*`. They
+have never done anything. Decide whether those layouts wanted a breakpoint and
+fix, or delete them.
 
 ## Features
 

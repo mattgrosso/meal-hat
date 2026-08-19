@@ -128,6 +128,22 @@ upload it over `s3://meal-hat/service-worker.js`, let clients shed the bad
 worker, then `yarn deploy` to restore the real one. It is NOT currently
 deployed.
 
+## Styling
+
+Bootstrap is imported as **hand-picked Sass partials** from
+`src/assets/scss/bootstrap.scss`, not as the full `bootstrap.min.css`. The file
+lists which components are in and why. **Add a Bootstrap component to a template
+and you must add its partial there**, or it renders unstyled.
+
+The configuration block at the top (`functions`, `variables`, `variables-dark`,
+`maps`, `mixins`, `utilities`) is Bootstrap 5.3's own required order and is not
+negotiable — omitting `maps` fails the build with a bare "Undefined variable"
+pointing at `_root.scss` rather than at the missing import. `utilities/api` must
+come last; it is what emits the utility classes.
+
+Responsive utility variants ARE still generated. See `BACKLOG.md` for the
+measured option to drop them and why it was not taken.
+
 ## Toolchain
 
 **Node is pinned to 22.22.3** (`.tool-versions`), raised from 18.4.0 on

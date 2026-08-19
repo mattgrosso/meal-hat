@@ -1,0 +1,77 @@
+// Bootstrap, assembled from the parts this app actually uses.
+//
+// main.js used to import bootstrap.min.css whole: 221KB raw, 30KB gzipped, on
+// every load. Most of it was for components Meal Hat has never rendered —
+// carousels, accordions, navbars, offcanvas, popovers, tooltips, pagination,
+// breadcrumbs, progress bars, tables.
+//
+// The list below was derived from the classes actually present in the
+// templates, not guessed. If you add a Bootstrap component, add its partial
+// here or it will silently render unstyled.
+
+// ── Configuration. This order is Bootstrap 5.3's own and is not negotiable ───
+// variables-dark and maps are easy to miss: maps builds $theme-colors-rgb,
+// which _root.scss iterates. Omitting it fails the build with a bare
+// "Undefined variable", pointing at root rather than at the missing import.
+// utilities must be configured here, before any component, even though the
+// classes are emitted by utilities/api at the very end.
+@import "bootstrap/scss/functions";
+@import "bootstrap/scss/variables";
+@import "bootstrap/scss/variables-dark";
+@import "bootstrap/scss/maps";
+@import "bootstrap/scss/mixins";
+@import "bootstrap/scss/utilities";
+
+@import "bootstrap/scss/root";
+
+// ── Base ────────────────────────────────────────────────────────────────────
+// reboot: the normalize layer. Everything assumes it.
+// type: headings, .lead, lists — the app uses h2/h3/h5 and .card-title.
+// transitions: .fade, which the modal's show/hide depends on. Dropping it
+//   leaves modals visible-but-transparent rather than animating.
+@import "bootstrap/scss/reboot";
+@import "bootstrap/scss/type";
+@import "bootstrap/scss/transitions";
+
+// ── Layout ──────────────────────────────────────────────────────────────────
+// containers is separate from grid in Bootstrap 5; .row/.col-* come from grid,
+// and the app uses col-12/col-2/col-3/col-5/col-6/col-9 plus col-md-2.
+@import "bootstrap/scss/containers";
+@import "bootstrap/scss/grid";
+
+// ── Components in use ───────────────────────────────────────────────────────
+// forms       -> .form-control, .form-select, .form-label, .form-floating,
+//                .input-group (input-group lives inside forms/)
+// buttons     -> .btn and every variant used: primary/secondary/success/
+//                warning/danger/outline-secondary, plus .btn-sm
+// button-group-> .btn-group on the Meal Hats screen
+// card        -> Show Meals
+// list-group  -> the shopping list and meal ingredient lists
+// modal       -> ShoppingList's quick-add details, and Modal.vue
+// toasts      -> App.vue's toast
+// close       -> .btn-close inside modals
+@import "bootstrap/scss/forms";
+@import "bootstrap/scss/buttons";
+@import "bootstrap/scss/button-group";
+@import "bootstrap/scss/card";
+@import "bootstrap/scss/list-group";
+@import "bootstrap/scss/modal";
+@import "bootstrap/scss/toasts";
+@import "bootstrap/scss/close";
+
+// ── Utilities ───────────────────────────────────────────────────────────────
+// The spacing/flex/text/sizing classes the templates lean on heavily
+// (d-flex, justify-content-*, align-items-*, gap-2, m*/p*, w-100, fw-bold,
+// text-center, text-muted). helpers carries .ratio/.stack/.visually-hidden and
+// is small enough not to be worth auditing.
+//
+// api MUST come last: it is what emits the utility classes from the $utilities
+// map, so anything importing after it cannot influence them.
+@import "bootstrap/scss/helpers";
+@import "bootstrap/scss/utilities/api";
+
+// Deliberately NOT imported — nothing in src/ references them. Adding one back
+// is a one-line change, but each is dead weight until something uses it:
+// accordion, alert, badge, breadcrumb, carousel, dropdown, images, nav, navbar,
+// offcanvas, pagination, placeholders, popover, progress, spinners, tables,
+// tooltip.
