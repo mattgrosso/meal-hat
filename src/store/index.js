@@ -504,7 +504,7 @@ export default createStore({
             "most-recent-database": context.state.databaseTopKey,
             "shopping-list": [],
             joinCode,
-            members: uid ? { [uid]: { joined: true, code: joinCode } } : {}
+            members: uid ? { [uid]: { joined: true, code: joinCode, email: auth.currentUser?.email || null } } : {}
           });
         }
       } catch (error) {
@@ -831,7 +831,10 @@ export default createStore({
 
       await update(ref(db, dBTitle), {
         joinCode,
-        [`members/${uid}`]: { joined: true, code: joinCode },
+        // The email is stored so the members list can show a person rather than
+        // a uid. Rules key on uid; this is purely a label for the roster, and
+        // only visible to people already in the hat.
+        [`members/${uid}`]: { joined: true, code: joinCode, email: auth.currentUser?.email || null },
         'most-recent-database': dBTitle
       });
 
@@ -851,7 +854,52 @@ export default createStore({
       if (!uid) throw new Error('Not signed in.');
       if (!hatName) throw new Error('No hat name.');
 
-      await set(ref(db, `${hatName}/members/${uid}`), { joined: true, code: code || null });
+      await set(ref(db, `${hatName}/members/${uid}`), {
+        joined: true,
+        code: code || null,
+        email: auth.currentUser?.email || null
+      });
+      return true;
+    },
+
+    /**
+     * Who is in a hat. Readable only by its members, which is the point.
+     *
+     * `isSelf` is computed here rather than in the component so the "you cannot
+     * remove yourself" guard has one definition.
+     */
+    async getHatMembers (context, hatName) {
+      try {
+        const snapshot = await get(ref(db, `${hatName}/members`));
+        const members = snapshot.val() || {};
+        const myUid = auth.currentUser?.uid;
+
+        return Object.entries(members).map(([uid, record]) => ({
+          uid,
+          email: record?.email || null,
+          isSelf: uid === myUid
+        })).sort((a, b) => (a.email || a.uid).localeCompare(b.email || b.uid));
+      } catch (error) {
+        console.error('Could not read hat members:', error);
+        return [];
+      }
+    },
+
+    /**
+     * Remove somebody from a hat.
+     *
+     * Refuses to remove YOU. Not politeness — a hat with no members is readable
+     * by nobody, so removing yourself from a hat you are alone in would destroy
+     * access to it permanently, with no way back short of a CLI write. Since
+     * you can never remove yourself, the last member can never be removed.
+     */
+    async removeHatMember (context, { hatName, uid }) {
+      if (!hatName || !uid) throw new Error('Missing hat or member.');
+      if (uid === auth.currentUser?.uid) {
+        throw new Error('You cannot remove yourself from a hat.');
+      }
+
+      await set(ref(db, `${hatName}/members/${uid}`), null);
       return true;
     },
 

@@ -44,8 +44,12 @@ const authUsers = JSON.parse(readFileSync(tmp)).users || [];
 unlinkSync(tmp);
 
 const uidByKey = new Map();
+const emailByUid = new Map();
 authUsers.forEach((u) => {
-  if (u.email) uidByKey.set(emailToKey(u.email), u.localId);
+  if (u.email) {
+    uidByKey.set(emailToKey(u.email), u.localId);
+    emailByUid.set(u.localId, u.email);
+  }
 });
 
 // ── the sharing graph ───────────────────────────────────────────────────────
@@ -108,7 +112,10 @@ for (const [hat, members] of membersByHat) {
   const joinCode = current || randomBytes(9).toString('base64url');
 
   const payload = { joinCode, members: {} };
-  for (const uid of members.keys()) payload.members[uid] = { joined: true, code: joinCode };
+  // email is a label for the members roster in the app — rules key on uid.
+  for (const uid of members.keys()) {
+    payload.members[uid] = { joined: true, code: joinCode, email: emailByUid.get(uid) || null };
+  }
 
   execFileSync('firebase', [
     'database:update', `/${hat}`, '-d', JSON.stringify(payload), '--project', PROJECT, '-f'

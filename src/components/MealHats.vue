@@ -5,13 +5,48 @@
       <ul data-step="1">
         <li v-for="(mealHat, index) in mealHatsList" :key="index" class="col-12 my-2">
           <div class="btn-group w-100" role="group">
-            <button type="button" class="btn btn-secondary flex-grow-1" style="width: 70%;" @click="switchToMealHat(mealHat)" :data-step="index === 0 ? '2' : undefined">{{mealHat}}</button>
-            <button type="button" class="btn btn-primary" @click="shareMealHat(mealHat)" :style="{ width: showDeleteButton(mealHat) ? '15%' : '30%' }" :data-step="index === 0 ? '3' : undefined">
+            <button type="button" class="btn btn-secondary flex-grow-1" @click="switchToMealHat(mealHat)" :data-step="index === 0 ? '2' : undefined">{{mealHat}}</button>
+            <button type="button" class="btn btn-tertiary" title="Who's in this hat" aria-label="Who's in this hat" @click="toggleMembers(mealHat)">
+              <i class="bi bi-people-fill"></i>
+            </button>
+            <button type="button" class="btn btn-primary" @click="shareMealHat(mealHat)" :data-step="index === 0 ? '3' : undefined">
               <i class="bi bi-share-fill"></i>
             </button>
-            <button v-if="showDeleteButton(mealHat)" type="button" class="btn btn-danger" style="width: 15%;" @click="removeMealhat(mealHat)" :data-step="index === 1 ? '4' : undefined">
+            <button v-if="showDeleteButton(mealHat)" type="button" class="btn btn-danger" @click="removeMealhat(mealHat)" :data-step="index === 1 ? '4' : undefined">
               <i class="bi bi-trash-fill"></i>
             </button>
+          </div>
+
+          <!-- Roster. Only readable at all if you are in the hat, which the
+               rules enforce — so this can never show someone else's household. -->
+          <div v-if="openMembersFor === mealHat" class="hat-members">
+            <p v-if="membersLoading" class="hat-members__status">Loading&hellip;</p>
+            <template v-else>
+              <ul class="hat-members__list">
+                <li v-for="member in members" :key="member.uid">
+                  <span class="hat-members__who">
+                    {{ member.email || member.uid }}
+                    <span v-if="member.isSelf" class="hat-members__you">you</span>
+                  </span>
+                  <button
+                    v-if="!member.isSelf"
+                    type="button"
+                    class="btn btn-sm btn-danger"
+                    :disabled="removingUid === member.uid"
+                    @click="removeMember(mealHat, member)"
+                  >
+                    {{ removingUid === member.uid ? 'Removing…' : 'Remove' }}
+                  </button>
+                  <!-- No control to remove yourself: a hat with no members is
+                       readable by nobody, so self-removal from a hat you are
+                       alone in would destroy access permanently. -->
+                  <span v-else class="hat-members__self-note">can't remove yourself</span>
+                </li>
+              </ul>
+              <p v-if="!members.length" class="hat-members__status">Nobody listed.</p>
+              <p v-if="memberError" class="join-error">{{ memberError }}</p>
+              <p class="hat-members__hint">Anyone with the share link can join. Send a fresh link only to people you want in.</p>
+            </template>
           </div>
         </li>
       </ul>
@@ -69,7 +104,12 @@ export default {
       showJoinHatModal: false,
       showCreateHatModal: false,
       newHat: '',
-      joinError: null
+      joinError: null,
+      openMembersFor: null,
+      members: [],
+      membersLoading: false,
+      memberError: null,
+      removingUid: null
     }
   },
   async mounted () {
@@ -99,6 +139,38 @@ export default {
     }
   },
   methods: {
+    // Fetched on open rather than for every hat up front: each roster is its
+    // own read, and most of the time you are not looking at any of them.
+    async toggleMembers (mealHatName) {
+      if (this.openMembersFor === mealHatName) {
+        this.openMembersFor = null;
+        return;
+      }
+
+      this.openMembersFor = mealHatName;
+      this.members = [];
+      this.memberError = null;
+      this.membersLoading = true;
+      this.members = await this.$store.dispatch('getHatMembers', mealHatName);
+      this.membersLoading = false;
+    },
+    async removeMember (mealHatName, member) {
+      this.memberError = null;
+      this.removingUid = member.uid;
+
+      try {
+        await this.$store.dispatch('removeHatMember', { hatName: mealHatName, uid: member.uid });
+        this.members = this.members.filter((m) => m.uid !== member.uid);
+        this.$emit('showToast', {
+          delay: 3000,
+          message: `Removed ${member.email || 'that person'} from ${mealHatName}.`
+        });
+      } catch (error) {
+        this.memberError = error.message || 'Could not remove them.';
+      } finally {
+        this.removingUid = null;
+      }
+    },
     switchToMealHat (mealHatName) {
       this.$store.dispatch('switchDatabase', mealHatName);
       this.$router.push('/');
@@ -393,5 +465,64 @@ export default {
     font-size: 0.85rem;
     padding: 0 32px;
     margin: 0.5rem 0 0;
+  }
+
+  .hat-members {
+    border: 1px solid #dcdcdc;
+    border-radius: 0 0 6px 6px;
+    border-top: 0;
+    padding: 0.5rem 0.75rem 0.75rem;
+    text-align: left;
+
+    .hat-members__list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+
+      li {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+        padding: 0.35rem 0;
+        border-bottom: 1px solid #f0f0f0;
+      }
+
+      li:last-child {
+        border-bottom: 0;
+      }
+    }
+
+    .hat-members__who {
+      font-size: 0.85rem;
+      word-break: break-all;
+    }
+
+    .hat-members__you {
+      background: #e6efe9;
+      border-radius: 4px;
+      color: #2f6f47;
+      font-size: 0.7rem;
+      margin-left: 0.35rem;
+      padding: 0.1rem 0.3rem;
+    }
+
+    .hat-members__self-note {
+      color: #9a9a9a;
+      font-size: 0.7rem;
+      white-space: nowrap;
+    }
+
+    .hat-members__status {
+      color: #6a6a6a;
+      font-size: 0.85rem;
+      margin: 0.25rem 0;
+    }
+
+    .hat-members__hint {
+      color: #6a6a6a;
+      font-size: 0.72rem;
+      margin: 0.5rem 0 0;
+    }
   }
 </style>

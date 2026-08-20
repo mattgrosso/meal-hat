@@ -144,6 +144,16 @@ breath** — `initializeDB` and `createNewHat` both do. A hat with no members is
 readable by nobody, so creating one without claiming it locks out its own owner
 on the next load.
 
+Each member record carries an `email` purely as a LABEL for the roster on the
+Meal Hats screen — rules key on uid and never look at it. It is visible only to
+people already in that hat.
+
+**Nobody can remove themselves.** The guard is in `removeHatMember`, not just in
+the template: a hat with no members is readable by nobody, so self-removal from
+a hat you are alone in would destroy access permanently, recoverable only by a
+CLI write. Because self-removal is impossible, the last member can never be
+removed either.
+
 `scripts/backfill-hat-membership.mjs` grandfathered every existing hat before
 the rule was deployed; re-run it (dry by default) if membership ever needs
 repairing.
