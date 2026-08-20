@@ -54,15 +54,19 @@ triage scripts. Four parts:
    which needs `FIREBASE_ADMIN_KEY_PATH` in a gitignored `.env.local`. Meal Hat
    has no Admin SDK scripts yet, so this part is new setup rather than a port.
 
-**Security detail that does not carry over.** Cinema Roll's rule is
-`bugReports: { ".read": false, ".write": true }`. Meal Hat's rules match every
-top-level key with `$hat`, granting read AND write to any signed-in user — so a
-`bugReports` node would be **readable by everyone with an account**, which is
-wrong for reports that carry email addresses and app state. It needs its own
-explicit rule ABOVE the wildcard: `".read": false, ".write": "auth != null"`.
-Check `$hat` doesn't also match it — in RTDB a named child takes precedence over
-a `$wildcard` sibling, so an explicit `bugReports` block is enough, but verify
-with an unauthenticated and a signed-in read before trusting it.
+**Security detail — RESOLVED 2026-08-19, rule already deployed.** Meal Hat's
+rules match every top-level key with `$hat`, granting read and write to any
+signed-in user, so a `bugReports` node would have been readable by everyone with
+an account. `database.rules.json` now carries an explicit write-only
+`bugReports` block, and the precedence it depends on was verified against the
+deployed rules rather than assumed: an authenticated read of a non-existent
+top-level key returns empty *without* an error (so the wildcard does grant read
+to any key), while `bugReports` returns Permission denied. The named child wins.
+
+Only the READ direction was proven — the security-critical one. The write side
+(`auth != null`, the same expression the app already exercises constantly on
+`$hat`) is inferred; if it were wrong the feature simply could not submit, which
+surfaces immediately on the first try.
 
 **What to snapshot.** Cinema Roll learned to include live screen state, not just
 persisted state, after a report it could not diagnose. The Meal Hat equivalent

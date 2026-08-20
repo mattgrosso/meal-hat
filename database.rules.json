@@ -28,6 +28,26 @@
     ".read": false,
     ".write": false,
 
+    // In-app bug reports: anyone signed in may FILE one, nobody may read them
+    // back. Reports carry the reporter's email, user agent, URL and an app-state
+    // snapshot, so they are triaged with the Admin SDK, which bypasses rules.
+    //
+    // This block is load-bearing, and not for the reason it looks. Without it
+    // the $hat wildcard below would match the key "bugReports" like any other
+    // top-level key and hand every signed-in user read access to everyone's
+    // reports — not the public, but everyone with an account.
+    //
+    // Verified on the deployed rules (2026-08-19) rather than assumed, because
+    // the whole design rests on a named child overriding a $wildcard sibling.
+    // Three authenticated reads: the user's own hat returned data; a
+    // non-existent top-level key returned empty WITHOUT an error, proving the
+    // wildcard grants read to any key; "bugReports" returned Permission denied.
+    // The named child wins.
+    "bugReports": {
+      ".read": false,
+      ".write": "auth != null"
+    },
+
     "$hat": {
       ".read": "auth != null",
       ".write": "auth != null",
