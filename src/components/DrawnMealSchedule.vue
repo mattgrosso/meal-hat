@@ -1,5 +1,5 @@
 <template>
-  <div class="drawn-meals-schedule my-4 md-col-8">
+  <div class="drawn-meals-schedule my-4">
     <h3>Meal Schedule</h3>
     <div v-if="drawnMeals.length" class="schedule">
       <ul class="meals-dates">

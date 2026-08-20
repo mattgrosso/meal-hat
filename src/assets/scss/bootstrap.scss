@@ -67,6 +67,23 @@
 //
 // api MUST come last: it is what emits the utility classes from the $utilities
 // map, so anything importing after it cannot influence them.
+// Responsive variants of the utilities are NOT generated.
+//
+// The templates use exactly one breakpoint class — `col-md-2` in Header.vue —
+// and that comes from the grid, not from $utilities. Everything the utilities
+// API was emitting at six breakpoints was therefore dead weight: dropping it
+// measured 22.5KB -> 18.5KB gzipped.
+//
+// This has a silent failure mode, which is why it was left out at first: add
+// `d-md-none` later and it will not error, it will simply do nothing.
+// tests/unit/no-responsive-utilities.spec.js turns that into a failing test.
+// If you want responsive utilities back, delete this block AND that test.
+@each $key, $utility in $utilities {
+  @if type-of($utility) == "map" and map-get($utility, responsive) {
+    $utilities: map-merge($utilities, ($key: map-merge($utility, (responsive: false)))) !global;
+  }
+}
+
 @import "bootstrap/scss/helpers";
 @import "bootstrap/scss/utilities/api";
 

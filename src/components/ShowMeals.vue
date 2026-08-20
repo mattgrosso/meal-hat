@@ -2,7 +2,7 @@
   <div class="show-meals">
     <Header headerText="Show Meals"/>
     <div class="show-meals-body d-flex flex-wrap justify-content-start col-12">
-      <div v-for="(meal, index) in meals" :key="index" class="meal col-12 md-col-4 p-3" data-step="1">
+      <div v-for="(meal, index) in meals" :key="index" class="meal col-12 p-3" data-step="1">
         <div class="card">
           <div class="card-body">
             <h5 class="card-title">{{meal.name}}</h5>

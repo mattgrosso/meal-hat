@@ -15,7 +15,8 @@ transfer from 306KB to 200KB gzipped; `axios` and `lodash` are gone; Node is on
 report button is built and live (v1.5.0); checking items off now sticks across
 a regeneration (v1.6.0); the draw is weighted by how overdue a meal is
 (v1.7.0); pantry staples (v1.8.0); hats are membership-gated with invite links
-(v1.9.0), with a members roster you can manage (v1.10.0).
+(v1.9.0), with a members roster you can manage (v1.10.0); responsive utility variants
+dropped and the dead `md-col-*` classes removed (v1.10.1).
 
 **Follow-up on hats:** two top-level keys were deliberately left without members
 and are now readable by nobody — `carrieseltzerandmattgrosso-gmail-com` (an
@@ -33,23 +34,7 @@ service-worker and dates sections of `CLAUDE.md` for the traps involved.
 
 ## Next up
 
-**Optional: drop responsive variants of the Bootstrap utilities.** Measured, and
-deliberately not taken. The utilities API is 7.9KB gzipped of the CSS that
-remains, most of it responsive variants generated at six breakpoints — and the
-templates use exactly ONE breakpoint class, `col-md-2`, which comes from the
-grid rather than the utilities API. Disabling responsive utilities measured
-22.5KB -> 18.5KB gzipped.
 
-Not done because the failure mode is silent: a missing component renders
-obviously unstyled, but a `d-md-none` added later would just quietly do nothing.
-4KB against a 200KB critical path did not seem worth that. The patch is four
-lines (`@each` over `$utilities` setting `responsive: false`, after
-`bootstrap/scss/utilities` and before `utilities/api`).
-
-**Dead classes in the templates.** `md-col-8` (DrawnMealSchedule) and `md-col-4`
-(ShowMeals) are not Bootstrap classes — Bootstrap's form is `col-md-*`. They
-have never done anything. Decide whether those layouts wanted a breakpoint and
-fix, or delete them.
 
 ## Features
 

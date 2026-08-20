@@ -2,7 +2,7 @@
   <div class="add-meal">
     <Header :headerText="headerText"/>
     <div class="add-meal-body p-3">
-      <div class="row md-col-6 mx-auto g-2 mb-3">
+      <div class="row mx-auto g-2 mb-3">
         <div class="form-floating col-9" data-step="1">
           <input type="text" class="form-control" id="recipe-title" v-model="name">
           <label for="recipe-title">Name</label>
@@ -14,7 +14,7 @@
       </div>
       <h2>Ingredients</h2>
       <div
-        class="row md-col-6 mx-auto g-2 mb-3"
+        class="row mx-auto g-2 mb-3"
         v-for="(ingredient, index) in ingredients"
         :key="index"
         data-step="3"

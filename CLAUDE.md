@@ -247,8 +247,16 @@ negotiable — omitting `maps` fails the build with a bare "Undefined variable"
 pointing at `_root.scss` rather than at the missing import. `utilities/api` must
 come last; it is what emits the utility classes.
 
-Responsive utility variants ARE still generated. See `BACKLOG.md` for the
-measured option to drop them and why it was not taken.
+**Responsive utility variants are NOT generated** (`responsive: false` applied
+across `$utilities`). The templates use exactly one breakpoint class, `col-md-2`
+in Header.vue, and that comes from the grid rather than the utilities API.
+
+This has a silent failure mode — `d-md-none` added later will not error, it will
+simply do nothing — so `tests/unit/no-responsive-utilities.spec.js` scans the
+templates and fails with an explanation if one appears. Grid breakpoints
+(`col-*`, `offset-*`, `row-cols-*`) stay allowed. To use a responsive utility,
+either write a media query in the component's own `<style>`, or re-enable
+responsive utilities and delete that test.
 
 ## Toolchain
 
