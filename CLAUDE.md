@@ -201,6 +201,30 @@ Two consequences to respect:
 
 ### Service worker (read before deploying)
 
+### Auto-update must keep working
+
+An open app is expected to pick up a deploy on its own. Three things make that
+true, and each has broken separately:
+
+- **service-worker.js must CHANGE between builds.** The browser compares bytes.
+  Precaching index.html is what supplies the variance, via its revision hash —
+  with an empty manifest the generated worker is pure static config and comes
+  out byte-identical every time, so no update is ever detected. Silent: the app
+  looks healthy and deploys simply never arrive. Do not set `exclude` to
+  everything. The BannerPlugin's "Current version" does NOT reach this file —
+  workbox generates it after webpack's banner stage.
+- **The reload guard is a RATE LIMIT, not a one-shot.** `updated()` reloads at
+  most once per 30s. An earlier "once per tab, ever" version stopped the loop
+  and also stopped every legitimate update after the first, so an installed PWA
+  took one update and then ignored the rest.
+- **Something has to check.** `registered()` polls `registration.update()` every
+  five minutes, because an installed PWA left open and foregrounded otherwise
+  only checks on a cold start or on returning from the background.
+
+If a deploy is not reaching an open app, check those three in that order.
+
+### The 2026-08-19 reload loop
+
 On 2026-08-19 a deploy put the live app into a reload loop, ~3 page loads per
 second, indefinitely. A new worker installs into the **waiting** state;
 `updated()` answered that with `location.reload()`, but reloading does not

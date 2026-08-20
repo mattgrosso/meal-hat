@@ -51,8 +51,26 @@ module.exports = defineConfig({
       skipWaiting: true,
       clientsClaim: true,
 
-      // Precache NOTHING. This is the part that decides whether a stuck client
-      // can ever recover.
+      // Precache index.html and NOTHING else.
+      //
+      // Two jobs, and both matter.
+      //
+      // (a) It keeps the install payload tiny — see below.
+      // (b) It is what makes service-worker.js CHANGE BETWEEN BUILDS. The
+      //     manifest carries index.html's revision hash, and index.html changes
+      //     every build because the bundle filenames do. Without a manifest the
+      //     generated worker is pure static config and comes out BYTE-IDENTICAL
+      //     every time — the browser compares bytes, finds no difference,
+      //     reports no update, and the app never auto-reloads again. That is
+      //     exactly what happened between 1.10.1 and 1.11.1, and it is silent:
+      //     everything looks healthy, deploys just never arrive.
+      //
+      // The BannerPlugin in configureWebpack does NOT cover this: workbox
+      // generates service-worker.js after webpack's banner stage, so the
+      // "Current version" banner never reaches it. Verified on the deployed
+      // file.
+      //
+      // This is the part that decides whether a stuck client can ever recover.
       //
       // The default manifest was 1.25MB across 8 entries (the vendor chunk and
       // its stylesheet), and installing that takes far longer than the ~300ms
@@ -63,7 +81,7 @@ module.exports = defineConfig({
       // An empty manifest makes install effectively instantaneous, so recovery
       // no longer depends on someone's connection or on catching them at the
       // right moment.
-      exclude: [/.*/],
+      exclude: [/^(?!index\.html$).*/],
 
       // Offline is served entirely by runtime caching instead: each response is
       // cached the first time it is used. Measured, after an earlier attempt

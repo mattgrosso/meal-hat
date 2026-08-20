@@ -362,6 +362,13 @@ export default {
     if (this.handleServiceWorkerMessage && 'serviceWorker' in navigator) {
       navigator.serviceWorker.removeEventListener('message', this.handleServiceWorkerMessage);
     }
+
+    // Drop safeReload too. It closes over THIS component's userInteracting
+    // flag, so leaving it on window after the component is gone means the
+    // update path consults a destroyed instance's state — which is permanently
+    // false, so it would appear to work while actually protecting nothing.
+    // Better to fall back to a plain reload once this screen is not mounted.
+    delete window.safeReload;
   },
   computed: {
     // All catalog grocery items, for the quick-add suggestions.
