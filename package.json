@@ -13,7 +13,9 @@
     "test:unit:watch": "vitest",
     "test:headed": "playwright test --headed",
     "test:debug": "playwright test --debug",
-    "test:report": "playwright show-report"
+    "test:report": "playwright show-report",
+    "fetch-bug-reports": "node scripts/fetch-bug-reports.mjs",
+    "resolve-bug-report": "node scripts/resolve-bug-report.mjs"
   },
   "dependencies": {
     "@popperjs/core": "^2.11.8",

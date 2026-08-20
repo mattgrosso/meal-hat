@@ -1,6 +1,7 @@
 <template>
   <div class="meal-hat">
     <router-view @showToast="showToast"></router-view>
+    <BugReportButton/>
     <div class="toast" role="alert" aria-live="assertive" aria-atomic="true" id="myToast">
       <div class="toast-body">
         {{toastMessage}}
@@ -11,15 +12,24 @@
 
 <script>
 import { Toast } from 'bootstrap';
+import BugReportButton from '@/components/BugReportButton.vue';
+import { flushStashedBugReports } from '@/utils/bugReports.js';
 
 export default {
   name: 'MealHat',
+  components: {
+    BugReportButton
+  },
   data () {
     return {
       toastMessage: ""
     }
   },
   async mounted () {
+    // Drain anything filed while offline. Fire-and-forget: a failure here just
+    // leaves the stash for the next launch, and must never block startup.
+    flushStashedBugReports().catch(() => {});
+
     document.addEventListener('visibilitychange', async () => {
       if (document.visibilityState === 'visible') {
         console.log('App is now in the foreground');

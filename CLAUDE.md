@@ -128,6 +128,21 @@ upload it over `s3://meal-hat/service-worker.js`, let clients shed the bad
 worker, then `yarn deploy` to restore the real one. It is NOT currently
 deployed.
 
+## Bug reports
+
+In-app reports go to a top-level `bugReports/` node, outside any hat, and the
+rule makes it **write-only** — see the note in `database.rules.json` for why
+that block is load-bearing against the `$hat` wildcard.
+
+Triage reads through the **Firebase CLI**, not the Admin SDK: the CLI's own
+project-owner login bypasses security rules, so there is no service-account key
+to generate or keep out of git. The tradeoff is that both scripts need
+`firebase login` to still be valid; they say so plainly if it is not.
+
+`src/utils/bugReports.js` stashes to localStorage when a write fails and drains
+on the next submit and on app launch. That matters here more than it looks —
+this is a PWA used in a grocery store, which is exactly where signal dies.
+
 ## Styling
 
 Bootstrap is imported as **hand-picked Sass partials** from

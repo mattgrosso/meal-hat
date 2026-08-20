@@ -11,7 +11,8 @@ Last reviewed 2026-08-19.
 in full (461 rows migrated to ISO, 247 loaded, and it stops growing); routes,
 the tour library and the calendar are all loaded on demand, taking the initial
 transfer from 306KB to 200KB gzipped; `axios` and `lodash` are gone; Node is on
-22.22.3 and a clean `yarn install` works again; `yarn lint` passes. See the
+22.22.3 and a clean `yarn install` works again; `yarn lint` passes; the bug
+report button is built and live (v1.5.0). See the
 service-worker and dates sections of `CLAUDE.md` for the traps involved.
 
 ## Next up
@@ -35,43 +36,6 @@ have never done anything. Decide whether those layouts wanted a breakpoint and
 fix, or delete them.
 
 ## Features
-
-**Bug report button** (requested 2026-08-19). Port the pattern from Cinema Roll —
-`src/components/BugReportButton.vue`, `src/utils/bugReports.js`, and the two
-triage scripts. Four parts:
-
-1. A fixed bottom-left button (Cinema Roll moved it there from bottom-right,
-   after a report) opening a modal with one textarea. 40px+ tap target, `:active`
-   not `:hover`.
-2. `submitBugReport` pushes to a top-level `bugReports/` node: transcript,
-   `serverTimestamp()`, reporter email, url, userAgent, screen size, DPR, plus a
-   **stringified** app-state snapshot. Stringified deliberately — RTDB silently
-   drops empty-object keys, so a nested object can lose fields with no warning.
-3. An offline stash in localStorage, drained on next submit and on app launch.
-   `bugReports/` sits outside the account root, so it can't use any
-   account-scoped write path.
-4. `yarn fetch-bug-reports` / `yarn resolve-bug-report <id>` via the Admin SDK,
-   which needs `FIREBASE_ADMIN_KEY_PATH` in a gitignored `.env.local`. Meal Hat
-   has no Admin SDK scripts yet, so this part is new setup rather than a port.
-
-**Security detail — RESOLVED 2026-08-19, rule already deployed.** Meal Hat's
-rules match every top-level key with `$hat`, granting read and write to any
-signed-in user, so a `bugReports` node would have been readable by everyone with
-an account. `database.rules.json` now carries an explicit write-only
-`bugReports` block, and the precedence it depends on was verified against the
-deployed rules rather than assumed: an authenticated read of a non-existent
-top-level key returns empty *without* an error (so the wildcard does grant read
-to any key), while `bugReports` returns Permission denied. The named child wins.
-
-Only the READ direction was proven — the security-critical one. The write side
-(`auth != null`, the same expression the app already exercises constantly on
-`$hat`) is inferred; if it were wrong the feature simply could not submit, which
-surfaces immediately on the first try.
-
-**What to snapshot.** Cinema Roll learned to include live screen state, not just
-persisted state, after a report it could not diagnose. The Meal Hat equivalent
-is worth thinking about up front: current hat, meal count, drawn-meal count,
-shopping-list size and `source` split, sort mode, and the route.
 
 **Make checking off stick.** The red X works, but it deletes rather than
 remembers — and `generateShoppingListFromMeals` rebuilds every `source: 'meal'`
