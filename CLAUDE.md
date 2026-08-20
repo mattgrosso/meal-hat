@@ -119,6 +119,35 @@ items and items added on other devices**. To make that safe:
   collections; use per-key `updateDBValue` (`path: shopping-list/<id>`) for
   single-item changes (as the manual add/edit paths do).
 
+### Hat membership
+
+Access to a hat is by **membership, not by knowing its name**. Before
+2026-08-19 any signed-in user who guessed a hat name could read and write it,
+and the names are guessable — emails with the punctuation swapped for hyphens.
+
+Members are keyed by **`auth.uid`**, never by the email-derived database key:
+rules can test `auth.uid` directly and cannot apply the app's punctuation
+stripping to an email to rebuild a key.
+
+Joining requires the hat's `joinCode`, which the Share button now puts in the
+link. The code is checked SERVER-SIDE by the rules against
+`root.child($hat).child('joinCode')`, so a client never needs to read it — and
+cannot, until it is a member. Typing a bare hat name no longer joins anything.
+
+`!data.exists()` on the `$hat` write rule is what still allows creating a new
+hat, and it is also the app's only honest way to tell "this name is free" from
+"this hat exists and you cannot see it": the write is refused in the second
+case, which is when the UI tells the user to ask for a share link.
+
+**Anything that creates a hat must write `members` and `joinCode` in the same
+breath** — `initializeDB` and `createNewHat` both do. A hat with no members is
+readable by nobody, so creating one without claiming it locks out its own owner
+on the next load.
+
+`scripts/backfill-hat-membership.mjs` grandfathered every existing hat before
+the rule was deployed; re-run it (dry by default) if membership ever needs
+repairing.
+
 ### Security rules
 
 Rules live in **`database.rules.json`** (wired up by `firebase.json`) and deploy

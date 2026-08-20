@@ -490,12 +490,21 @@ export default createStore({
         const snapshot = await get(ref(db, context.state.databaseTopKey));
         if (!snapshot.exists()) {
           // If the databaseTopKey doesn't exist, create a new top-level key with an empty object.
+          // members + joinCode are written HERE, not later. Under the
+          // membership rules a hat with no members is readable by nobody, so
+          // creating one without claiming it would lock its own owner out on
+          // the very next load.
+          const joinCode = uuidv4().replace(/-/g, '').slice(0, 12);
+          const uid = auth.currentUser?.uid;
+
           await set(ref(db, context.state.databaseTopKey), {
             drawnMeals: {},
             "meal-hats-list": [context.state.databaseTopKey],
             meals: {},
             "most-recent-database": context.state.databaseTopKey,
-            "shopping-list": []
+            "shopping-list": [],
+            joinCode,
+            members: uid ? { [uid]: { joined: true, code: joinCode } } : {}
           });
         }
       } catch (error) {
@@ -801,11 +810,60 @@ export default createStore({
         return false;
       }
     },
+    /**
+     * Create a hat and become its first member.
+     *
+     * One atomic write, and it doubles as the existence check: the rules allow
+     * writing a hat you are not a member of ONLY when it does not exist yet. So
+     * if this is refused, the name is already taken by a hat you have no access
+     * to — which is exactly when the user needs an invite link rather than a
+     * "create it?" prompt.
+     */
     async createNewHat (context, dBTitle) {
       if (!dBTitle) {
-        return Promise.reject(new Error("dBTitle is required"));
+        return Promise.reject(new Error('dBTitle is required'));
       }
-      return set(ref(db, `${dBTitle}/most-recent-database`), dBTitle)
+
+      const uid = auth.currentUser?.uid;
+      if (!uid) return Promise.reject(new Error('Not signed in.'));
+
+      const joinCode = uuidv4().replace(/-/g, '').slice(0, 12);
+
+      await update(ref(db, dBTitle), {
+        joinCode,
+        [`members/${uid}`]: { joined: true, code: joinCode },
+        'most-recent-database': dBTitle
+      });
+
+      return joinCode;
+    },
+
+    /**
+     * Join an existing hat using the code from its share link.
+     *
+     * The code is never compared here — it is checked server-side by the rules
+     * against the hat's own joinCode, which the client cannot read until it is
+     * a member. A wrong or missing code is a permission error, not a silent
+     * no-op.
+     */
+    async joinHatWithCode (context, { hatName, code }) {
+      const uid = auth.currentUser?.uid;
+      if (!uid) throw new Error('Not signed in.');
+      if (!hatName) throw new Error('No hat name.');
+
+      await set(ref(db, `${hatName}/members/${uid}`), { joined: true, code: code || null });
+      return true;
+    },
+
+    /** The share code for a hat. Readable only by its members, by design. */
+    async getHatJoinCode (context, hatName) {
+      try {
+        const snapshot = await get(ref(db, `${hatName}/joinCode`));
+        return snapshot.val();
+      } catch (error) {
+        console.error('Could not read the hat join code:', error);
+        return null;
+      }
     },
   }
 })

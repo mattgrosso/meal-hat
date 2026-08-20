@@ -49,8 +49,48 @@
     },
 
     "$hat": {
-      ".read": "auth != null",
-      ".write": "auth != null",
+      // Membership, not name-knowledge.
+      //
+      // Before 2026-08-19 any signed-in user who guessed a hat name could read
+      // and write it — and the names are guessable, being emails with the
+      // punctuation swapped for hyphens. Access is now granted only to uids
+      // listed under the hat's own `members`.
+      //
+      // Keyed by auth.uid, NOT by the email-derived database key: rules can
+      // test auth.uid directly and have no way to apply the app's punctuation
+      // stripping to an email to rebuild a key.
+      //
+      // The `!data.exists()` clause on write is what still allows creating a
+      // brand-new hat. It also gives the app its only honest way to tell "this
+      // name is free" from "this hat exists and you cannot see it" — the write
+      // is refused in the second case, which is when the user needs an invite
+      // link rather than a create prompt.
+      //
+      // Every existing hat was given members and a joinCode by
+      // scripts/backfill-hat-membership.mjs BEFORE this rule was deployed. A
+      // hat with no members is readable by nobody, which is the safe direction,
+      // but it means the backfill has to be complete — it was verified against
+      // all 14 top-level keys first.
+      ".read": "auth != null && data.child('members').child(auth.uid).exists()",
+      ".write": "auth != null && (!data.exists() || data.child('members').child(auth.uid).exists())",
+
+      "members": {
+        "$uid": {
+          // Joining. A user may add ONLY themselves, and only by presenting the
+          // hat's joinCode — which they cannot read until they are a member, so
+          // it has to come from a share link.
+          //
+          // This grant is what makes invite links work at all: the $hat write
+          // rule above refuses non-members, and in these rules a grant deeper
+          // in the path still applies even where an ancestor denies.
+          //
+          // The `!root...exists()` fallback covers a hat that predates join
+          // codes; nothing in the live database is in that state, but a hat
+          // created by an older client would otherwise be unjoinable.
+          ".write": "auth != null && auth.uid === $uid && (newData.child('code').val() === root.child($hat).child('joinCode').val() || !root.child($hat).child('joinCode').exists())"
+        }
+      },
+
 
       "drawnMeals": {
         // The client loads only a trailing window of the schedule, via

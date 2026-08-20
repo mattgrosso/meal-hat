@@ -15,6 +15,7 @@
           </div>
         </li>
       </ul>
+      <p v-if="joinError" class="join-error">{{ joinError }}</p>
       <div class="add-more-hats" data-step="5">
         <button class="btn btn-primary my-3 col-12" @click="showNewHatPrompt">Add a hat</button>
       </div>
@@ -67,17 +68,30 @@ export default {
     return {
       showJoinHatModal: false,
       showCreateHatModal: false,
-      newHat: ''
+      newHat: '',
+      joinError: null
     }
   },
   async mounted () {
-    if (this.$route.params.sharedMealHatName) {
-      this.newHat = this.$route.params.sharedMealHatName;
-      // Awaited: the existence check is a database round-trip now, so switching
-      // before it settles would navigate away mid-join.
-      await this.addHatToList();
-      this.switchToMealHat(this.$route.params.sharedMealHatName);
+    const shared = this.$route.params.sharedMealHatName;
+    if (!shared) return;
+
+    this.newHat = shared;
+
+    // A share link carries the hat's code; joining is a single write that the
+    // rules validate against the hat's own joinCode server-side.
+    const code = this.$route.query.code;
+    if (code) {
+      try {
+        await this.$store.dispatch('joinHatWithCode', { hatName: shared, code });
+      } catch {
+        this.joinError = 'That invite link is not valid any more. Ask for a fresh one.';
+        return;
+      }
     }
+
+    await this.addHatToList();
+    this.switchToMealHat(shared);
   },
   computed: {
     mealHatsList () {
@@ -105,8 +119,13 @@ export default {
         this.$router.push('/');
       }
     },
-    shareMealHat (mealHatName) {
-      const shareUrl = `${window.location.href}/${mealHatName}`;
+    async shareMealHat (mealHatName) {
+      // The code rides in the link. Sharing is unchanged from the user's side —
+      // send the link, they tap it — but the name alone is no longer enough to
+      // get in, which is the whole point.
+      const code = await this.$store.dispatch('getHatJoinCode', mealHatName);
+      const base = `${window.location.href}/${mealHatName}`;
+      const shareUrl = code ? `${base}?code=${encodeURIComponent(code)}` : base;
 
       if (navigator.share) {
         navigator.share({
@@ -123,6 +142,7 @@ export default {
       }
     },
     showNewHatPrompt () {
+      this.joinError = null;
       this.showJoinHatModal = true;
     },
     createHatAndAddToList () {
@@ -146,7 +166,18 @@ export default {
       }
 
       if (createHat) {
-        this.$store.dispatch('createNewHat', newHat);
+        try {
+          await this.$store.dispatch('createNewHat', newHat);
+        } catch {
+          // Refused means the name is taken by a hat this user cannot see. The
+          // rules allow writing a hat you are not a member of only when it does
+          // not exist, so this is the one honest signal available — and it is
+          // the moment to say "you need the link" rather than pretend the hat
+          // is missing.
+          this.closeCreateHatModal();
+          this.joinError = `"${newHat}" already exists and is private. Ask whoever owns it for the share link.`;
+          return;
+        }
         this.closeCreateHatModal();
       }
 
@@ -354,5 +385,13 @@ export default {
         font-size: 0.8rem;
       }
     }
+  }
+
+  /* #b02a37 rather than Bootstrap's .text-danger, which is too light on white. */
+  .join-error {
+    color: #b02a37;
+    font-size: 0.85rem;
+    padding: 0 32px;
+    margin: 0.5rem 0 0;
   }
 </style>
