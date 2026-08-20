@@ -16,7 +16,9 @@ report button is built and live (v1.5.0); checking items off now sticks across
 a regeneration (v1.6.0); the draw is weighted by how overdue a meal is
 (v1.7.0); pantry staples (v1.8.0); hats are membership-gated with invite links
 (v1.9.0), with a members roster you can manage (v1.10.0); responsive utility variants
-dropped and the dead `md-col-*` classes removed (v1.10.1).
+dropped and the dead `md-col-*` classes removed (v1.10.1); ingredients editable
+from the shopping list, which also gave the per-item staple interval a UI
+(v1.11.0).
 
 **Follow-up on hats:** two top-level keys were deliberately left without members
 and are now readable by nobody — `carrieseltzerandmattgrosso-gmail-com` (an
@@ -26,11 +28,7 @@ deprecated split-model nodes). Neither loses anything. Grant access with
 `scripts/backfill-hat-membership.mjs` or a CLI write if either is ever wanted
 back.
 
-**Possible follow-up on staples:** the per-item `stapleIntervalDays` is stored
-and honoured but has no UI — everything uses the 60-day default. Salt and flour
-plainly want different numbers. Worth adding only once the default proves wrong
-in practice. See the
-service-worker and dates sections of `CLAUDE.md` for the traps involved.
+
 
 ## Next up
 

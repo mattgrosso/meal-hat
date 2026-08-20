@@ -65,6 +65,22 @@ likely as the most recent, and the least likely still held 8.5%. Keep it that
 way — a strict "longest wait wins" makes the schedule deterministic, which is
 the opposite of a hat.
 
+### Editing an ingredient
+
+The pencil beside a shopping-list item edits the GROCERY CATALOG entry, not the
+row: name, default units, default aisle, default home location, staple, and the
+staple interval. Meals reference a grocery by id and never by name, so a rename
+propagates everywhere it is used — verified live, where renaming one entry
+changed how it read on the shopping list while three meals kept referencing it.
+
+A name that collides with another catalog entry warns rather than blocks. Two
+entries sharing a name is legal and occasionally deliberate, and the repo
+already has merge tooling (`analyzeIngredientDuplicates`, `findSimilarGroceries`)
+for when it is not.
+
+Note `ShoppingList.vue` imports Bootstrap's `Modal` for the quick-add dialog, so
+the app's own modal component is aliased to `AppModal` there.
+
 ### Pantry staples
 
 A grocery can be flagged `staple` in the catalog. Staples are kept out of the

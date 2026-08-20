@@ -62,6 +62,13 @@
                 <div class="d-flex justify-content-between align-items-center mb-2">
                   <span class="fw-bold">
                     {{ ingredient.groceryItem ? ingredient.groceryItem.name : ingredient.name }}
+                    <button
+                      type="button"
+                      class="edit-grocery"
+                      title="Edit this ingredient"
+                      aria-label="Edit this ingredient"
+                      @click="openGroceryEditor(ingredient)"
+                    ><i class="bi bi-pencil"></i></button>
                     <!-- A staple that came back says why, rather than just
                          reappearing without explanation. -->
                     <span v-if="ingredient.stapleDue" class="staple-due-note">
@@ -175,6 +182,64 @@
       </div>
     </div>
 
+    <!-- Edit the GROCERY, not this week's row. Everything here lives on the
+         catalog entry, so a rename shows up in every meal that uses it — meals
+         reference the grocery by id, never by name. -->
+    <AppModal
+      v-if="editingGrocery"
+      :showModal="Boolean(editingGrocery)"
+      title="Edit ingredient"
+      primaryButtonText="Save"
+      secondaryButtonText="Cancel"
+      :closeModalCallback="closeGroceryEditor"
+      :primaryButtonCallback="saveGrocery"
+      :secondaryButtonCallback="closeGroceryEditor"
+    >
+      <div class="row g-2 text-start">
+        <div class="col-12">
+          <label class="form-label">Name</label>
+          <input type="text" class="form-control" v-model="editForm.name">
+          <p v-if="nameClash" class="edit-warning">
+            "{{ editForm.name }}" is already another ingredient. Two entries with the same
+            name will both keep appearing — merge them instead if that isn't what you want.
+          </p>
+        </div>
+        <div class="col-6">
+          <label class="form-label">Default units</label>
+          <input type="text" class="form-control" v-model="editForm.defaultUnits" placeholder="cups, lbs…">
+        </div>
+        <div class="col-6">
+          <label class="form-label">Default aisle</label>
+          <input type="number" step="0.1" class="form-control" v-model="editForm.defaultAisle">
+        </div>
+        <div class="col-12">
+          <label class="form-label">Default home location</label>
+          <select class="form-select" v-model="editForm.defaultLocation">
+            <option :value="null">—</option>
+            <option value="upstairs">Upstairs</option>
+            <option value="downstairs">Downstairs</option>
+          </select>
+        </div>
+        <div class="col-12">
+          <label class="staple-toggle">
+            <input type="checkbox" v-model="editForm.staple">
+            <span>Something you always have (a staple)</span>
+          </label>
+        </div>
+        <!-- The per-item interval has existed in the data since staples shipped
+             but had no way to set it. Salt and flour plainly want different
+             numbers from the 60-day default. -->
+        <div v-if="editForm.staple" class="col-12">
+          <label class="form-label">Put it back on the list after</label>
+          <div class="input-group">
+            <input type="number" min="1" class="form-control" v-model="editForm.stapleIntervalDays" :placeholder="String(defaultStapleInterval)">
+            <span class="input-group-text">days</span>
+          </div>
+          <p class="edit-hint">Leave blank for the default of {{ defaultStapleInterval }} days.</p>
+        </div>
+      </div>
+    </AppModal>
+
     <!-- Quick Details Modal -->
     <div class="modal fade" id="quickDetailsModal" tabindex="-1">
       <div class="modal-dialog modal-dialog-centered">
@@ -222,13 +287,18 @@ import { Modal } from 'bootstrap';
 // and its stylesheet were downloaded by every visit — to power a "?" button most
 // visits never press.
 import Header from '@/components/Header.vue';
-import { partitionStaples } from '@/store/staples';
+// Aliased: `Modal` in this file is already Bootstrap's, used by the quick-add
+// dialog. This one is the app's own hand-rolled component.
+import AppModal from '@/components/Modal.vue';
+import { partitionStaples, DEFAULT_STAPLE_INTERVAL_DAYS } from '@/store/staples';
+import { normalizeName } from '@/store/ingredients';
 import { todayISO } from '@/store/schedule';
 
 export default {
   name: 'ShoppingList',
   components: {
-    Header
+    Header,
+    AppModal
   },
   data () {
     return {
@@ -260,6 +330,11 @@ export default {
 
       // Same for the cupboard: a reassurance, not a worklist.
       showCupboard: false,
+
+      // The grocery being edited (a catalog entry), and a working copy so
+      // Cancel really cancels.
+      editingGrocery: null,
+      editForm: {},
 
       // Staples the user has explicitly pulled onto this list despite being in
       // the cupboard. Session-only on purpose — "I'm out of olive oil" is about
@@ -293,6 +368,23 @@ export default {
     groceryItems () {
       const catalog = this.$store.state.groceryCatalog || {};
       return Object.values(catalog).sort((a, b) => a.name.localeCompare(b.name));
+    },
+
+    defaultStapleInterval () {
+      return DEFAULT_STAPLE_INTERVAL_DAYS;
+    },
+
+    // Warn, do not block. Two entries sharing a name is legal and sometimes
+    // deliberate, but it is almost always a mistake worth noticing — and the
+    // repo already has merge tooling for when it is not.
+    nameClash () {
+      if (!this.editingGrocery || !this.editForm.name) return false;
+
+      const wanted = normalizeName(this.editForm.name);
+      if (!wanted || wanted === normalizeName(this.editingGrocery.name)) return false;
+
+      return Object.values(this.$store.state.groceryCatalog || {})
+        .some((entry) => entry.id !== this.editingGrocery.id && normalizeName(entry.name) === wanted);
     },
 
     purchasedItems () {
@@ -554,6 +646,54 @@ export default {
     },
 
     // Remove item entirely from shopping list
+    openGroceryEditor (item) {
+      const entry = (this.$store.state.groceryCatalog || {})[item.groceryId];
+      if (!entry) return;
+
+      this.editingGrocery = entry;
+      // A copy, so Cancel leaves the catalog untouched.
+      this.editForm = {
+        name: entry.name || '',
+        defaultUnits: entry.defaultUnits || '',
+        defaultAisle: entry.defaultAisle ?? '',
+        defaultLocation: entry.defaultLocation || null,
+        staple: Boolean(entry.staple),
+        stapleIntervalDays: entry.stapleIntervalDays || ''
+      };
+    },
+    closeGroceryEditor () {
+      this.editingGrocery = null;
+      this.editForm = {};
+    },
+    saveGrocery () {
+      const entry = this.editingGrocery;
+      if (!entry) return;
+
+      const name = (this.editForm.name || '').trim();
+      // A nameless ingredient is unreadable everywhere it appears, so keep the
+      // old one rather than writing an empty string.
+      if (!name) return;
+
+      const interval = Number(this.editForm.stapleIntervalDays);
+
+      this.$store.dispatch('updateDBValue', {
+        path: `grocery-catalog/${entry.id}`,
+        value: {
+          ...entry,
+          name,
+          defaultUnits: (this.editForm.defaultUnits || '').trim(),
+          defaultAisle: Number(this.editForm.defaultAisle) || 0,
+          defaultLocation: this.editForm.defaultLocation || null,
+          staple: Boolean(this.editForm.staple),
+          // Only persisted when it is a real override; otherwise the default
+          // applies and the field stays empty next time it is opened.
+          stapleIntervalDays: this.editForm.staple && interval > 0 ? interval : null
+        }
+      });
+
+      this.$emit('showToast', { delay: 3000, message: `Updated ${name}.` });
+      this.closeGroceryEditor();
+    },
     isStaple (item) {
       return Boolean((this.$store.state.groceryCatalog || {})[item.groceryId]?.staple);
     },
@@ -1103,5 +1243,32 @@ export default {
       font-size: 0.7rem;
       color: #9a9a9a;
     }
+  }
+
+  .edit-grocery {
+    background: none;
+    border: 0;
+    color: #9a9a9a;
+    font-size: 0.8rem;
+    line-height: 1;
+    padding: 0 0.25rem;
+    vertical-align: baseline;
+  }
+
+  .edit-grocery:active {
+    color: #408558;
+  }
+
+  /* #7a6a2a on white is ~5.5:1. Bootstrap's .text-warning is unreadable here. */
+  .edit-warning {
+    color: #7a6a2a;
+    font-size: 0.75rem;
+    margin: 0.35rem 0 0;
+  }
+
+  .edit-hint {
+    color: #6a6a6a;
+    font-size: 0.72rem;
+    margin: 0.25rem 0 0;
   }
 </style>
