@@ -6,6 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 import router from '@/router';
 import { analyzeDuplicates, findSimilar, aggregateMealIngredients, remapMealIngredients } from './ingredients';
 import { withDrawnDate, compareByDate, isUpcoming, toISODate, isoDaysAgo } from './schedule';
+import { withPreservedPurchases } from './purchases';
 
 // How far back drawnMeals is loaded.
 //
@@ -312,7 +313,12 @@ export default createStore({
         }
       });
 
-      // Queue the freshly-generated meal items.
+      // Build the freshly-generated meal items, then carry "already bought"
+      // across before queueing them. Regeneration deletes every meal row and
+      // re-derives it with a new uuid, so a purchase marked on the old row does
+      // not survive on its own — see purchases.js.
+      const regeneratedRows = [];
+
       Object.values(mealIngredients).forEach(item => {
         // Ensure a grocery catalog entry exists for this item.
         if (!context.state.groceryCatalog[item.id]) {
@@ -328,7 +334,7 @@ export default createStore({
         const catalogEntry = catalogUpdates[item.id] || context.state.groceryCatalog[item.id];
         const shoppingItemId = uuidv4();
 
-        shoppingListUpdates[shoppingItemId] = {
+        regeneratedRows.push({
           id: shoppingItemId,
           groceryId: item.id,
           quantity: item.quantity,
@@ -338,8 +344,14 @@ export default createStore({
           source: 'meal',
           mealId: item.mealId,
           purchased: false
-        };
+        });
       });
+
+      // Read from the list as it stands BEFORE this rebuild — it was refreshed
+      // from the database at the top of this action, so it is authoritative and
+      // includes anything ticked off on another device.
+      withPreservedPurchases(regeneratedRows, Object.values(context.state.shoppingList || {}))
+        .forEach((row) => { shoppingListUpdates[row.id] = row; });
 
       // Apply the same changes to local state so the UI updates immediately.
       Object.entries(shoppingListUpdates).forEach(([id, value]) => {

@@ -52,6 +52,23 @@ A **deprecated split model** (`groceryItems`, `nonMealShoppingList`,
 Prefer the unified model for new work; finishing the migration and removing the
 deprecated paths is outstanding cleanup.
 
+### Checking items off
+
+The tick on a shopping-list row sets `purchased: true`; it does **not** delete
+the row. Deleting was the old behaviour and it did not survive: the meal half of
+the list is rebuilt from the upcoming schedule on every regeneration, with a new
+uuid per row, so a deletion was simply never an input to that calculation and
+anything bought for a still-upcoming meal came back. Manual items stayed gone,
+so the same gesture quietly meant two different things.
+
+`src/store/purchases.js` (`withPreservedPurchases`) re-applies the flag to the
+rebuilt rows. It matches on **`groceryId`, not row id** — the id is regenerated
+every time — and reopens an item when the newly required quantity exceeds what
+was bought, so a redraw that needs more chicken does not leave you short.
+
+Purchased meal rows clean themselves up: once their meal is in the past,
+`aggregateMealIngredients` stops deriving them and the row goes.
+
 ### Shopping-list write invariant (don't regress this)
 
 Drawing meals regenerates the `source: 'meal'` items while **preserving manual

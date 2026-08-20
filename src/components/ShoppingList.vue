@@ -85,14 +85,41 @@
                 <div class="d-flex justify-content-end gap-2" :data-step="ingredient === sortedShoppingList[0] ? '4' : undefined">
                   <button class="btn btn-sm btn-primary" @click="increaseShoppingListQuantity(ingredient)" style="width: 40px;">+1</button>
                   <button class="btn btn-sm btn-secondary" @click="decreaseShoppingListQuantity(ingredient)" style="width: 40px;">-1</button>
-                  <button class="btn btn-sm btn-warning" @click="removeFromShoppingList(ingredient)" style="width: 40px;"><i class="bi bi-x" style="font-size: 1.2em;"></i></button>
+                  <!-- Marks it bought rather than deleting it. Same gesture and
+                       the same immediate result — it leaves the list — but it is
+                       now recorded, so a regeneration cannot bring it back. -->
+                  <button class="btn btn-sm btn-success" title="Got it" aria-label="Got it" @click="markPurchased(ingredient)" style="width: 40px;"><i class="bi bi-check-lg" style="font-size: 1.2em;"></i></button>
                 </div>
               </li>
             </ul>
           </div>
 
-          <!-- Empty State -->
-          <div v-else class="text-center py-4 text-muted">
+          <!-- Bought. Collapsed by default: this is a record, not a worklist.
+               Meal-sourced rows clear themselves once their meal is in the past,
+               because regeneration stops deriving them. -->
+          <div v-if="purchasedItems.length" class="purchased-section my-3">
+            <button type="button" class="purchased-toggle" @click="showPurchased = !showPurchased">
+              <i :class="showPurchased ? 'bi bi-chevron-down' : 'bi bi-chevron-right'"></i>
+              Bought ({{ purchasedItems.length }})
+            </button>
+
+            <ul v-if="showPurchased" class="list-group my-2">
+              <li class="list-group-item d-flex justify-content-between align-items-center purchased-item" v-for="ingredient in purchasedItems" :key="ingredient.id">
+                <span>{{ ingredient.groceryItem ? ingredient.groceryItem.name : ingredient.name }}</span>
+                <span class="d-flex align-items-center gap-2">
+                  <span class="small">{{ ingredient.quantity }} {{ pluralizedUnits(ingredient) }}</span>
+                  <button class="btn btn-sm btn-outline-secondary" title="Put it back" aria-label="Put it back" @click="unmarkPurchased(ingredient)">
+                    <i class="bi bi-arrow-counterclockwise"></i>
+                  </button>
+                </span>
+              </li>
+            </ul>
+          </div>
+
+          <!-- Empty State. Conditions spelled out rather than chained with
+               v-else: the bought section sits between this and the list, so an
+               v-else would attach to the wrong sibling. -->
+          <div v-if="!sortedShoppingList.length && !purchasedItems.length" class="text-center py-4 text-muted">
             <i class="bi bi-cart3" style="font-size: 3rem; opacity: 0.5;"></i>
             <p class="mt-2">Start typing to add items to your shopping list</p>
           </div>
@@ -176,7 +203,10 @@ export default {
       tempAisleValue: undefined,
 
       // Sort mode: 'aisle' or 'location'
-      sortMode: 'aisle'
+      sortMode: 'aisle',
+
+      // The bought list is a record you occasionally need, not part of shopping.
+      showPurchased: false
     }
   },
   async mounted () {
@@ -205,6 +235,16 @@ export default {
     groceryItems () {
       const catalog = this.$store.state.groceryCatalog || {};
       return Object.values(catalog).sort((a, b) => a.name.localeCompare(b.name));
+    },
+
+    purchasedItems () {
+      return this.$store.getters.shoppingListItems
+        .filter((item) => item.purchased)
+        .sort((a, b) => {
+          const left = a.groceryItem ? a.groceryItem.name : (a.name || '');
+          const right = b.groceryItem ? b.groceryItem.name : (b.name || '');
+          return left.localeCompare(right);
+        });
     },
 
     sortedShoppingList () {
@@ -433,15 +473,30 @@ export default {
     },
 
     // Remove item entirely from shopping list
-    removeFromShoppingList (item) {
+    // Mark bought. Deliberately NOT a delete.
+    //
+    // Deleting was the old behaviour and it did not stick: the meal half of the
+    // list is rebuilt from the upcoming schedule whenever meals are drawn, the
+    // schedule is reordered, a drawn meal is deleted, or one is scheduled from
+    // Show Meals. A deletion was never an input to that calculation, so anything
+    // bought for a still-upcoming meal simply came back. Manual items stayed
+    // gone, which meant the same gesture quietly did two different things.
+    markPurchased (item) {
+      this.setPurchased(item, true);
+    },
+    unmarkPurchased (item) {
+      this.setPurchased(item, false);
+    },
+    setPurchased (item, purchased) {
       this.userInteracting = true;
 
-      // Remove item from list entirely
-      const dbEntry = {
+      const updated = { ...item, purchased };
+      delete updated.groceryItem; // a read-time join, never persisted
+
+      this.$store.dispatch('updateDBValue', {
         path: `shopping-list/${item.id}`,
-        value: null
-      };
-      this.$store.dispatch('updateDBValue', dbEntry);
+        value: updated
+      });
 
       // Clear interaction flag after operation
       setTimeout(() => {
@@ -800,4 +855,35 @@ export default {
     }
   }
 }
+
+  /* Bought items: present but plainly secondary to what is still to buy. */
+  .purchased-section {
+    .purchased-toggle {
+      background: none;
+      border: 0;
+      padding: 0.25rem 0;
+      color: #6a6a6a;
+      font-size: 0.9rem;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      /* Small to look at, big to tap. */
+      min-height: 40px;
+    }
+
+    .purchased-toggle:active {
+      color: #212529;
+    }
+
+    .purchased-item {
+      color: #6a6a6a;
+      text-decoration: line-through;
+      text-decoration-color: #b9b9b9;
+    }
+
+    /* The undo control is not struck through — it is an action, not a record. */
+    .purchased-item .btn {
+      text-decoration: none;
+    }
+  }
 </style>

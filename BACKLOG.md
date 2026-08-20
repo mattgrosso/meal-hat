@@ -12,7 +12,8 @@ in full (461 rows migrated to ISO, 247 loaded, and it stops growing); routes,
 the tour library and the calendar are all loaded on demand, taking the initial
 transfer from 306KB to 200KB gzipped; `axios` and `lodash` are gone; Node is on
 22.22.3 and a clean `yarn install` works again; `yarn lint` passes; the bug
-report button is built and live (v1.5.0). See the
+report button is built and live (v1.5.0); checking items off now sticks across
+a regeneration (v1.6.0). See the
 service-worker and dates sections of `CLAUDE.md` for the traps involved.
 
 ## Next up
@@ -36,18 +37,6 @@ have never done anything. Decide whether those layouts wanted a breakpoint and
 fix, or delete them.
 
 ## Features
-
-**Make checking off stick.** The red X works, but it deletes rather than
-remembers — and `generateShoppingListFromMeals` rebuilds every `source: 'meal'`
-item from all upcoming drawn meals, with no idea you already bought anything. So
-anything cleared for a still-upcoming meal comes back the next time you draw,
-reorder the schedule, delete a drawn meal, or schedule one from Show Meals.
-Manual items stay gone, because they are never regenerated — the same gesture
-behaves differently depending on where the item came from.
-
-The `purchased` field already exists for this: mark it bought instead of
-deleting, and teach regeneration to leave bought items alone, reopening only if
-the required quantity actually goes up.
 
 **Weight the draw.** `getRandomMealForDate` picks uniformly at random among
 eligible meals; nothing favours what you haven't eaten in ages. `minDaysBetween`
