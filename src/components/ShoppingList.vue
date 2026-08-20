@@ -89,22 +89,27 @@
                     <option value="upstairs">Upstairs</option>
                     <option value="downstairs">Downstairs</option>
                   </select>
-                  <!-- Staple lives on the same line as the other per-grocery
-                       defaults, because that is what it is: a property of the
-                       grocery, not of this week's row. -->
-                  <label class="staple-toggle ms-2" :title="stapleTitle(ingredient)">
+                </div>
+                <!-- Third line: +/- buttons -->
+                <!-- Staple sits HERE rather than on the aisle/location line.
+                     On a 402px phone that line was already using its full width:
+                     adding a 52px control overflowed the row by 15px and
+                     squeezed the aisle input from 72px down to 18px, which is
+                     what "ruined the layout" meant. This line has three 40px
+                     buttons and room to spare. -->
+                <div class="d-flex justify-content-between align-items-center gap-2" :data-step="ingredient === sortedShoppingList[0] ? '4' : undefined">
+                  <label class="staple-toggle" :title="stapleTitle(ingredient)">
                     <input type="checkbox" :checked="isStaple(ingredient)" @change="toggleStaple(ingredient, $event.target.checked)">
                     <span>Staple</span>
                   </label>
-                </div>
-                <!-- Third line: +/- buttons -->
-                <div class="d-flex justify-content-end gap-2" :data-step="ingredient === sortedShoppingList[0] ? '4' : undefined">
+                  <span class="d-flex gap-2">
                   <button class="btn btn-sm btn-primary" @click="increaseShoppingListQuantity(ingredient)" style="width: 40px;">+1</button>
                   <button class="btn btn-sm btn-secondary" @click="decreaseShoppingListQuantity(ingredient)" style="width: 40px;">-1</button>
                   <!-- Marks it bought rather than deleting it. Same gesture and
                        the same immediate result — it leaves the list — but it is
                        now recorded, so a regeneration cannot bring it back. -->
                   <button class="btn btn-sm btn-success" title="Got it" aria-label="Got it" @click="markPurchased(ingredient)" style="width: 40px;"><i class="bi bi-check-lg" style="font-size: 1.2em;"></i></button>
+                  </span>
                 </div>
               </li>
             </ul>
@@ -114,7 +119,7 @@
                already have them. NOT hidden and NOT deleted — the rows are
                intact, and each one can be pulled onto the list in a tap. They
                also return on their own once past their interval. -->
-          <div v-if="cupboardItems.length" class="cupboard-section my-3">
+          <div v-if="cupboardItems.length" class="cupboard-section my-3" data-step="5">
             <button type="button" class="cupboard-toggle" @click="showCupboard = !showCupboard">
               <i :class="showCupboard ? 'bi bi-chevron-down' : 'bi bi-chevron-right'"></i>
               In the cupboard ({{ cupboardItems.length }})
@@ -140,7 +145,7 @@
           <!-- Bought. Collapsed by default: this is a record, not a worklist.
                Meal-sourced rows clear themselves once their meal is in the past,
                because regeneration stops deriving them. -->
-          <div v-if="purchasedItems.length" class="purchased-section my-3">
+          <div v-if="purchasedItems.length" class="purchased-section my-3" :data-step="cupboardItems.length ? null : '5'">
             <button type="button" class="purchased-toggle" @click="showPurchased = !showPurchased">
               <i :class="showPurchased ? 'bi bi-chevron-down' : 'bi bi-chevron-right'"></i>
               Bought ({{ purchasedItems.length }})
@@ -895,6 +900,48 @@ export default {
             action: tour.back,
             classes: 'btn-secondary btn btn-sm'
           },
+          {
+            text: 'Next',
+            action: tour.next,
+            classes: 'btn-success btn btn-sm'
+          }
+        ]
+      });
+
+      // Only when the section is actually on screen: both the cupboard and the
+      // bought list are conditional, and Shepherd cannot attach a step to an
+      // element that is not rendered. Same guard MealHats uses for its delete
+      // step.
+      if (document.querySelector('[data-step="5"]')) {
+        tour.addStep({
+          title: 'Bought, and the cupboard',
+          text: 'Things you tick off collect under "Bought", where you can put one back if you tapped it by mistake. Staples you already have sit under "In the cupboard" — they come back to the list on their own once it has been a while, so you will not quietly run out.',
+          attachTo: {
+            element: '[data-step="5"]',
+            on: 'top'
+          },
+          buttons: [
+            {
+              text: 'Back',
+              action: tour.back,
+              classes: 'btn-secondary btn btn-sm'
+            },
+            {
+              text: 'Next',
+              action: tour.next,
+              classes: 'btn-success btn btn-sm'
+            }
+          ]
+        });
+      }
+
+      // Closing step, matching every other screen's tour. It is also what lets
+      // the step above be optional without leaving the tour ending on a "Next"
+      // that goes nowhere.
+      tour.addStep({
+        title: 'That\'s all',
+        text: 'Happy shopping!',
+        buttons: [
           {
             text: 'Done',
             action: tour.complete,

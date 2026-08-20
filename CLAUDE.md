@@ -234,6 +234,31 @@ to generate or keep out of git. The tradeoff is that both scripts need
 on the next submit and on app launch. That matters here more than it looks —
 this is a PWA used in a grocery store, which is exactly where signal dies.
 
+## Measure at phone width
+
+This is a PWA used on a phone. A layout verified in a desktop browser window is
+a layout no phone ever renders.
+
+Learned the expensive way on 2026-08-19: the staple checkbox was added to the
+shopping list, checked at 1559px where it looked fine, and shipped. On the
+reporter's 402px iPhone that row was already using its full width — the extra
+52px control overflowed it by 15px and squeezed the aisle input from 72px to
+18px. Constrain to ~402px and measure `scrollWidth` against
+`getBoundingClientRect().width` before shipping any row that gains a control.
+
+## Guided tours
+
+Each step attaches by `[data-step="N"]`. Nothing at runtime checks the anchor
+exists — Shepherd just floats an unanchored step in the middle of the screen,
+pointing at nothing, with no error. `tests/unit/tour-anchors.spec.js` pairs the
+two halves and fails in both directions: a step pointing at a missing anchor,
+and an anchor no step uses. It found ShowMeals had been skipping the Schedule
+button entirely.
+
+It cannot check the WORDS are still true. When a screen gains a feature, update
+its tour copy by hand — the shopping list tour described `+`/`-` long after the
+tick, staples and the cupboard existed.
+
 ## Styling
 
 Bootstrap is imported as **hand-picked Sass partials** from

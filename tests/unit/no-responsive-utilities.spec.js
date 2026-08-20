@@ -37,8 +37,10 @@ describe('responsive utility classes are not used', () => {
     for (const file of templateFiles()) {
       const source = readFileSync(file, 'utf8');
       // Only the template half — a breakpoint inside a media query in <style>
-      // is ordinary CSS and perfectly fine.
-      const template = source.split('</template>')[0];
+      // is ordinary CSS and perfectly fine. Split on <script>, not on the first
+      // </template>: nested <template v-if>/<template v-for> blocks are normal
+      // and would cut the real template short.
+      const template = source.split(/<script[\s>]/)[0];
 
       for (const match of template.matchAll(BREAKPOINT)) {
         const [full, prefix] = match;

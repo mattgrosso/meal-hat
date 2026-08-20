@@ -278,6 +278,30 @@ export default {
         ]
       });
 
+      // The Schedule button had a data-step anchor and no step pointing at it —
+      // the tour has been skipping one of the three actions on every meal card.
+      // Caught by tests/unit/tour-anchors.spec.js.
+      tour.addStep({
+        title: 'Schedule Meal',
+        text: 'Put this meal on a specific date, rather than waiting for it to be drawn. It goes straight onto the schedule and its ingredients join your shopping list.',
+        attachTo: {
+          element: '[data-step="4"]',
+          on: 'bottom'
+        },
+        buttons: [
+          {
+            text: 'Back',
+            action: tour.back,
+            classes: 'btn-secondary btn btn-sm'
+          },
+          {
+            text: 'Next',
+            action: tour.next,
+            classes: 'btn-success btn btn-sm'
+          }
+        ]
+      });
+
       tour.addStep({
         title: 'That\'s it!',
         text: 'I hope that helped. Enjoy!',
