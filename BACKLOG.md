@@ -13,7 +13,8 @@ the tour library and the calendar are all loaded on demand, taking the initial
 transfer from 306KB to 200KB gzipped; `axios` and `lodash` are gone; Node is on
 22.22.3 and a clean `yarn install` works again; `yarn lint` passes; the bug
 report button is built and live (v1.5.0); checking items off now sticks across
-a regeneration (v1.6.0). See the
+a regeneration (v1.6.0); the draw is weighted by how overdue a meal is
+(v1.7.0). See the
 service-worker and dates sections of `CLAUDE.md` for the traps involved.
 
 ## Next up
@@ -37,11 +38,6 @@ have never done anything. Decide whether those layouts wanted a breakpoint and
 fix, or delete them.
 
 ## Features
-
-**Weight the draw.** `getRandomMealForDate` picks uniformly at random among
-eligible meals; nothing favours what you haven't eaten in ages. `minDaysBetween`
-is the only lever. Weighting by time-since-last-drawn would make the hat feel
-smarter with no new UI — and `drawnDates` already keeps enough history to do it.
 
 **Pantry staples.** Things you always have shouldn't keep landing on the list.
 

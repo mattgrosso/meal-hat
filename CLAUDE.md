@@ -52,6 +52,19 @@ A **deprecated split model** (`groceryItems`, `nonMealShoppingList`,
 Prefer the unified model for new work; finishing the migration and removing the
 deprecated paths is outstanding cleanup.
 
+### Drawing meals
+
+`src/store/draw.js` picks weighted by how OVERDUE a meal is, not flat random.
+The weight is `daysSinceLastDrawn / minDaysBetween`, capped at 3 — measured
+against each meal's own cadence rather than in raw days, so a meal you
+deliberately marked rare does not become likelier than a frequent one simply by
+virtue of being rare. Never-drawn meals get the cap.
+
+It is a nudge, not a rotation: on live data the most overdue meal was 3x as
+likely as the most recent, and the least likely still held 8.5%. Keep it that
+way — a strict "longest wait wins" makes the schedule deterministic, which is
+the opposite of a hat.
+
 ### Checking items off
 
 The tick on a shopping-list row sets `purchased: true`; it does **not** delete

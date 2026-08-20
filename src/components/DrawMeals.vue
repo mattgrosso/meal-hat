@@ -34,7 +34,8 @@ import { defineAsyncComponent } from 'vue';
 // and its stylesheet were downloaded by every visit — to power a "?" button most
 // visits never press.
 import Header from '@/components/Header.vue';
-import { todayISO, fromISODate, datesInRange, drawnTooRecently } from '@/store/schedule';
+import { todayISO, fromISODate, datesInRange } from '@/store/schedule';
+import { eligibleMeals, pickWeightedMeal } from '@/store/draw';
 
 export default {
   name: 'DrawMeals',
@@ -174,15 +175,10 @@ export default {
         return null;
       }
 
-      const eligible = Object.values(allMeals).filter((meal) => {
-        return !drawnTooRecently(meal, isoDate) && !takenIds.has(meal.id);
-      });
-
-      if (!eligible.length) {
-        return null;
-      }
-
-      return eligible[Math.floor(Math.random() * eligible.length)];
+      // Weighted by how overdue each meal is, rather than flat random — see
+      // store/draw.js. Still a hat: the least overdue meal stays in contention,
+      // it just comes up less often.
+      return pickWeightedMeal(eligibleMeals(allMeals, isoDate, takenIds), isoDate);
     },
     getMeal (id) {
       if (!id) {
