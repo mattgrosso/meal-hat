@@ -65,6 +65,28 @@ likely as the most recent, and the least likely still held 8.5%. Keep it that
 way — a strict "longest wait wins" makes the schedule deterministic, which is
 the opposite of a hat.
 
+### Pantry staples
+
+A grocery can be flagged `staple` in the catalog. Staples are kept out of the
+main shopping list while you should still have them — but the requirement that
+shaped the whole design was Matt's: *"in a way where I won't ever end up wishing
+I had olive oil but not having it."*
+
+So two rules, and neither is optional:
+
+1. **Relocated, never removed.** `partitionStaples` only decides which SECTION a
+   row renders in. The row stays in the stored list with its real quantity, and
+   there is a test asserting every input row comes out somewhere. A bug here can
+   misplace an item; it cannot lose one.
+2. **It returns on its own.** `lastPurchased` is written to the catalog entry
+   when an item is ticked off, and once that is `stapleIntervalDays` (default
+   60) old the staple goes back on the main list, labelled with how long it has
+   been. Never bought, unreadable date, or missing catalog entry all resolve to
+   "on the list" — every uncertain case errs toward showing it.
+
+The cupboard section also has a "Need it" button, which forces a staple onto the
+list for this session without editing the grocery.
+
 ### Checking items off
 
 The tick on a shopping-list row sets `purchased: true`; it does **not** delete

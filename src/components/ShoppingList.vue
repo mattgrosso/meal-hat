@@ -60,7 +60,16 @@
               <li class="list-group-item" v-for="ingredient in sortedShoppingList" :key="ingredient.id">
                 <!-- First line: Item name and quantity -->
                 <div class="d-flex justify-content-between align-items-center mb-2">
-                  <span class="fw-bold">{{ ingredient.groceryItem ? ingredient.groceryItem.name : ingredient.name }}</span>
+                  <span class="fw-bold">
+                    {{ ingredient.groceryItem ? ingredient.groceryItem.name : ingredient.name }}
+                    <!-- A staple that came back says why, rather than just
+                         reappearing without explanation. -->
+                    <span v-if="ingredient.stapleDue" class="staple-due-note">
+                      {{ ingredient.daysSincePurchase === null || ingredient.daysSincePurchase === undefined
+                        ? 'staple — not bought yet'
+                        : `staple — last bought ${ingredient.daysSincePurchase} days ago` }}
+                    </span>
+                  </span>
                   <span>{{ ingredient.quantity }} {{ pluralizedUnits(ingredient) }}</span>
                 </div>
                 <!-- Second line: Aisle input and location selector -->
@@ -80,6 +89,13 @@
                     <option value="upstairs">Upstairs</option>
                     <option value="downstairs">Downstairs</option>
                   </select>
+                  <!-- Staple lives on the same line as the other per-grocery
+                       defaults, because that is what it is: a property of the
+                       grocery, not of this week's row. -->
+                  <label class="staple-toggle ms-2" :title="stapleTitle(ingredient)">
+                    <input type="checkbox" :checked="isStaple(ingredient)" @change="toggleStaple(ingredient, $event.target.checked)">
+                    <span>Staple</span>
+                  </label>
                 </div>
                 <!-- Third line: +/- buttons -->
                 <div class="d-flex justify-content-end gap-2" :data-step="ingredient === sortedShoppingList[0] ? '4' : undefined">
@@ -90,6 +106,33 @@
                        now recorded, so a regeneration cannot bring it back. -->
                   <button class="btn btn-sm btn-success" title="Got it" aria-label="Got it" @click="markPurchased(ingredient)" style="width: 40px;"><i class="bi bi-check-lg" style="font-size: 1.2em;"></i></button>
                 </div>
+              </li>
+            </ul>
+          </div>
+
+          <!-- In the cupboard: staples bought recently enough that you should
+               already have them. NOT hidden and NOT deleted — the rows are
+               intact, and each one can be pulled onto the list in a tap. They
+               also return on their own once past their interval. -->
+          <div v-if="cupboardItems.length" class="cupboard-section my-3">
+            <button type="button" class="cupboard-toggle" @click="showCupboard = !showCupboard">
+              <i :class="showCupboard ? 'bi bi-chevron-down' : 'bi bi-chevron-right'"></i>
+              In the cupboard ({{ cupboardItems.length }})
+            </button>
+
+            <ul v-if="showCupboard" class="list-group my-2">
+              <li class="list-group-item d-flex justify-content-between align-items-center cupboard-item" v-for="ingredient in cupboardItems" :key="ingredient.id">
+                <span>
+                  {{ ingredient.groceryItem ? ingredient.groceryItem.name : ingredient.name }}
+                  <span class="cupboard-meta">
+                    {{ ingredient.daysSincePurchase === null || ingredient.daysSincePurchase === undefined
+                      ? 'no purchase recorded'
+                      : `bought ${ingredient.daysSincePurchase} days ago` }}
+                  </span>
+                </span>
+                <button class="btn btn-sm btn-outline-secondary" title="Add to the list anyway" aria-label="Add to the list anyway" @click="needStapleNow(ingredient)">
+                  Need it
+                </button>
               </li>
             </ul>
           </div>
@@ -174,6 +217,8 @@ import { Modal } from 'bootstrap';
 // and its stylesheet were downloaded by every visit — to power a "?" button most
 // visits never press.
 import Header from '@/components/Header.vue';
+import { partitionStaples } from '@/store/staples';
+import { todayISO } from '@/store/schedule';
 
 export default {
   name: 'ShoppingList',
@@ -206,7 +251,15 @@ export default {
       sortMode: 'aisle',
 
       // The bought list is a record you occasionally need, not part of shopping.
-      showPurchased: false
+      showPurchased: false,
+
+      // Same for the cupboard: a reassurance, not a worklist.
+      showCupboard: false,
+
+      // Staples the user has explicitly pulled onto this list despite being in
+      // the cupboard. Session-only on purpose — "I'm out of olive oil" is about
+      // this shopping trip, and marking it bought records the real answer.
+      forcedOntoList: []
     }
   },
   async mounted () {
@@ -247,8 +300,31 @@ export default {
         });
     },
 
+    // Staples split off here, and ONLY here — nothing is removed from the
+    // stored list, so a mistake in this rule can misplace an item but never
+    // lose one.
+    stapleSplit () {
+      const { list, cupboard } = partitionStaples(
+        this.$store.getters.unpurchasedShoppingItems,
+        this.$store.state.groceryCatalog || {}
+      );
+
+      // Anything explicitly asked for this session goes back on the list.
+      const forced = new Set(this.forcedOntoList);
+      const pulled = cupboard.filter((item) => forced.has(item.groceryId));
+
+      return {
+        list: [...list, ...pulled],
+        cupboard: cupboard.filter((item) => !forced.has(item.groceryId))
+      };
+    },
+
+    cupboardItems () {
+      return this.stapleSplit.cupboard;
+    },
+
     sortedShoppingList () {
-      const items = [...this.$store.getters.unpurchasedShoppingItems];
+      const items = [...this.stapleSplit.list];
       if (this.sortMode === 'location') {
         const order = { upstairs: 0, downstairs: 1 };
         return items.sort((a, b) => {
@@ -473,6 +549,34 @@ export default {
     },
 
     // Remove item entirely from shopping list
+    isStaple (item) {
+      return Boolean((this.$store.state.groceryCatalog || {})[item.groceryId]?.staple);
+    },
+    stapleTitle (item) {
+      return this.isStaple(item)
+        ? 'A staple — kept in the cupboard section until it is due again'
+        : 'Mark as something you always have';
+    },
+    // Staple-ness belongs to the grocery, not to this week's row, so it is
+    // written to the catalog — the same place aisle and location defaults go.
+    toggleStaple (item, staple) {
+      const entry = (this.$store.state.groceryCatalog || {})[item.groceryId];
+      if (!entry) return;
+
+      this.$store.dispatch('updateDBValue', {
+        path: `grocery-catalog/${item.groceryId}`,
+        value: { ...entry, staple }
+      });
+    },
+    // "I'm out of it after all." Session-scoped: it puts the row back on this
+    // list without editing the grocery, and ticking it off records the real
+    // purchase date, which is what actually resets the cycle.
+    needStapleNow (item) {
+      if (!this.forcedOntoList.includes(item.groceryId)) {
+        this.forcedOntoList.push(item.groceryId);
+      }
+    },
+
     // Mark bought. Deliberately NOT a delete.
     //
     // Deleting was the old behaviour and it did not stick: the meal half of the
@@ -492,11 +596,29 @@ export default {
 
       const updated = { ...item, purchased };
       delete updated.groceryItem; // a read-time join, never persisted
+      delete updated.stapleDue; // presentation only, derived on read
+      delete updated.daysSincePurchase;
 
       this.$store.dispatch('updateDBValue', {
         path: `shopping-list/${item.id}`,
         value: updated
       });
+
+      // Record WHEN it was bought, on the grocery itself. This is what lets a
+      // staple settle down and, more importantly, come back later — without it
+      // a staple would be hidden forever, which is exactly the failure mode
+      // this feature must not have.
+      if (purchased) {
+        const entry = (this.$store.state.groceryCatalog || {})[item.groceryId];
+        if (entry) {
+          this.$store.dispatch('updateDBValue', {
+            path: `grocery-catalog/${item.groceryId}`,
+            value: { ...entry, lastPurchased: todayISO() }
+          });
+        }
+        // No longer forced onto the list — it has been dealt with.
+        this.forcedOntoList = this.forcedOntoList.filter((id) => id !== item.groceryId);
+      }
 
       // Clear interaction flag after operation
       setTimeout(() => {
@@ -884,6 +1006,55 @@ export default {
     /* The undo control is not struck through — it is an action, not a record. */
     .purchased-item .btn {
       text-decoration: none;
+    }
+  }
+
+  .staple-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.75rem;
+    color: #6a6a6a;
+    white-space: nowrap;
+    /* Small text, but the label and box together clear the tap minimum. */
+    min-height: 40px;
+  }
+
+  .staple-due-note {
+    display: block;
+    font-size: 0.7rem;
+    font-weight: 400;
+    /* #7a6a2a on white is ~5.5:1 — readable, and not the same green as the
+       affirmative buttons. */
+    color: #7a6a2a;
+  }
+
+  /* The cupboard is reassurance, not a worklist — quieter than the real list. */
+  .cupboard-section {
+    .cupboard-toggle {
+      background: none;
+      border: 0;
+      padding: 0.25rem 0;
+      color: #6a6a6a;
+      font-size: 0.9rem;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      min-height: 40px;
+    }
+
+    .cupboard-toggle:active {
+      color: #212529;
+    }
+
+    .cupboard-item {
+      color: #6a6a6a;
+    }
+
+    .cupboard-meta {
+      display: block;
+      font-size: 0.7rem;
+      color: #9a9a9a;
     }
   }
 </style>

@@ -14,7 +14,12 @@ transfer from 306KB to 200KB gzipped; `axios` and `lodash` are gone; Node is on
 22.22.3 and a clean `yarn install` works again; `yarn lint` passes; the bug
 report button is built and live (v1.5.0); checking items off now sticks across
 a regeneration (v1.6.0); the draw is weighted by how overdue a meal is
-(v1.7.0). See the
+(v1.7.0); pantry staples (v1.8.0).
+
+**Possible follow-up on staples:** the per-item `stapleIntervalDays` is stored
+and honoured but has no UI — everything uses the 60-day default. Salt and flour
+plainly want different numbers. Worth adding only once the default proves wrong
+in practice. See the
 service-worker and dates sections of `CLAUDE.md` for the traps involved.
 
 ## Next up
@@ -38,8 +43,6 @@ have never done anything. Decide whether those layouts wanted a breakpoint and
 fix, or delete them.
 
 ## Features
-
-**Pantry staples.** Things you always have shouldn't keep landing on the list.
 
 **Hat membership.** Any signed-in user who guesses a hat's name can read and
 write it — that is the sharing model, but since the rules were tightened it is
