@@ -163,7 +163,7 @@ export default {
 
       tour.addStep({
         title: 'Click here to view your shopping list.',
-        text: 'This is your complete grocery hub! View ingredients from drawn meals, add additional grocery items, adjust quantities if you already have some at home, and organize by aisle for efficient shopping.',
+        text: 'Everything your drawn meals need, plus anything you add yourself. Sort by aisle, tick things off as you shop, and mark the things you always have — like olive oil — as staples so they stop cluttering the list.',
         attachTo: {
           element: '[data-step="4"]',
           on: 'bottom'

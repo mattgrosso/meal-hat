@@ -282,7 +282,7 @@ export default {
 
       tour.addStep({
         title: 'Frequency',
-        text: 'Add a number of days here that will be the minimum number of days the hat will wait before it can suggest the meal again.',
+        text: 'The fewest days the hat will wait before this meal can come up again. It also sets the pace the hat measures against: once a meal is overdue for its own number, it becomes likelier to be drawn than one that is barely due.',
         attachTo: {
           element: '[data-step="2"]',
           on: 'bottom'

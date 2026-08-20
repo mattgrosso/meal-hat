@@ -6,7 +6,7 @@
         <li v-for="(mealHat, index) in mealHatsList" :key="index" class="col-12 my-2">
           <div class="btn-group w-100" role="group">
             <button type="button" class="btn btn-secondary flex-grow-1" @click="switchToMealHat(mealHat)" :data-step="index === 0 ? '2' : undefined">{{mealHat}}</button>
-            <button type="button" class="btn btn-tertiary" title="Who's in this hat" aria-label="Who's in this hat" @click="toggleMembers(mealHat)">
+            <button type="button" class="btn btn-tertiary" title="Who's in this hat" aria-label="Who's in this hat" @click="toggleMembers(mealHat)" :data-step="index === 0 ? '6' : undefined">
               <i class="bi bi-people-fill"></i>
             </button>
             <button type="button" class="btn btn-primary" @click="shareMealHat(mealHat)" :data-step="index === 0 ? '3' : undefined">
@@ -350,8 +350,29 @@ export default {
       });
 
       tour.addStep({
+        title: 'Who\'s in this hat',
+        text: 'Everyone sharing this hat, and a way to remove somebody. You will not find yourself in that list with a Remove button — a hat with nobody in it could never be opened again.',
+        attachTo: {
+          element: '[data-step="6"]',
+          on: 'bottom'
+        },
+        buttons: [
+          {
+            text: 'Back',
+            action: tour.back,
+            classes: 'btn-secondary btn btn-sm'
+          },
+          {
+            text: 'Next',
+            action: tour.next,
+            classes: 'btn-success btn btn-sm'
+          }
+        ]
+      });
+
+      tour.addStep({
         title: 'Share a Hat',
-        text: 'Click this button to share the hat with someone else. They can also add it to their list of hats just by entering the hat\'s name.',
+        text: 'Send someone this hat\'s link and they can join it. The link carries an invite code — typing the hat\'s name on its own will not get anybody in, so share the link rather than the name.',
         attachTo: {
           element: '[data-step="3"]',
           on: 'bottom'
