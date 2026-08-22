@@ -203,25 +203,62 @@ Two consequences to respect:
 
 ### Auto-update must keep working
 
-An open app is expected to pick up a deploy on its own. Three things make that
-true, and each has broken separately:
+An open app is expected to pick up a deploy on its own, at a moment that does
+not cost the user anything. Since 2026-08-22 that is Cinema Roll's mechanism,
+ported wholesale — `src/utils/appUpdate.js` plus the wiring in `App.vue`.
 
-- **service-worker.js must CHANGE between builds.** The browser compares bytes.
-  Precaching index.html is what supplies the variance, via its revision hash —
-  with an empty manifest the generated worker is pure static config and comes
-  out byte-identical every time, so no update is ever detected. Silent: the app
-  looks healthy and deploys simply never arrive. Do not set `exclude` to
-  everything. The BannerPlugin's "Current version" does NOT reach this file —
-  workbox generates it after webpack's banner stage.
-- **The reload guard is a RATE LIMIT, not a one-shot.** `updated()` reloads at
-  most once per 30s. An earlier "once per tab, ever" version stopped the loop
-  and also stopped every legitimate update after the first, so an installed PWA
-  took one update and then ignored the rest.
-- **Something has to check.** `registered()` polls `registration.update()` every
-  five minutes, because an installed PWA left open and foregrounded otherwise
-  only checks on a cold start or on returning from the background.
+**Detection does not go through the service worker.** `App.vue` fetches
+`index.html?updateCheck=<ts>` with `cache: 'no-store'` and compares the hashed
+`js/app.<hash>.js` filename it finds against the one this page actually loaded
+off its own `<script>` tags. The SW `updated()` hook is a race the app usually
+loses — `skipWaiting: true` means a new worker activates instead of sitting in
+the `installed` state where the hook fires — so it is kept only as a SECONDARY
+signal, setting the same `updateAvailable` flag. Both bundle helpers live in
+`appUpdate.js` behind `ENTRY_BUNDLE_PATTERN`, so a change in Vue CLI's output
+naming breaks `tests/unit/appUpdate.spec.js` instead of silently switching
+auto-update off.
 
-If a deploy is not reaching an open app, check those three in that order.
+**Four triggers, because no single one is reliable.** visibilitychange,
+pageshow, window focus, and a 30-minute interval. On an iOS home-screen PWA
+visibilitychange sometimes just never fires, and `registered()` still polls
+`registration.update()` every five minutes for the same reason.
+
+**Applying it is guarded, and the guards are the point.** Reload immediately
+only within 5s of opening or foregrounding (nothing is in flight yet);
+otherwise poll every 5s for a 25-second stretch with no pointerdown, keydown,
+wheel, touchstart or scroll. Either way `isSafeMomentForReload()` must agree:
+never with a form control or contenteditable focused, never with a modal open
+(`body.modal-open` for Bootstrap's, `.modal.show` for `Modal.vue`'s), never
+with a Shepherd tour step in the document, and never while a screen has
+registered a busy reason. `reloadForUpdate()` awaits `waitForNewWorker()` first
+so the reload cannot land on a mixed old/new state.
+
+**Busy reasons are for state only memory knows about.** `markBusy` in mounted,
+`clearBusy` in beforeUnmount — a reason left behind by a destroyed component
+blocks every future update, forever. `ShoppingList` registers while the user is
+mid-edit, has the grocery edit form open (a working copy, unsaved until Save),
+or has forced a staple onto the list (session-only by design). `DrawMeals`
+registers for its whole lifetime: the picked date range is in memory, and a
+reload between `applyDraw` and `generateShoppingListFromMeals` leaves a
+schedule with no shopping list behind it.
+
+**The loop guard is `shouldAutoAttempt`:** one attempt per detected bundle,
+in sessionStorage. It replaced the old 30-second rate limit in
+`registerServiceWorker.js` and is strictly stronger, because each deploy
+carries its own key — a loop is impossible, and a genuine second deploy still
+gets through.
+
+**service-worker.js must still CHANGE between builds.** The browser compares
+bytes. Precaching index.html is what supplies the variance, via its revision
+hash — with an empty manifest the generated worker is pure static config and
+comes out byte-identical every time. Silent: the app looks healthy and deploys
+simply never arrive. Do not set `exclude` to everything. The BannerPlugin's
+"Current version" does NOT reach this file — workbox generates it after
+webpack's banner stage.
+
+If a deploy is not reaching an open app, check in that order: is the bundle
+comparison seeing a different filename, is something holding a busy reason,
+is service-worker.js changing between builds.
 
 ### The 2026-08-19 reload loop
 
@@ -243,9 +280,10 @@ Three things keep it dead, all load-bearing:
   inside the ~300ms the loop left between reloads, so the corrected worker was
   aborted mid-install every time. Zero install payload wins that race on any
   connection. Do not reintroduce precaching without re-checking this.
-- **`updated()` reloads at most once per tab** (sessionStorage). Belt and
-  braces: if promotion ever fails again the cost is one wasted reload, not a
-  loop.
+- **`updated()` no longer reloads at all** (2026-08-22). It sets the
+  `updateAvailable` flag and App.vue decides, behind `shouldAutoAttempt` — one
+  attempt per detected bundle, in sessionStorage. Belt and braces: if promotion
+  ever fails again the cost is one wasted reload, not a loop.
 
 Offline comes from **runtime caching**, not precaching: `meal-hat-pages`
 (NetworkFirst, the app shell), `meal-hat-assets`, `meal-hat-images`,

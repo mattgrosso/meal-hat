@@ -1,6 +1,7 @@
 /* eslint-disable no-console */
 
 import { register } from 'register-service-worker'
+import store from './store'
 
 // A deploy should reach an open app on its own, without anyone knowing to pull
 // down to refresh.
@@ -11,14 +12,13 @@ import { register } from 'register-service-worker'
 //      service worker on navigation, and App.vue checks again whenever the app
 //      is brought back to the foreground — but an installed PWA left open on
 //      screen does neither, so it could sit on an old build indefinitely.
-//   2. Noticing has to lead to a reload. It did not: see the guard below.
-const RELOAD_GUARD_KEY = 'mealHatLastUpdateReload';
-
-// A runaway update loop reloads several times a SECOND. A real deploy arrives
-// minutes or hours apart. Thirty seconds sits far above the first and far below
-// the second, so it caps a loop at roughly two reloads a minute while letting
-// every genuine update through.
-const MIN_MS_BETWEEN_RELOADS = 30_000;
+//   2. Noticing has to lead to a reload, and not to a reload loop.
+//
+// Both now live in App.vue, which compares the bundle filename the server
+// serves against the one this page actually loaded. This file is the SECONDARY
+// signal: it keeps polling, and hands `updated()` straight to the same flag
+// instead of reloading on its own. Two independent reload paths racing is
+// exactly the bug class this feature exists to close.
 
 // How often an open app asks whether there is a new build. Cheap — one
 // conditional request for a ~1KB file.
@@ -51,42 +51,20 @@ if (process.env.NODE_ENV === 'production') {
       console.log('New content is downloading.')
     },
     updated () {
-      console.log('New content is available; reloading.');
+      console.log('New content is available.');
 
-      // Rate-limited, NOT once-per-tab.
+      // No reload from here any more. This hook is a race the app often loses
+      // in the first place — the build sets `skipWaiting`, so a new worker
+      // activates immediately rather than sitting in `installed` where this
+      // fires — which is precisely why App.vue compares bundle filenames
+      // instead. When it does fire, it is a perfectly good extra signal, so it
+      // sets the same flag and lets App.vue decide when reloading is safe.
       //
-      // This started life as an unconditional reload, which looped: a reload
-      // does not promote a waiting worker, so the page came back on the old
-      // bundle, `updated` fired again, and round it went about three times a
-      // second. The fix for that was "reload at most once per tab, ever" —
-      // which stopped the loop and also stopped every legitimate update after
-      // the first. An installed PWA that stays open would take one update and
-      // then quietly ignore the rest, which is precisely what got reported.
-      //
-      // A time window separates the two cases cleanly, because they differ by
-      // three orders of magnitude in frequency. sessionStorage, so a fresh tab
-      // is never blocked by an older one's timestamp.
-      const last = Number(window.sessionStorage.getItem(RELOAD_GUARD_KEY)) || 0;
-      const sinceLast = Date.now() - last;
-
-      if (last && sinceLast < MIN_MS_BETWEEN_RELOADS) {
-        console.warn(
-          `Update reload suppressed — one already happened ${Math.round(sinceLast / 1000)}s ago. ` +
-          'This is the loop guard; if you see it repeatedly, the new worker is not taking over.'
-        );
-        return;
-      }
-
-      window.sessionStorage.setItem(RELOAD_GUARD_KEY, String(Date.now()));
-
-      // safeReload defers while the user is mid-edit (see ShoppingList's
-      // setupReloadProtection) and reloads once they stop. Reloading out from
-      // under somebody typing an aisle number is its own bug.
-      if (window.safeReload) {
-        window.safeReload();
-      } else {
-        window.location.reload();
-      }
+      // The old 30-second rate limit that used to live here is gone with it:
+      // App.vue's `shouldAutoAttempt` allows one attempt per detected bundle,
+      // which caps the 2026-08-19 loop harder while still letting every real
+      // deploy through.
+      store.commit('setUpdateAvailable', true);
     },
     offline () {
       console.log('No internet connection found. App is running in offline mode.')

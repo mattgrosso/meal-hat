@@ -36,6 +36,10 @@ import { defineAsyncComponent } from 'vue';
 import Header from '@/components/Header.vue';
 import { todayISO, fromISODate, datesInRange } from '@/store/schedule';
 import { eligibleMeals, pickWeightedMeal } from '@/store/draw';
+import { markBusy, clearBusy } from '@/utils/appUpdate';
+
+// The reason string this screen registers with the auto-update machinery.
+const BUSY_REASON = 'draw-meals';
 
 export default {
   name: 'DrawMeals',
@@ -66,6 +70,23 @@ export default {
         end: fromISODate(todayISO())
       }
     }
+  },
+  mounted () {
+    // No auto-update while this screen is up. Two things are at stake and both
+    // live only in memory: the date range the user has picked (a reload resets
+    // it to today, silently), and the window inside drawMeals() between
+    // `applyDraw` landing and `generateShoppingListFromMeals` finishing — a
+    // reload in there leaves a week of meals scheduled with no shopping list
+    // behind them.
+    //
+    // Blocking the whole screen rather than just the dispatch is deliberate:
+    // it is transient, the user leaves it within a minute or two (drawing
+    // routes to Home), and the update applies the moment they do.
+    markBusy(BUSY_REASON);
+  },
+  beforeUnmount () {
+    // A reason left behind by a gone component blocks every future update.
+    clearBusy(BUSY_REASON);
   },
   computed: {
     hasDateRange () {

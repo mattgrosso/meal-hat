@@ -82,7 +82,12 @@ export default createStore({
     shoppingList: {}, // Unified shopping list: id → { groceryId, quantity, units, aisle, location, source, mealId?, purchased }
 
     // Hats this user belongs to — backs the MealHats sharing screen.
-    mealHatsList: null
+    mealHatsList: null,
+
+    // A newer build is live. Set by App.vue's bundle comparison (the primary
+    // signal) and by registerServiceWorker's updated() hook (the secondary
+    // one); App.vue watches it and applies the update at a safe moment.
+    updateAvailable: false
   },
   getters: {
     getMeal: (state) => (id) => {
@@ -134,6 +139,9 @@ export default createStore({
     },
     setMostRecentDatabase (state, value) {
       state.mostRecentDatabase = value;
+    },
+    setUpdateAvailable (state, value) {
+      state.updateAvailable = value;
     },
     setShowTutorial (state, value) {
       state.showTutorial = value;

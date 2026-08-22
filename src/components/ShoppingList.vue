@@ -293,6 +293,10 @@ import AppModal from '@/components/Modal.vue';
 import { partitionStaples, DEFAULT_STAPLE_INTERVAL_DAYS } from '@/store/staples';
 import { normalizeName } from '@/store/ingredients';
 import { todayISO } from '@/store/schedule';
+import { markBusy, clearBusy } from '@/utils/appUpdate';
+
+// The reason string this screen registers with the auto-update machinery.
+const BUSY_REASON = 'shopping-list';
 
 export default {
   name: 'ShoppingList',
@@ -369,8 +373,42 @@ export default {
     // false, so it would appear to work while actually protecting nothing.
     // Better to fall back to a plain reload once this screen is not mounted.
     delete window.safeReload;
+
+    // Same hazard, same fix: a busy reason left behind by a component that no
+    // longer exists blocks every future update, forever.
+    clearBusy(BUSY_REASON);
+  },
+  watch: {
+    // Hold off an auto-update while this screen is holding something a reload
+    // would destroy. Three cases, all of them real losses:
+    //
+    //  - userInteracting: mid aisle/quantity edit, debounced, so keystrokes
+    //    are still on their way to the database.
+    //  - editingGrocery: the edit form is a WORKING COPY so Cancel can really
+    //    cancel — nothing is written until Save.
+    //  - forcedOntoList: "I'm out of olive oil" is session-only by design. It
+    //    is never persisted, so a reload silently un-says it, and the olive
+    //    oil quietly leaves the list you are standing in the shop reading.
+    //
+    // The last one can block for a whole shopping trip, which is correct: it
+    // clears the moment the user leaves this screen, and the update lands then.
+    shoppingListBusy: {
+      immediate: true,
+      handler (busy) {
+        if (busy) {
+          markBusy(BUSY_REASON);
+        } else {
+          clearBusy(BUSY_REASON);
+        }
+      }
+    }
   },
   computed: {
+    // Is this screen holding state a reload would lose? Watched above.
+    shoppingListBusy () {
+      return Boolean(this.userInteracting || this.editingGrocery || this.forcedOntoList.length);
+    },
+
     // All catalog grocery items, for the quick-add suggestions.
     groceryItems () {
       const catalog = this.$store.state.groceryCatalog || {};
