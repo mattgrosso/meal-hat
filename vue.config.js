@@ -1,6 +1,15 @@
 const { defineConfig } = require('@vue/cli-service');
 const webpack = require('webpack');
 
+// The build stamp (see src/utils/buildStamp.js). Set here, at config
+// evaluation, so it names the moment THIS build ran rather than the moment
+// the page was loaded — an app left open for a week keeps showing the build
+// it is still running. vue-cli inlines every VUE_APP_* var it finds on
+// process.env when it resolves the client env, which happens after this file
+// is read, so assigning it here is enough — it deliberately does not live in
+// .env, which version.js rewrites from a dotenv parse.
+process.env.VUE_APP_BUILD_TIME = new Date().toISOString();
+
 module.exports = defineConfig({
   transpileDependencies: true,
   configureWebpack: {

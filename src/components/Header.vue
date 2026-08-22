@@ -6,11 +6,13 @@
       <p class="col-6 col-md-2" @click.stop="logout">{{$store.state.userEmail}}</p>
       <p class="col-6 col-md-2" @click.stop="$router.push('/meal-hats')">{{hatTitle}}</p>
     </div>
-    <span class="version">{{version}}</span>
+    <span class="build-stamp">{{buildStamp}}</span>
   </div>
 </template>
 
 <script>
+import { buildStamp } from '../utils/buildStamp.js';
+
 export default {
   props: {
     headerText: {
@@ -19,8 +21,11 @@ export default {
     }
   },
   computed: {
-    version () {
-      return process.env.VUE_APP_VERSION;
+    // The house build stamp — "v1.14.0 · built Aug 22, 8:15 AM". Was the bare
+    // version number; the version alone can't tell you whether the app in
+    // front of you picked up the deploy you just did.
+    buildStamp () {
+      return buildStamp();
     },
     hatTitle () {
       if (this.$store.getters.primaryDatabaseTopKey === this.$store.state.databaseTopKey) {
@@ -89,12 +94,21 @@ export default {
       }
     }
 
-    .version {
+    // The house build stamp: present, readable, never competing for
+    // attention. Same corner the bare version number used to sit in, but it
+    // is a longer string now — line-height 1 and top 1px keep its 8px box
+    // clear of the icon below it (top: 9px), and nowrap keeps it on one line
+    // at phone width rather than wrapping under the icon.
+    .build-stamp {
       font-family: "Roboto Condensed", sans-serif;
       font-size: 0.5rem;
+      font-variant-numeric: tabular-nums;
+      line-height: 1;
+      opacity: 0.85;
       position: absolute;
       right: 3px;
-      top: 2px;
+      top: 1px;
+      white-space: nowrap;
     }
   }
 </style>
