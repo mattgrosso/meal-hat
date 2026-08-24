@@ -14,6 +14,25 @@ console.log('• 1 - PATCH (x.x.X): Bug fixes, small tweaks, no new features');
 console.log('• 2 - MINOR (x.X.x): New features, backwards-compatible changes');
 console.log('• 3 - MAJOR (X.x.x): Breaking changes, incompatible API changes');
 
+// A bump chosen up front, for anything that isn't a person at a keyboard:
+//
+//   VERSION_BUMP=minor yarn deploy
+//
+// The same spelling cinemaroll uses. Without this the interactive prompt below
+// was the ONLY way to release: setRawMode throws outright when stdin is not a
+// TTY, so `yarn deploy` from a script or an agent died before it built
+// anything, and the 20-second auto-patch fallback never got the chance to
+// fire.
+const NAMED_BUMPS = { patch: '1', minor: '2', major: '3' };
+
+function chosenBump () {
+  const named = String(process.env.VERSION_BUMP || '').toLowerCase();
+  if (named && NAMED_BUMPS[named]) return NAMED_BUMPS[named];
+  // No terminal to prompt at: patch, quietly, rather than crashing.
+  if (!process.stdin.isTTY) return '1';
+  return null;
+}
+
 function waitForKeypress (timeout = 20000) {
   return new Promise((resolve) => {
     let timeoutId; // eslint-disable-line prefer-const
@@ -41,11 +60,17 @@ function waitForKeypress (timeout = 20000) {
 }
 
 async function determineVersionBump () {
-  console.log('\nWhat type of changes are you releasing?');
-  console.log('Press: 1, 2, or 3 (or Enter for patch) - Auto-patch in 20 seconds');
+  const preset = chosenBump();
+  if (preset) {
+    console.log(process.env.VERSION_BUMP
+      ? `\nVERSION_BUMP=${process.env.VERSION_BUMP}`
+      : '\nNo terminal to ask at — defaulting to PATCH.');
+  } else {
+    console.log('\nWhat type of changes are you releasing?');
+    console.log('Press: 1, 2, or 3 (or Enter for patch) - Auto-patch in 20 seconds');
+  }
 
-  const key = await waitForKeypress();
-  const choice = key;
+  const choice = preset || await waitForKeypress();
 
   let newVersion;
 
