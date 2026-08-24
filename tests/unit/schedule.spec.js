@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
+import { nextMealId,
   toISODate,
   fromISODate,
   isUpcoming,
@@ -212,5 +212,70 @@ describe('datesInRange', () => {
 
   it('returns nothing for a backwards range', () => {
     expect(datesInRange('2026-08-22', '2026-08-19')).toEqual([]);
+  });
+});
+
+// Bug report (Natalie, 2026-08-24): "the highlighted green on the drawn meals
+// page is always one day ahead so right now it's highlighting Tuesday instead
+// of Monday."
+//
+// These run in a fixed local timezone via the TZ the suite is started with;
+// what matters is that the meal dates and "now" are built the same way a real
+// user's are — a bare ISO string for the meal, a real Date for now.
+describe('nextMealId', () => {
+  const meals = [
+    { id: 'sun', assignedDate: '2026-08-23' },
+    { id: 'mon', assignedDate: '2026-08-24' },
+    { id: 'tue', assignedDate: '2026-08-25' },
+  ];
+
+  // The reported bug, exactly: a Monday afternoon must highlight Monday.
+  it("highlights today's meal, not tomorrow's", () => {
+    const mondayLunchtime = new Date(2026, 7, 24, 12, 30);
+    expect(nextMealId(meals, mondayLunchtime)).toBe('mon');
+  });
+
+  // The trap that caused it. 'YYYY-MM-DD' through `new Date()` is UTC
+  // midnight, which is the previous evening anywhere west of Greenwich — so
+  // the failure only shows up in a negative-offset timezone, which is where
+  // the users are.
+  it('is not fooled early in the morning', () => {
+    expect(nextMealId(meals, new Date(2026, 7, 24, 0, 5))).toBe('mon');
+  });
+
+  it('is not fooled late in the evening either', () => {
+    // Past dinner, so tonight's meal is done and tomorrow is next.
+    expect(nextMealId(meals, new Date(2026, 7, 24, 23, 45))).toBe('tue');
+  });
+
+  // Tonight's dinner stops being "next" once you have presumably eaten it.
+  it('moves on after 6pm', () => {
+    expect(nextMealId(meals, new Date(2026, 7, 24, 17, 59))).toBe('mon');
+    expect(nextMealId(meals, new Date(2026, 7, 24, 18, 0))).toBe('tue');
+  });
+
+  it('skips meals already in the past', () => {
+    expect(nextMealId(meals, new Date(2026, 7, 25, 9, 0))).toBe('tue');
+  });
+
+  it('finds the earliest upcoming meal whatever order they arrive in', () => {
+    const shuffled = [meals[2], meals[0], meals[1]];
+    expect(nextMealId(shuffled, new Date(2026, 7, 24, 12, 0))).toBe('mon');
+  });
+
+  it('does not reorder the list it was given', () => {
+    const original = [meals[2], meals[0], meals[1]];
+    const copy = [...original];
+    nextMealId(original, new Date(2026, 7, 24, 12, 0));
+    expect(original).toEqual(copy);
+  });
+
+  it('has nothing to highlight once every meal is behind you', () => {
+    expect(nextMealId(meals, new Date(2026, 8, 1, 12, 0))).toBe(null);
+  });
+
+  it('is safe on junk', () => {
+    expect(nextMealId(null, new Date())).toBe(null);
+    expect(nextMealId([{ id: 'x' }], new Date())).toBe(null);
   });
 });

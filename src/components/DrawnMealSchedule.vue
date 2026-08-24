@@ -35,7 +35,9 @@
 
 <script>
 import draggable from 'vuedraggable';
-import { toISODate, fromISODate, compareByDate, withDrawnDate } from '@/store/schedule';
+import {
+  toISODate, fromISODate, withDrawnDate, nextMealId
+} from '@/store/schedule';
 
 export default {
   name: 'DrawnMealSchedule',
@@ -49,6 +51,12 @@ export default {
     }
   },
   computed: {
+    // Which meal gets the green highlight. The rule lives in the store so it
+    // can be tested directly — see nextMealId, and the off-by-one-day bug it
+    // exists to have prevented.
+    nextMealId () {
+      return nextMealId(this.drawnMeals);
+    },
     drawnMeals () {
       if (!this.$store.state.drawnMealsWithHistory || !this.$store.state.drawnMealsWithHistory.length) {
         return [];
@@ -149,19 +157,7 @@ export default {
       await this.$store.dispatch('generateShoppingListFromMeals');
     },
     nextMeal (drawnMeal) {
-      const now = new Date();
-
-      const cutOffTime = new Date();
-      cutOffTime.setHours(18, 0, 0, 0);
-
-      this.drawnMeals.sort(compareByDate);
-
-      const nextMeal = this.drawnMeals.find(meal => {
-        const mealDate = new Date(meal.assignedDate);
-        return mealDate > now || (mealDate.toDateString() === now.toDateString() && now < cutOffTime);
-      });
-
-      return drawnMeal === nextMeal;
+      return Boolean(this.nextMealId) && drawnMeal.id === this.nextMealId;
     }
   },
 };

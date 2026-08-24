@@ -165,3 +165,42 @@ export function datesInRange (start, end) {
   }
   return dates;
 }
+
+/**
+ * Which drawn meal the "next meal" highlight belongs on — its id, or null.
+ *
+ * Bug report (Natalie, 2026-08-24): "the highlighted green on the drawn meals
+ * page is always one day ahead so right now it's highlighting Tuesday instead
+ * of Monday."
+ *
+ * The cause was `new Date(meal.assignedDate)` on a bare 'YYYY-MM-DD', which
+ * parses as UTC MIDNIGHT — 8pm the previous day in this timezone. Monday's
+ * meal therefore looked like it fell on Sunday: it failed the "is it today"
+ * test AND the "is it still ahead" test, so Tuesday's meal (parsing as Monday
+ * 8pm, still in the future) took the highlight. Exactly one day ahead, every
+ * day, all year.
+ *
+ * Compared as ISO strings here, which sort chronologically by themselves and
+ * involve no date parsing at all — there is no timezone left to get wrong.
+ * This lives in the store rather than the component so it can be tested
+ * directly, which is how the bug would have been caught.
+ *
+ * The 6pm rule is kept: tonight's dinner stops being "next" once you have
+ * presumably eaten it.
+ */
+export const DINNER_HOUR = 18;
+
+export function nextMealId (meals, now = new Date()) {
+  const today = todayISO(now);
+  const eatenAlready = now.getHours() >= DINNER_HOUR;
+
+  const upcoming = [...(meals || [])]
+    .sort(compareByDate)
+    .find((meal) => {
+      const date = toISODate(meal && meal.assignedDate);
+      if (!date) return false;
+      return date > today || (date === today && !eatenAlready);
+    });
+
+  return upcoming ? upcoming.id : null;
+}
