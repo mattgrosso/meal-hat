@@ -48,6 +48,37 @@
       ".write": "auth != null"
     },
 
+    // Magic Mirror feed. Matt's hallway display has no keyboard and no login,
+    // so it cannot authenticate; it used to read a whole hat over
+    // unauthenticated REST, which is exactly what the rules above closed.
+    //
+    // Instead of reopening a hat, the app PUBLISHES a few hundred bytes —
+    // upcoming dates and meal names, nothing else — to mirrorFeed/<hat>/<secret>.
+    // See src/assets/javascript/mirrorFeed.js.
+    //
+    // The grant is at the $secret level, NOT at $hat. Reading
+    // mirrorFeed/<hat>.json is denied, so the hat list cannot be enumerated
+    // through this node and a feed cannot be found without its 128-bit secret.
+    // The secret itself lives at <hat>/mirrorFeedKey, readable only by members.
+    //
+    // Named at the root for the same load-bearing reason as bugReports: left to
+    // the $hat wildcard below, "mirrorFeed" would be treated as a hat, and the
+    // wildcard's `!data.exists()` write clause would let any signed-in user
+    // create it.
+    "mirrorFeed": {
+      ".read": false,
+      "$hat": {
+        ".read": false,
+        // Only a member of the hat may publish that hat's schedule. Keyed on
+        // auth.uid against the hat's own members list — the same test the $hat
+        // rules use, reached through root because this node sits outside it.
+        ".write": "auth != null && root.child($hat).child('members').child(auth.uid).exists()",
+        "$secret": {
+          ".read": true
+        }
+      }
+    },
+
     "$hat": {
       // Membership, not name-knowledge.
       //

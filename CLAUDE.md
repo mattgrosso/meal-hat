@@ -297,6 +297,44 @@ upload it over `s3://meal-hat/service-worker.js`, let clients shed the bad
 worker, then `yarn deploy` to restore the real one. It is NOT currently
 deployed.
 
+### Magic Mirror feed
+
+Matt's hallway Magic Mirror shows the next three meals. It has no keyboard and
+no login, so it cannot authenticate — and it used to read
+`mattgrosso-gmail-com.json` over unauthenticated REST, which is precisely what
+the 2026-08-19 lockdown closed. The panel went blank and said nothing: the
+mirror's fetch is inside a try/catch that leaves its list empty, and an empty
+list renders as no panel.
+
+So the app **publishes** rather than the mirror peeking. `buildMirrorFeed`
+(`src/assets/javascript/mirrorFeed.js`) reduces the hat to dates and meal names
+— nothing else — and it goes to `mirrorFeed/<hat>/<secret>`. The rules grant
+public read at the **`$secret`** level only, so `mirrorFeed/<hat>.json` is
+denied and a feed cannot be found without its 128-bit secret. The secret lives
+at `<hat>/mirrorFeedKey`, readable only by members. Same arrangement as Cinema
+Roll, which broke the same way five days earlier.
+
+Three things that are deliberate:
+
+- **The feed carries three weeks, not the three meals the mirror shows.** It is
+  a snapshot of a moving schedule, refreshed only when someone draws or opens
+  the app. Publishing three would empty the mirror three days after a draw even
+  though the schedule runs another fortnight. The mirror re-filters by date, so
+  a stale feed shows less rather than showing yesterday's dinner.
+- **`publishMirrorFeed` re-reads the database** instead of using
+  `state.drawnMeals`, which is a trailing window already filtered to upcoming
+  entries and may not have echoed back a just-landed draw.
+- **The six-hour throttle stamp is written BEFORE the publish, not after.**
+  A hat whose publish keeps failing would otherwise retry on every snapshot
+  callback for the rest of the session.
+
+`node scripts/publish-mirror-feed.mjs --write` does the same job from the CLI
+(dry by default), for bootstrapping the URL before anyone has pressed the button
+and for repairing a stale feed. It prints the URL to paste into the mirror.
+
+The mirror end is the `magic-mirror` repo: `src/mealHatFeed.js` holds the URL
+and the date helpers, `src/App.vue`'s `getUpcomingMeals` reads the feed.
+
 ## Bug reports
 
 In-app reports go to a top-level `bugReports/` node, outside any hat, and the

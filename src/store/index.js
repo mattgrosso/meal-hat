@@ -7,6 +7,7 @@ import router from '@/router';
 import { analyzeDuplicates, findSimilar, aggregateMealIngredients, remapMealIngredients } from './ingredients';
 import { withDrawnDate, compareByDate, isUpcoming, toISODate, isoDaysAgo } from './schedule';
 import { withPreservedPurchases } from './purchases';
+import { buildMirrorFeed } from '../assets/javascript/mirrorFeed';
 
 // How far back drawnMeals is loaded.
 //
@@ -84,6 +85,10 @@ export default createStore({
     // Hats this user belongs to — backs the MealHats sharing screen.
     mealHatsList: null,
 
+    // Secret path segment for this hat's Magic Mirror feed, or null if the
+    // feed has never been turned on. Per-hat, so clearState drops it.
+    mirrorFeedKey: null,
+
     // A newer build is live. Set by App.vue's bundle comparison (the primary
     // signal) and by registerServiceWorker's updated() hook (the secondary
     // one); App.vue watches it and applies the update at a safe moment.
@@ -128,6 +133,13 @@ export default createStore({
     },
     unpurchasedShoppingItems: (state, getters) => {
       return getters.shoppingListItems.filter(item => !item.purchased);
+    },
+    // The URL to paste into the Magic Mirror. Empty until the current hat has
+    // a feed key, which is what the MealHats panel keys its two states on.
+    mirrorFeedUrl (state) {
+      if (!state.databaseTopKey || !state.mirrorFeedKey) return '';
+
+      return `${firebaseConfig.databaseURL}/mirrorFeed/${state.databaseTopKey}/${state.mirrorFeedKey}.json`;
     },
   },
   mutations: {
@@ -178,6 +190,9 @@ export default createStore({
     setMealHatsList (state, mealHatsList) {
       state.mealHatsList = mealHatsList;
     },
+    setMirrorFeedKey (state, mirrorFeedKey) {
+      state.mirrorFeedKey = mirrorFeedKey || null;
+    },
     clearState (state) {
       state.meals = null;
       state.drawnMealsWithHistory = null;
@@ -185,6 +200,7 @@ export default createStore({
       state.groceryCatalog = {};
       state.shoppingList = {};
       state.mealHatsList = null;
+      state.mirrorFeedKey = null;
     }
   },
   actions: {
@@ -623,6 +639,36 @@ export default createStore({
           context.commit('setShoppingList', data || {});
         });
       }
+
+      // Magic Mirror feed key. Null for every hat that has never turned the
+      // feed on, which is the normal case — the read costs one small node and
+      // is what tells the MealHats screen which half of the panel to render.
+      if (context.state.mirrorFeedKey === null) {
+        onValue(ref(db, `${context.state.databaseTopKey}/mirrorFeedKey`), (snapshot) => {
+          context.commit('setMirrorFeedKey', snapshot.val());
+          context.dispatch('publishMirrorFeedIfStale');
+        });
+      }
+    },
+
+    // Republish on app open, at most every six hours.
+    //
+    // Drawing already republishes, and that covers the schedule CHANGING. This
+    // covers the schedule merely getting older: the feed carries a fixed window
+    // of days, so without a periodic refresh a hat that is drawn a month ahead
+    // and then left alone would watch the mirror empty out from the front.
+    async publishMirrorFeedIfStale (context) {
+      if (!context.state.mirrorFeedKey) return;
+
+      const stamp = `mealHat.mirrorFeed.lastPublish.${context.state.databaseTopKey}`;
+      const last = Number(window.localStorage.getItem(stamp) || 0);
+      if (Date.now() - last < 6 * 60 * 60 * 1000) return;
+
+      // Written BEFORE the publish, not after. A hat whose publish keeps
+      // failing (rules, offline, a half-open socket) would otherwise retry on
+      // every snapshot callback for the whole session.
+      window.localStorage.setItem(stamp, String(Date.now()));
+      await context.dispatch('publishMirrorFeed');
     },
     async setDBValue (context, dbEntry) {
       const timestamp = Date.now();
@@ -690,6 +736,71 @@ export default createStore({
       if (!Object.keys(updates).length) return;
 
       await update(ref(db, context.state.databaseTopKey), updates);
+
+      // A draw is the moment the schedule changes, so it is the moment the
+      // mirror's copy of it goes stale. No throttle here — this is the event
+      // the feed exists to carry. No-ops unless the hat has a feed key.
+      await context.dispatch('publishMirrorFeed');
+    },
+
+    // ------------------------------------------------------------------
+    // Magic Mirror feed. See src/assets/javascript/mirrorFeed.js for why this
+    // exists: the mirror used to read the whole hat over unauthenticated REST
+    // and the 2026-08-19 lockdown ended that.
+    //
+    // The secret must never live in Meal Hat's public bundle, so it is
+    // generated per-hat at runtime and stored on the hat itself, where only
+    // its members can read it.
+    async ensureMirrorFeedKey (context) {
+      const topKey = context.state.databaseTopKey;
+      if (!topKey) return null;
+
+      const existing = context.state.mirrorFeedKey;
+      if (typeof existing === 'string' && existing.length >= 16) return existing;
+
+      const bytes = new Uint8Array(16);
+      window.crypto.getRandomValues(bytes);
+      const key = Array.from(bytes).map((byte) => byte.toString(16).padStart(2, '0')).join('');
+
+      await set(ref(db, `${topKey}/mirrorFeedKey`), key);
+      context.commit('setMirrorFeedKey', key);
+
+      return key;
+    },
+
+    async publishMirrorFeed (context) {
+      const topKey = context.state.databaseTopKey;
+      const secret = context.state.mirrorFeedKey;
+      if (!topKey || !secret) return;
+
+      // Publish from what the database holds, not from this device's state.
+      // state.drawnMeals is a trailing WINDOW already filtered to upcoming
+      // entries, and a draw that just landed may not have echoed back through
+      // onValue yet — either would publish a schedule shorter than the real one.
+      let drawnMeals = null;
+      let meals = null;
+
+      try {
+        const [drawnSnapshot, mealsSnapshot] = await Promise.all([
+          get(ref(db, `${topKey}/drawnMeals`)),
+          get(ref(db, `${topKey}/meals`))
+        ]);
+        drawnMeals = drawnSnapshot.val();
+        meals = mealsSnapshot.val();
+      } catch (error) {
+        console.error('Could not read the schedule to publish the mirror feed: ', error);
+        return;
+      }
+
+      const feed = buildMirrorFeed(drawnMeals, meals);
+
+      try {
+        await set(ref(db, `mirrorFeed/${topKey}/${secret}`), feed);
+      } catch (error) {
+        // A mirror showing a stale schedule is not worth interrupting
+        // anyone's draw over.
+        console.error('Could not publish the mirror feed: ', error);
+      }
     },
 
     /**

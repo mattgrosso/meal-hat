@@ -54,6 +54,28 @@
       <div class="add-more-hats" data-step="5">
         <button class="btn btn-primary my-3 col-12" @click="showNewHatPrompt">Add a hat</button>
       </div>
+
+      <!-- Publishes the upcoming schedule for a wall display that cannot log
+           in. Scoped to the hat you are currently in, since that is the one
+           whose meals would go on the mirror. -->
+      <div class="mirror-feed">
+        <h2 class="mirror-feed__title">Magic Mirror</h2>
+        <p class="mirror-feed__blurb">
+          Publishes the next few weeks of <strong>{{ currentHat }}</strong>'s meals — just the dates and the meal names — so a wall display can show them without signing in. Your groceries, shopping list and everyone's email stay private.
+        </p>
+        <button v-if="!mirrorFeedKey" type="button" class="btn btn-secondary col-12" :disabled="enablingMirrorFeed" @click="enableMirrorFeed">
+          <i class="bi bi-display"></i>
+          {{ enablingMirrorFeed ? 'Turning it on…' : 'Turn on the mirror feed' }}
+        </button>
+        <template v-else>
+          <input class="form-control mirror-feed__url" readonly :value="mirrorFeedUrl" @focus="$event.target.select()">
+          <button type="button" class="btn btn-secondary col-12" @click="copyMirrorFeedUrl">
+            <i class="bi bi-clipboard"></i> Copy URL
+          </button>
+          <p class="mirror-feed__hint">Anyone with this URL can see the meal names. Republished whenever you draw.</p>
+        </template>
+        <p v-if="mirrorFeedError" class="mirror-feed__error">{{ mirrorFeedError }}</p>
+      </div>
     </div>
     <Modal
       :showModal="showJoinHatModal"
@@ -109,7 +131,9 @@ export default {
       members: [],
       membersLoading: false,
       memberError: null,
-      removingUid: null
+      removingUid: null,
+      enablingMirrorFeed: false,
+      mirrorFeedError: null
     }
   },
   async mounted () {
@@ -136,9 +160,41 @@ export default {
   computed: {
     mealHatsList () {
       return this.$store.state.mealHatsList || [];
+    },
+    currentHat () {
+      return this.$store.getters.databaseTopKey;
+    },
+    mirrorFeedKey () {
+      return this.$store.state.mirrorFeedKey;
+    },
+    mirrorFeedUrl () {
+      return this.$store.getters.mirrorFeedUrl;
     }
   },
   methods: {
+    // Two writes, in this order: the key first, then the feed itself. The
+    // publish reads the key back out of state, so generating it and publishing
+    // in parallel would publish nothing on the very first press.
+    async enableMirrorFeed () {
+      this.mirrorFeedError = null;
+      this.enablingMirrorFeed = true;
+
+      try {
+        await this.$store.dispatch('ensureMirrorFeedKey');
+        await this.$store.dispatch('publishMirrorFeed');
+      } catch (error) {
+        this.mirrorFeedError = 'Could not turn the mirror feed on. Try again in a moment.';
+      } finally {
+        this.enablingMirrorFeed = false;
+      }
+    },
+    copyMirrorFeedUrl () {
+      navigator.clipboard.writeText(this.mirrorFeedUrl);
+      this.$emit('showToast', {
+        delay: 3000,
+        message: 'Mirror feed URL copied to clipboard.'
+      });
+    },
     // Fetched on open rather than for every hat up front: each roster is its
     // own read, and most of the time you are not looking at any of them.
     async toggleMembers (mealHatName) {
@@ -477,6 +533,45 @@ export default {
       .btn-secondary {
         font-size: 0.8rem;
       }
+    }
+  }
+
+  .mirror-feed {
+    border-top: 1px solid #dcdcdc;
+    margin-top: 1.5rem;
+    padding: 1rem 32px 2rem;
+    text-align: left;
+
+    .mirror-feed__title {
+      font-size: 1rem;
+      font-weight: 600;
+      margin: 0 0 0.35rem;
+    }
+
+    .mirror-feed__blurb {
+      color: #6a6a6a;
+      font-size: 0.8rem;
+      margin: 0 0 0.75rem;
+    }
+
+    /* The URL is long and unbreakable; a phone gets a scrollable field rather
+       than a row that overflows the screen. */
+    .mirror-feed__url {
+      font-size: 0.75rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .mirror-feed__hint {
+      color: #6a6a6a;
+      font-size: 0.72rem;
+      margin: 0.5rem 0 0;
+    }
+
+    /* #b02a37 rather than Bootstrap's .text-danger, which is too light here. */
+    .mirror-feed__error {
+      color: #b02a37;
+      font-size: 0.85rem;
+      margin: 0.5rem 0 0;
     }
   }
 
