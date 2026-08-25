@@ -89,6 +89,16 @@ export default createStore({
     // feed has never been turned on. Per-hat, so clearState drops it.
     mirrorFeedKey: null,
 
+    // Which hat mirrorFeedKey is subscribed to, so initializeDB can tell
+    // "not subscribed" from "subscribed, and the answer is null".
+    //
+    // The other subscriptions here guard on their own data being empty, which
+    // works because their first snapshot always fills it in. This one's normal
+    // answer IS null — most hats have no feed — so the same shape would attach
+    // a fresh listener on every initializeDB, and the router dispatches that on
+    // every guarded navigation.
+    mirrorFeedSubscribedFor: null,
+
     // A newer build is live. Set by App.vue's bundle comparison (the primary
     // signal) and by registerServiceWorker's updated() hook (the secondary
     // one); App.vue watches it and applies the update at a safe moment.
@@ -193,6 +203,9 @@ export default createStore({
     setMirrorFeedKey (state, mirrorFeedKey) {
       state.mirrorFeedKey = mirrorFeedKey || null;
     },
+    setMirrorFeedSubscribedFor (state, hat) {
+      state.mirrorFeedSubscribedFor = hat || null;
+    },
     clearState (state) {
       state.meals = null;
       state.drawnMealsWithHistory = null;
@@ -201,6 +214,7 @@ export default createStore({
       state.shoppingList = {};
       state.mealHatsList = null;
       state.mirrorFeedKey = null;
+      state.mirrorFeedSubscribedFor = null;
     }
   },
   actions: {
@@ -643,7 +657,8 @@ export default createStore({
       // Magic Mirror feed key. Null for every hat that has never turned the
       // feed on, which is the normal case — the read costs one small node and
       // is what tells the MealHats screen which half of the panel to render.
-      if (context.state.mirrorFeedKey === null) {
+      if (context.state.mirrorFeedSubscribedFor !== context.state.databaseTopKey) {
+        context.commit('setMirrorFeedSubscribedFor', context.state.databaseTopKey);
         onValue(ref(db, `${context.state.databaseTopKey}/mirrorFeedKey`), (snapshot) => {
           context.commit('setMirrorFeedKey', snapshot.val());
           context.dispatch('publishMirrorFeedIfStale');
