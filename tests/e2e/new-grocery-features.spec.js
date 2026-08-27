@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { setupAuthAndDisableTutorial, navigateDirectly } = require('./test-utils.js');
+const { setupAuthAndDisableTutorial, navigateDirectly, emulatorSignIn, seedFirebaseSession } = require('./test-utils.js');
 
 /**
  * NEW GROCERY PAGE FEATURES TESTS
@@ -10,10 +10,10 @@ const { setupAuthAndDisableTutorial, navigateDirectly } = require('./test-utils.
 test.describe('🛒 New Grocery Page Features', () => {
   test('✅ Quick add interface loads correctly', async ({ page }) => {
     // Use same auth pattern as working tests
-    await page.addInitScript(() => {
-      window.localStorage.setItem('mealHatUserEmail', 'test@example.com');
-      window.localStorage.setItem('mealHatDatabaseTopKey', 'test-example-com');
-    });
+    // A real emulator session - the localStorage-only stub stopped signing
+    // anyone in when the app started requiring a real Firebase user.
+    const session = await emulatorSignIn();
+    await seedFirebaseSession(page, session);
 
     await page.goto('/#/add-groceries');
     await page.waitForSelector('input[placeholder="Add item to shopping list..."]', { timeout: 15000 });
@@ -29,10 +29,10 @@ test.describe('🛒 New Grocery Page Features', () => {
   });
 
   test('✅ Autocomplete suggestions appear when typing', async ({ page }) => {
-    await page.addInitScript(() => {
-      window.localStorage.setItem('mealHatUserEmail', 'test@example.com');
-      window.localStorage.setItem('mealHatDatabaseTopKey', 'test-example-com');
-    });
+    // A real emulator session - the localStorage-only stub stopped signing
+    // anyone in when the app started requiring a real Firebase user.
+    const session = await emulatorSignIn();
+    await seedFirebaseSession(page, session);
 
     await page.goto('/#/add-groceries');
     await page.waitForSelector('input[placeholder="Add item to shopping list..."]', { timeout: 15000 });
@@ -51,10 +51,9 @@ test.describe('🛒 New Grocery Page Features', () => {
   });
 
   test('✅ Shopping list displays with quantity controls', async ({ page }) => {
+    const session = await emulatorSignIn();
+    await seedFirebaseSession(page, session);
     await page.addInitScript(() => {
-      window.localStorage.setItem('mealHatUserEmail', 'test@example.com');
-      window.localStorage.setItem('mealHatDatabaseTopKey', 'test-example-com');
-
       // Pre-populate with a test item in the shopping list
       window.localStorage.setItem('testShoppingItem', JSON.stringify({
         id: 'test-item-1',
@@ -82,10 +81,10 @@ test.describe('🛒 New Grocery Page Features', () => {
   });
 
   test('✅ Modal appears for new items', async ({ page }) => {
-    await page.addInitScript(() => {
-      window.localStorage.setItem('mealHatUserEmail', 'test@example.com');
-      window.localStorage.setItem('mealHatDatabaseTopKey', 'test-example-com');
-    });
+    // A real emulator session - the localStorage-only stub stopped signing
+    // anyone in when the app started requiring a real Firebase user.
+    const session = await emulatorSignIn();
+    await seedFirebaseSession(page, session);
 
     await page.goto('/#/add-groceries');
     await page.waitForSelector('input[placeholder="Add item to shopping list..."]', { timeout: 15000 });
@@ -102,10 +101,10 @@ test.describe('🛒 New Grocery Page Features', () => {
   });
 
   test('✅ Quantity buttons use correct colors', async ({ page }) => {
-    await page.addInitScript(() => {
-      window.localStorage.setItem('mealHatUserEmail', 'test@example.com');
-      window.localStorage.setItem('mealHatDatabaseTopKey', 'test-example-com');
-    });
+    // A real emulator session - the localStorage-only stub stopped signing
+    // anyone in when the app started requiring a real Firebase user.
+    const session = await emulatorSignIn();
+    await seedFirebaseSession(page, session);
 
     await page.goto('/#/add-groceries');
     await page.waitForTimeout(2000);
@@ -129,10 +128,10 @@ test.describe('🛒 New Grocery Page Features', () => {
   });
 
   test('✅ Input clears after successful operations', async ({ page }) => {
-    await page.addInitScript(() => {
-      window.localStorage.setItem('mealHatUserEmail', 'test@example.com');
-      window.localStorage.setItem('mealHatDatabaseTopKey', 'test-example-com');
-    });
+    // A real emulator session - the localStorage-only stub stopped signing
+    // anyone in when the app started requiring a real Firebase user.
+    const session = await emulatorSignIn();
+    await seedFirebaseSession(page, session);
 
     await page.goto('/#/add-groceries');
     await page.waitForSelector('input[placeholder="Add item to shopping list..."]', { timeout: 15000 });
@@ -151,10 +150,10 @@ test.describe('🛒 New Grocery Page Features', () => {
   });
 
   test('✅ Page maintains responsive design', async ({ page }) => {
-    await page.addInitScript(() => {
-      window.localStorage.setItem('mealHatUserEmail', 'test@example.com');
-      window.localStorage.setItem('mealHatDatabaseTopKey', 'test-example-com');
-    });
+    // A real emulator session - the localStorage-only stub stopped signing
+    // anyone in when the app started requiring a real Firebase user.
+    const session = await emulatorSignIn();
+    await seedFirebaseSession(page, session);
 
     // Test mobile viewport
     await page.setViewportSize({ width: 375, height: 667 });

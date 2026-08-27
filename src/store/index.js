@@ -1,7 +1,7 @@
 import { createStore } from 'vuex';
 import { initializeApp } from "firebase/app";
-import { getDatabase, onValue, ref, set, get, update, query, orderByChild, startAt } from "firebase/database";
-import { getAuth, GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut } from "firebase/auth";
+import { getDatabase, onValue, ref, set, get, update, query, orderByChild, startAt, connectDatabaseEmulator } from "firebase/database";
+import { getAuth, GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut, connectAuthEmulator } from "firebase/auth";
 import { v4 as uuidv4 } from 'uuid';
 import router from '@/router';
 import { analyzeDuplicates, findSimilar, aggregateMealIngredients, remapMealIngredients } from './ingredients';
@@ -49,6 +49,24 @@ const removeNaNAndUndefined = (obj) => {
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
+// The Playwright suite runs against the Firebase EMULATORS, not production.
+//
+// Two reasons, both discovered the hard way (2026-08-27). The E2E tests used
+// to fake a session with two localStorage keys; when initializeDB started
+// requiring a real Firebase user (the membership lockdown), every test landed
+// on the Login screen — and a Google popup is not something an automated
+// browser can complete. And worse: for as long as the tests DID work, they
+// were writing meals into the production database.
+//
+// The flag is compile-time (vue-cli inlines process.env.VUE_APP_*), so a
+// production build contains `if (false)` and no emulator code path exists to
+// trigger by accident. playwright.config.js sets it on the dev server it
+// starts; nothing else does.
+const useEmulators = process.env.VUE_APP_FIREBASE_EMULATORS === '1';
+if (useEmulators) {
+  connectDatabaseEmulator(db, 'localhost', 9000);
+}
+
 // Auth has to be initialized HERE, at boot, not only inside the login action.
 //
 // Sign-in state is restored from localStorage by the router's loggedIn(), which
@@ -59,6 +77,9 @@ const db = getDatabase(app);
 // returning user silently reads nothing: past the route guard, into an app with
 // no meals and no explanation.
 const auth = getAuth(app);
+if (useEmulators) {
+  connectAuthEmulator(auth, 'http://localhost:9099', { disableWarnings: true });
+}
 
 // Resolves with the restored user (or null) the first time Firebase reports auth
 // state. Restoration is asynchronous, so anything that touches the database has
@@ -523,30 +544,59 @@ export default createStore({
         return;
       }
 
-      // Check if the databaseTopKey exists in the database.
+      // Make sure the hat exists, creating it if this user is its first.
+      //
+      // The SHAPE of this matters, and the first version got it wrong in a way
+      // that locked out every genuinely new user. It read the hat and created
+      // it only when the read came back empty - but under the membership
+      // rules, reading a hat you are not a member of is DENIED, and a hat
+      // that does not exist yet has no members. So for a brand-new user the
+      // read threw, the catch logged it, and the create was never reached:
+      // a permanently empty app. Nobody noticed for a week because every
+      // existing hat was backfilled with members before the rules shipped -
+      // only a NEW account walks this path, and the first one to do so was
+      // the E2E suite's tester (2026-08-27).
+      //
+      // The write rule is the honest probe here, exactly as the rules file
+      // says: creation is allowed when the hat does not exist, and refused
+      // when it exists and you are not a member - which is the case where the
+      // user needs an invite link rather than a create.
+      //
+      // members + joinCode are written IN the create, not later. A hat with
+      // no members is readable by nobody, so creating one without claiming it
+      // would lock its own owner out on the very next load.
+      const createHat = async () => {
+        const joinCode = uuidv4().replace(/-/g, '').slice(0, 12);
+        const uid = auth.currentUser?.uid;
+
+        await set(ref(db, context.state.databaseTopKey), {
+          drawnMeals: {},
+          "meal-hats-list": [context.state.databaseTopKey],
+          meals: {},
+          "most-recent-database": context.state.databaseTopKey,
+          "shopping-list": [],
+          joinCode,
+          members: uid ? { [uid]: { joined: true, code: joinCode, email: auth.currentUser?.email || null } } : {}
+        });
+      };
+
       try {
         const snapshot = await get(ref(db, context.state.databaseTopKey));
         if (!snapshot.exists()) {
-          // If the databaseTopKey doesn't exist, create a new top-level key with an empty object.
-          // members + joinCode are written HERE, not later. Under the
-          // membership rules a hat with no members is readable by nobody, so
-          // creating one without claiming it would lock its own owner out on
-          // the very next load.
-          const joinCode = uuidv4().replace(/-/g, '').slice(0, 12);
-          const uid = auth.currentUser?.uid;
-
-          await set(ref(db, context.state.databaseTopKey), {
-            drawnMeals: {},
-            "meal-hats-list": [context.state.databaseTopKey],
-            meals: {},
-            "most-recent-database": context.state.databaseTopKey,
-            "shopping-list": [],
-            joinCode,
-            members: uid ? { [uid]: { joined: true, code: joinCode, email: auth.currentUser?.email || null } } : {}
-          });
+          await createHat();
         }
-      } catch (error) {
-        console.error('Error checking databaseTopKey: ', error);
+      } catch (readError) {
+        // Permission denied: either the hat doesn't exist (create is allowed)
+        // or it exists and this user isn't a member (create will be refused
+        // too, which is itself the answer).
+        try {
+          await createHat();
+        } catch (createError) {
+          console.warn(
+            `Hat "${context.state.databaseTopKey}" exists and this account is not a member - an invite link is needed.`,
+            readError.message
+          );
+        }
       }
 
       // If there are no meals in the state, fetch them from the database.

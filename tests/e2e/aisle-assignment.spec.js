@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { setupAuthAndDisableTutorial, navigateDirectly } = require('./test-utils.js');
+const { setupAuthAndDisableTutorial, navigateDirectly, emulatorSignIn, seedFirebaseSession } = require('./test-utils.js');
 
 /**
  * AISLE ASSIGNMENT TESTS
@@ -41,10 +41,10 @@ test.describe.serial('🏪 Aisle Assignment Functionality', () => {
 
   test('✅ Should assign aisle when creating new grocery item', async ({ page }) => {
     // Use same auth pattern as working tests
-    await page.addInitScript(() => {
-      window.localStorage.setItem('mealHatUserEmail', 'test@example.com');
-      window.localStorage.setItem('mealHatDatabaseTopKey', 'test-example-com');
-    });
+    // A real emulator session - the localStorage-only stub stopped signing
+    // anyone in when the app started requiring a real Firebase user.
+    const session = await emulatorSignIn();
+    await seedFirebaseSession(page, session);
 
     await page.goto('/#/add-groceries');
     await page.waitForSelector('input[placeholder="Add item to shopping list..."]', { timeout: 15000 });
@@ -63,10 +63,10 @@ test.describe.serial('🏪 Aisle Assignment Functionality', () => {
 
   test('✅ Should edit aisle on shopping list and persist', async ({ page }) => {
     // Use same auth pattern as working tests
-    await page.addInitScript(() => {
-      window.localStorage.setItem('mealHatUserEmail', 'test@example.com');
-      window.localStorage.setItem('mealHatDatabaseTopKey', 'test-example-com');
-    });
+    // A real emulator session - the localStorage-only stub stopped signing
+    // anyone in when the app started requiring a real Firebase user.
+    const session = await emulatorSignIn();
+    await seedFirebaseSession(page, session);
 
     // Navigate to shopping list page
     await page.goto('/#/shopping-list');
@@ -84,10 +84,10 @@ test.describe.serial('🏪 Aisle Assignment Functionality', () => {
 
   test('✅ Should complete full aisle workflow: create → draw → edit', async ({ page }) => {
     // Use same auth pattern as working tests
-    await page.addInitScript(() => {
-      window.localStorage.setItem('mealHatUserEmail', 'test@example.com');
-      window.localStorage.setItem('mealHatDatabaseTopKey', 'test-example-com');
-    });
+    // A real emulator session - the localStorage-only stub stopped signing
+    // anyone in when the app started requiring a real Firebase user.
+    const session = await emulatorSignIn();
+    await seedFirebaseSession(page, session);
 
     // Step 1: Verify meal creation page supports aisle assignment
     await page.goto('/#/add-meal');
@@ -117,10 +117,10 @@ test.describe.serial('🏪 Aisle Assignment Functionality', () => {
 
   test('✅ Should handle aisle persistence across page refreshes', async ({ page }) => {
     // Use same auth pattern as working tests
-    await page.addInitScript(() => {
-      window.localStorage.setItem('mealHatUserEmail', 'test@example.com');
-      window.localStorage.setItem('mealHatDatabaseTopKey', 'test-example-com');
-    });
+    // A real emulator session - the localStorage-only stub stopped signing
+    // anyone in when the app started requiring a real Firebase user.
+    const session = await emulatorSignIn();
+    await seedFirebaseSession(page, session);
 
     // Navigate to grocery page and verify aisle functionality exists
     await page.goto('/#/add-groceries');

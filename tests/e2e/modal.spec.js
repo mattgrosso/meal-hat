@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { emulatorSignIn, seedFirebaseSession } = require('./test-utils.js');
 
 /**
  * Regression guard for the shopping-list "add new item" modal freeze.
@@ -12,10 +13,10 @@ const { test, expect } = require('@playwright/test');
 
 test.describe('Shopping list new-item modal', () => {
   test.beforeEach(async ({ page }) => {
-    await page.addInitScript(() => {
-      window.localStorage.setItem('mealHatUserEmail', 'test@example.com');
-      window.localStorage.setItem('mealHatDatabaseTopKey', 'test-example-com');
-    });
+    // A real emulator session - the localStorage-only stub stopped signing
+    // anyone in when the app started requiring a real Firebase user.
+    const session = await emulatorSignIn();
+    await seedFirebaseSession(page, session);
     await page.goto('/#/shopping-list');
     await page.waitForSelector('input[placeholder="Add item to shopping list..."]', { timeout: 15000 });
   });

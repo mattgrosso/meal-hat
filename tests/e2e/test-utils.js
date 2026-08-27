@@ -1,22 +1,122 @@
 const { expect } = require('@playwright/test');
+const fs = require('fs');
+const path = require('path');
 
 /**
- * Reliable test utilities for Meal Hat app
- * These functions handle authentication and tutorial issues consistently
+ * Test utilities for the Meal Hat E2E suite.
+ *
+ * AUTH IS REAL HERE, AGAINST THE EMULATOR. This file used to fake a session
+ * with two localStorage keys, which worked only while the app trusted
+ * localStorage. Since the membership lockdown, initializeDB checks
+ * auth.currentUser and signs out anyone Firebase doesn't recognise - so every
+ * test landed on the Login screen (2026-08-27, the whole suite red).
+ *
+ * Now: the suite runs against the Firebase Auth + Database EMULATORS
+ * (playwright.config.js starts them and starts the dev server with
+ * VUE_APP_FIREBASE_EMULATORS=1). Each run signs a tester into the auth
+ * emulator over REST and seeds the browser's IndexedDB with the resulting
+ * session - the same record the SDK itself writes - so the app boots already
+ * signed in. No Google popup, no production database, no credentials on disk.
  */
+
+const TEST_EMAIL = 'test@example.com';
+const TEST_PASSWORD = 'test-password';
+const TEST_HAT_KEY = 'test-example-com';
+const AUTH_EMULATOR = 'http://localhost:9099';
+
+// The app's real web API key - the IndexedDB record is keyed by it, so it has
+// to match what the app initializes with. Read from .env the way vue-cli does.
+const API_KEY = (() => {
+  const env = fs.readFileSync(path.join(__dirname, '..', '..', '.env'), 'utf8');
+  const line = env.split('\n').find((l) => l.startsWith('VUE_APP_GOOGLE_API_KEY='));
+  if (!line) throw new Error('VUE_APP_GOOGLE_API_KEY missing from .env');
+  return line.slice('VUE_APP_GOOGLE_API_KEY='.length).trim();
+})();
+
+/**
+ * A real session from the auth emulator: sign the tester up (or in, on every
+ * run after the first) and hand back the SDK-shaped tokens.
+ */
+async function emulatorSignIn () {
+  const call = async (endpoint) => {
+    const res = await fetch(`${AUTH_EMULATOR}/identitytoolkit.googleapis.com/v1/accounts:${endpoint}?key=${API_KEY}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: TEST_EMAIL, password: TEST_PASSWORD, returnSecureToken: true })
+    });
+    return res.json();
+  };
+
+  let session = await call('signUp');
+  if (session.error?.message === 'EMAIL_EXISTS') session = await call('signInWithPassword');
+  if (!session.idToken) {
+    throw new Error(`Auth emulator sign-in failed: ${JSON.stringify(session).slice(0, 200)} - is the emulator running?`);
+  }
+  return session;
+}
+
+/**
+ * Seeds the browser with the signed-in session BEFORE the app loads.
+ *
+ * The Firebase SDK persists its session in IndexedDB
+ * (firebaseLocalStorageDb/firebaseLocalStorage) keyed by
+ * `firebase:authUser:<apiKey>:[DEFAULT]`; writing the same record the SDK
+ * would have written makes the app restore the tester exactly as it would a
+ * person. Fragile against major SDK upgrades by nature - if a Firebase bump
+ * ever turns the whole suite red at the login screen again, look here first.
+ */
+async function seedFirebaseSession (page, session) {
+  const record = {
+    uid: session.localId,
+    email: TEST_EMAIL,
+    emailVerified: true,
+    isAnonymous: false,
+    providerData: [{
+      providerId: 'password',
+      uid: TEST_EMAIL,
+      displayName: null,
+      email: TEST_EMAIL,
+      phoneNumber: null,
+      photoURL: null
+    }],
+    stsTokenManager: {
+      refreshToken: session.refreshToken,
+      accessToken: session.idToken,
+      expirationTime: Date.now() + 55 * 60 * 1000
+    },
+    createdAt: String(Date.now()),
+    lastLoginAt: String(Date.now()),
+    apiKey: API_KEY,
+    appName: '[DEFAULT]'
+  };
+
+  await page.addInitScript(({ apiKey, user }) => {
+    // Authentication state the ROUTER reads (its guard runs before Firebase
+    // has restored anything).
+    window.localStorage.setItem('mealHatUserEmail', user.email);
+    window.localStorage.setItem('mealHatDatabaseTopKey', 'test-example-com');
+    // Tutorial off, as before.
+    window.localStorage.setItem('mealHat-tutorial-completed', 'true');
+
+    // The session the FIREBASE SDK reads.
+    const open = indexedDB.open('firebaseLocalStorageDb', 1);
+    open.onupgradeneeded = () => {
+      open.result.createObjectStore('firebaseLocalStorage', { keyPath: 'fbase_key' });
+    };
+    open.onsuccess = () => {
+      const tx = open.result.transaction('firebaseLocalStorage', 'readwrite');
+      tx.objectStore('firebaseLocalStorage').put({
+        fbase_key: `firebase:authUser:${apiKey}:[DEFAULT]`,
+        value: user
+      });
+    };
+  }, { apiKey: API_KEY, user: record });
+}
 
 // Set up authentication and disable tutorial completely
 async function setupAuthAndDisableTutorial (page) {
-  // Set up authentication and tutorial state BEFORE navigating
-  await page.addInitScript(() => {
-    // Authentication
-    window.localStorage.setItem('mealHatUserEmail', 'test@example.com');
-    window.localStorage.setItem('mealHatDatabaseTopKey', 'test-example-com');
-
-    // Disable tutorial by setting it as already completed
-    // This should prevent it from showing up at all
-    window.localStorage.setItem('mealHat-tutorial-completed', 'true');
-  });
+  const session = await emulatorSignIn();
+  await seedFirebaseSession(page, session);
 
   // Navigate to app
   await page.goto('/');
@@ -83,10 +183,8 @@ async function dismissTutorialIfPresent (page) {
 
 // Navigate directly to a page bypassing home page tutorial
 async function navigateDirectly (page, path) {
-  await page.addInitScript(() => {
-    window.localStorage.setItem('mealHatUserEmail', 'test@example.com');
-    window.localStorage.setItem('mealHatDatabaseTopKey', 'test-example-com');
-  });
+  const session = await emulatorSignIn();
+  await seedFirebaseSession(page, session);
 
   await page.goto(`/#${path}`);
 
@@ -163,6 +261,8 @@ async function safeClick (page, selector) {
 }
 
 module.exports = {
+  emulatorSignIn,
+  seedFirebaseSession,
   setupAuthAndDisableTutorial,
   dismissTutorialIfPresent,
   navigateDirectly,

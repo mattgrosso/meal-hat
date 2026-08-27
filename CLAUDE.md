@@ -25,6 +25,38 @@ drawn meals' ingredients.
 - `yarn build` — production build into `dist/` (runs an interactive version bump first; see Deploy gotcha)
 - `yarn lint` — eslint (vue3-essential + @vue/standard) + stylelint
 - `yarn test` / `yarn test:headed` / `yarn test:report` — Playwright
+
+## The E2E suite runs against the Firebase EMULATORS
+
+Since 2026-08-27. `playwright.config.js` starts the Auth + Database emulators
+(the database one runs on brew's keg-only openjdk — `/usr/bin/java` is only
+Apple's "install a runtime" stub) and a dev server on **port 8085** with
+`VUE_APP_FIREBASE_EMULATORS=1`, which is what makes `src/store/index.js`
+point the SDK at localhost. The flag is compile-time, so production builds
+contain no emulator path at all.
+
+Why: the suite used to fake a session with two localStorage keys. When the
+membership lockdown made `initializeDB` require a real Firebase user, every
+test landed on the Login screen — and for as long as the fake HAD worked, the
+tests were writing meals into the **production** database. Now
+`tests/e2e/test-utils.js` signs a real tester into the auth emulator over
+REST and seeds the browser's IndexedDB with the same session record the SDK
+writes (`emulatorSignIn` / `seedFirebaseSession`). If a Firebase SDK upgrade
+ever turns the whole suite red at the login screen, that seeding record's
+shape is the first suspect.
+
+Port 8085 on purpose: Matt keeps another app's dev server running on 8080,
+and with `reuseExistingServer` the suite would silently test whatever app
+answered there.
+
+**Fixing the suite exposed a real production bug**: a brand-new user's hat
+was never created. `initializeDB` read the hat and created it only if the
+read came back empty — but reading a hat you're not a member of is DENIED,
+and a hat that doesn't exist has no members, so a new user's read always
+threw and the create was unreachable. Invisible until now because every
+existing hat was backfilled with members before the rules shipped. The fix
+probes with the WRITE (allowed when `!data.exists()`, refused when the hat
+exists and you're not a member — which is exactly the invite-link case).
 - `yarn deploy` — build + ship to AWS (see Deploy)
 
 ## Architecture

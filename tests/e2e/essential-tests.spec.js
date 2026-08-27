@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { setupAuthAndDisableTutorial, navigateDirectly } = require('./test-utils.js');
+const { setupAuthAndDisableTutorial, navigateDirectly, emulatorSignIn, seedFirebaseSession } = require('./test-utils.js');
 
 /**
  * ESSENTIAL SAFETY NET TESTS
@@ -9,10 +9,11 @@ const { setupAuthAndDisableTutorial, navigateDirectly } = require('./test-utils.
 
 test.describe('🛡️ Essential Safety Net for Data Refactoring', () => {
   test('✅ Authentication works and app loads', async ({ page }) => {
-    await page.addInitScript(() => {
-      window.localStorage.setItem('mealHatUserEmail', 'test@example.com');
-      window.localStorage.setItem('mealHatDatabaseTopKey', 'test-example-com');
-    });
+    // A REAL emulator session, not the old localStorage-only stub - the app
+    // rightly signs out anyone whose localStorage claims a login Firebase
+    // doesn't back, so the stub now tests a path that must fail.
+    const session = await emulatorSignIn();
+    await seedFirebaseSession(page, session);
 
     await page.goto('/');
     await page.waitForSelector('text=Meal Hat', { timeout: 15000 });
@@ -148,11 +149,9 @@ test.describe('🛡️ Essential Safety Net for Data Refactoring', () => {
   });
 
   test('✅ Direct URL navigation works with auth', async ({ page }) => {
-    // Test authentication works for direct navigation
-    await page.addInitScript(() => {
-      window.localStorage.setItem('mealHatUserEmail', 'test@example.com');
-      window.localStorage.setItem('mealHatDatabaseTopKey', 'test-example-com');
-    });
+    // Same real session as above; direct navigation has to survive it too.
+    const session = await emulatorSignIn();
+    await seedFirebaseSession(page, session);
 
     const directUrls = ['/', '/add-meal', '/show-meals', '/draw-meals'];
 
