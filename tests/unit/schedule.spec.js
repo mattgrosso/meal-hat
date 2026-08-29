@@ -244,14 +244,22 @@ describe('nextMealId', () => {
   });
 
   it('is not fooled late in the evening either', () => {
-    // Past dinner, so tonight's meal is done and tomorrow is next.
-    expect(nextMealId(meals, new Date(2026, 7, 24, 23, 45))).toBe('tue');
+    expect(nextMealId(meals, new Date(2026, 7, 24, 23, 45))).toBe('mon');
   });
 
-  // Tonight's dinner stops being "next" once you have presumably eaten it.
-  it('moves on after 6pm', () => {
+  // Matt, 2026-08-28: "it's telling me tomorrow but it should be telling me
+  // today" - filed at 6:41pm, against a rule that moved the highlight on at
+  // 18:00 sharp. Today's meal now holds it until midnight; see nextMealId's
+  // own note for why the old rule went.
+  it("keeps today's meal highlighted all evening", () => {
     expect(nextMealId(meals, new Date(2026, 7, 24, 17, 59))).toBe('mon');
-    expect(nextMealId(meals, new Date(2026, 7, 24, 18, 0))).toBe('tue');
+    expect(nextMealId(meals, new Date(2026, 7, 24, 18, 0))).toBe('mon');
+    expect(nextMealId(meals, new Date(2026, 7, 24, 18, 41))).toBe('mon');
+    expect(nextMealId(meals, new Date(2026, 7, 24, 23, 59))).toBe('mon');
+  });
+
+  it('rolls over to the next meal at midnight, not before', () => {
+    expect(nextMealId(meals, new Date(2026, 7, 25, 0, 0))).toBe('tue');
   });
 
   it('skips meals already in the past', () => {

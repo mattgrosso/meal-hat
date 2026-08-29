@@ -185,21 +185,29 @@ export function datesInRange (start, end) {
  * This lives in the store rather than the component so it can be tested
  * directly, which is how the bug would have been caught.
  *
- * The 6pm rule is kept: tonight's dinner stops being "next" once you have
- * presumably eaten it.
+ * THE 6PM RULE IS GONE (Matt, 2026-08-28): "the homepage where it highlights
+ * what today's meal is is incorrect, it's telling me tomorrow but it should
+ * be telling me today." Filed at 6:41pm — which was the old rule working as
+ * designed, and the design being wrong.
+ *
+ * The rule was that tonight's dinner stopped being "next" at 18:00, on the
+ * theory you had presumably eaten it. It predates the timezone fix above and
+ * was invisible until then, because the highlight was a day ahead at every
+ * hour anyway. Two things are wrong with it. Dinner at 6pm sharp is an
+ * assumption the app has no business making, and more to the point this
+ * highlight answers "what's for dinner today" — a question that stays true
+ * until the day ends, whether or not you've eaten. So today's meal now holds
+ * the highlight until midnight.
  */
-export const DINNER_HOUR = 18;
-
 export function nextMealId (meals, now = new Date()) {
   const today = todayISO(now);
-  const eatenAlready = now.getHours() >= DINNER_HOUR;
 
   const upcoming = [...(meals || [])]
     .sort(compareByDate)
     .find((meal) => {
       const date = toISODate(meal && meal.assignedDate);
       if (!date) return false;
-      return date > today || (date === today && !eatenAlready);
+      return date >= today;
     });
 
   return upcoming ? upcoming.id : null;
