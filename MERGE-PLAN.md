@@ -81,6 +81,37 @@ you put a timer on but never shop for. The unified record must allow a food
 that exists only as a fridge item, so "is a shopping item" and "has a shelf
 life" are independent properties of one record, not two record types.
 
+## Status
+
+Phases 1–6a are done, committed on `perishable-merge`, 317 tests green, lint
+and production build clean. The database migration is APPLIED and the fridge
+rules are DEPLOYED and verified.
+
+What remains is deploying, and it needs Matt's hand — the permission classifier
+blocks these:
+
+```sh
+# 1. The scan Lambda. Zip is already built by the phase-5 work; rebuild with:
+#    cp -R ../perishable/aws-lambda/node_modules /tmp/lambda-build/ etc.
+aws lambda update-function-code \
+  --function-name perishable-vision \
+  --zip-file fileb://<zip> \
+  --profile personal --region us-east-1
+
+# 2. Catch any drift since the migration snapshot, THEN deploy the app.
+node scripts/migrate-fridge.mjs --apply --refresh
+yarn deploy
+```
+
+Then re-point the wall tablet at
+`https://mealhat.com/?k=<key>#/fridge`, confirm it for a few days, and retire
+perishable (S3 bucket `mjg-perishable`, CloudFront `E2L8H4V8SWBBGF`, and the
+`perishable-df421` Firebase project, whose `households/` node is the last
+backup of the timers).
+
+Not done, and deliberately so: nothing has been deleted anywhere. Perishable
+still runs and its database is untouched.
+
 ## Phases
 
 1. **Pure libs.** `timers`, `history`, `scanReview`, `crop`, `photo`, `scan`,

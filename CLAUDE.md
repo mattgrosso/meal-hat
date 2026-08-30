@@ -367,6 +367,105 @@ and for repairing a stale feed. It prints the URL to paste into the mirror.
 The mirror end is the `magic-mirror` repo: `src/mealHatFeed.js` holds the URL
 and the date helpers, `src/App.vue`'s `getUpcomingMeals` reads the feed.
 
+## The fridge (merged in from Perishable, 2026-08-29)
+
+Countdown timers for things that go off, on a `/fridge` route. Two surfaces:
+the **kitchen wall tablet** (a Galaxy in Fully Kiosk, glanced at from across
+the room) and the **phone** (a capture surface — camera first). Split by
+viewport width in `utils/fridge/viewMode.js`; `?view=wall` pins it.
+
+**Do NOT change the wall display's look without asking.** Matt likes it as it
+is. That constraint survived the merge intact and is the reason for most of
+the styling care below.
+
+### The wall tablet cannot log in, and cannot read the catalog
+
+Both facts drive the whole design.
+
+Google's popup refuses to run in a kiosk WebView, and a session that lapses on
+a wall display fails silently — a blank kitchen screen nobody notices for a
+week. So the fridge authorizes by **capability key in the path**:
+`fridge/<32-char-secret>`. Knowing the key IS the authorization, because RTDB
+rules have nowhere to receive a credential as a parameter. `auth != null` rides
+alongside, satisfied by a silent **anonymous** session (`ensureSession()` in
+`src/firebase.js`) — the one kind a kiosk can get, with no popup and nothing to
+lapse. The anonymous session grants nothing on its own; the key is still what
+picks the fridge.
+
+`/fridge` is therefore the only route besides `/login` with
+`requiresLogin: false`. That is not a hole: without a valid key it renders its
+own loud NOT-CONNECTED screen and reads nothing.
+
+**THE KEY MUST STAY IN THE URL.** Perishable stripped it after storing it, for
+tidiness, and on 2026-08-26 both devices lost their storage and neither could
+get back in. `adoptFridgeKey` leaves it in the address bar and puts it BACK
+when a load arrives without it — and, because this app routes on the hash, it
+must preserve `location.hash` too. The kiosk URL is `/?k=<key>#/fridge`;
+rebuilding it as `pathname?query` drops `#/fridge` and lands the tablet on Home.
+
+The tablet is a member of no hat, so it can **never** read
+`<hat>/grocery-catalog`. Hence `fridge/<key>/templates`: a projection of the
+catalog's shelf lives, published by the signed-in app — the same arrangement as
+the Magic Mirror feed, for the same reason.
+
+### Two copies of a shelf life, and how they stay honest
+
+The catalog is authoritative. Templates are the wall-readable cache. But the
+wall also WRITES — a scan teaches a shelf life — so it is a two-way sync, and
+`src/store/fridge/reconcile.js` is the merge.
+
+A two-way sync needs a base to tell "they changed it" from "we changed it".
+That is **`shelfLifeSyncedDays`** on the catalog entry: the value both sides
+last agreed on. Each side's edit is then attributable alone, and only a genuine
+simultaneous edit is a conflict. When both moved, **the fridge wins** — someone
+stood in the kitchen and confirmed a real date — and it is logged rather than
+swallowed.
+
+`reconcileCatalog` runs only for a signed-in client, and only once BOTH
+subscriptions have landed. Either can arrive second, and reconciling against a
+half-loaded catalog reads every food as new.
+
+### The food record
+
+One record. `shelfLifeDays` sits beside `defaultUnits`, `defaultAisle`,
+`staple` and the rest. **`fridgeOnly: true`** marks a food that lives in the
+fridge but is never shopped for — `Leftover pizza`, `Leftover chinese`.
+
+That flag is inferred ONLY from a "leftover" prefix. The tempting rule — "any
+template with no catalog entry is fridge-only" — would have hidden Grapes,
+Potatoes, Watermelon, English muffins and nine other ordinary groceries.
+Wrongly hiding something from the shopping list is the expensive direction,
+which is the same reasoning that makes every uncertain staple resolve to "on
+the list".
+
+### Styling is scoped, and must stay that way
+
+Perishable owned its whole page and styled `body` and `*` from an unscoped
+sheet. Here the body-level rules hang off a **`fridge-active`** class that
+`Fridge.vue`'s mounted/beforeUnmount add and remove, and everything else nests
+under `.fridge-app`. It all rides in the lazy-loaded fridge chunk, so no other
+screen pays for it. Break the scoping and every meal-hat screen turns black and
+starts fighting Bootstrap's reboot.
+
+### The scan endpoint
+
+`aws-lambda/perishable-vision.js` (the file name is the Lambda's configured
+handler — renaming it breaks the function). Deployed with the **`personal`** AWS
+profile; `personal-deploy` has no Lambda permissions.
+
+**Its key check reads the database, so that read must be authenticated.** It
+was a bare unauthenticated GET, which worked only while the node was open to
+anyone. When every path started requiring `auth != null` the read began
+returning 401 for EVERY key — verification failed for everybody and every scan
+was rejected before reaching the model, with nothing logging it as a fault.
+Scanning simply stopped working. The client now sends its Firebase ID token
+beside the capability key (`X-Firebase-Token`) and it rides on the read as
+`?auth=`. Both the submit AND the poll carry it; omitting it on the poll
+strands a job already paid for. `tests/unit/fridge/scan.spec.js` fences this.
+
+The token is fetched per scan, never held: Firebase tokens last an hour and a
+wall tablet sits on this page for weeks.
+
 ## Bug reports
 
 In-app reports go to a top-level `bugReports/` node, outside any hat, and the
