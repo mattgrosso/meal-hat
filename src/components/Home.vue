@@ -25,13 +25,27 @@
           Draw Meals
         </router-link>
       </div>
+      <!-- The fridge button appears only for a hat that HAS a fridge.
+           `fridgeKeyForHat` is null for the other twelve accounts, and a button
+           that lands them on the NOT-CONNECTED screen would turn an opt-in
+           feature into a broken one. Shopping List takes the full width on its
+           own when there is no fridge, exactly as before. -->
       <div class="btn-group mt-2" role="group">
         <router-link
           to="/shopping-list"
-          class="btn btn-success w-100"
+          class="btn btn-success"
+          :class="{ 'w-100': !hasFridge }"
           data-step="4"
         >
           Shopping List
+        </router-link>
+        <router-link
+          v-if="hasFridge"
+          to="/fridge"
+          class="btn btn-secondary"
+          data-step="7"
+        >
+          Fridge
         </router-link>
       </div>
       <DrawnMealSchedule />
@@ -67,6 +81,11 @@ export default {
   computed: {
     showTutorial () {
       return this.$store.state.showTutorial;
+    },
+    // The hat's fridgeKey pointer, which only its members can read. Null is the
+    // normal answer — most hats have no fridge.
+    hasFridge () {
+      return Boolean(this.$store.state.fridgeKeyForHat);
     }
   },
   methods: {
@@ -181,6 +200,32 @@ export default {
           }
         ]
       });
+
+      // Only when the button is on screen. The anchor is behind the same
+      // v-if, and Shepherd does not complain about a step pointing at nothing —
+      // it just floats it in the middle of the screen aimed at empty space.
+      if (this.hasFridge) {
+        tour.addStep({
+          title: 'Click here to see what\'s in the fridge.',
+          text: 'Countdown timers for everything that goes off. Photograph your shopping — or a receipt, or the inside of the fridge — and it works out what it\'s looking at and starts the clocks.<br>The shopping list reads from here too, so a staple you can prove you still have stops appearing on it.',
+          attachTo: {
+            element: '[data-step="7"]',
+            on: 'bottom'
+          },
+          buttons: [
+            {
+              text: 'Back',
+              action: tour.back,
+              classes: 'btn-secondary btn btn-sm'
+            },
+            {
+              text: 'Next',
+              action: tour.next,
+              classes: 'btn-success btn btn-sm'
+            }
+          ]
+        });
+      }
 
       tour.addStep({
         title: 'The Header',
