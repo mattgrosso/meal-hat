@@ -243,6 +243,25 @@
           </div>
           <p class="edit-hint">Leave blank for the default of {{ defaultStapleInterval }} days.</p>
         </div>
+
+        <!-- How much of this food comes in one package.
+             This is the bridge between a recipe and the fridge. Meal quantities
+             are recorded in whatever unit suits the recipe — 28 for a can of
+             tomato sauce, meaning 28 OUNCES — while the fridge holds physical
+             packages. One number per food reconciles them, and without it
+             checking a meal off has to assume a whole package. -->
+        <div class="col-12">
+          <label class="form-label">One package contains</label>
+          <div class="input-group">
+            <input type="number" min="0" step="any" class="form-control" v-model="editForm.packageSize" placeholder="1">
+            <span class="input-group-text">{{ editForm.defaultUnits || 'units' }}</span>
+          </div>
+          <p class="edit-hint">
+            What one package holds, in the units your recipes use for it. A
+            28&nbsp;oz can of tomato sauce is 28. A box of orzo you use one of
+            is 1.
+          </p>
+        </div>
       </div>
     </AppModal>
 
@@ -713,7 +732,8 @@ export default {
         defaultAisle: entry.defaultAisle ?? '',
         defaultLocation: entry.defaultLocation || null,
         staple: Boolean(entry.staple),
-        stapleIntervalDays: entry.stapleIntervalDays || ''
+        stapleIntervalDays: entry.stapleIntervalDays || '',
+        packageSize: entry.packageSize || ''
       };
     },
     closeGroceryEditor () {
@@ -730,6 +750,7 @@ export default {
       if (!name) return;
 
       const interval = Number(this.editForm.stapleIntervalDays);
+      const packageSize = Number(this.editForm.packageSize);
 
       this.$store.dispatch('updateDBValue', {
         path: `grocery-catalog/${entry.id}`,
@@ -742,7 +763,10 @@ export default {
           staple: Boolean(this.editForm.staple),
           // Only persisted when it is a real override; otherwise the default
           // applies and the field stays empty next time it is opened.
-          stapleIntervalDays: this.editForm.staple && interval > 0 ? interval : null
+          stapleIntervalDays: this.editForm.staple && interval > 0 ? interval : null,
+          // Same rule: blank means "unknown", which is not the same as 1.
+          // Checking a meal off says out loud when it had to assume.
+          packageSize: packageSize > 0 ? packageSize : null
         }
       });
 

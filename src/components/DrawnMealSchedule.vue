@@ -23,6 +23,7 @@
             <span class="">
               {{ element.meal.name }}
             </span>
+            <button class="btn btn-sm btn-success made-button" @click.stop="openCookedSheet(element)">Made it</button>
             <button class="btn btn-sm btn-warning delete-button" @click.stop="deleteMeal(element)">Delete</button>
             <i v-if="selectedMeal.id !== element.id" class="bi bi-grip-vertical"/>
           </li>
@@ -30,11 +31,21 @@
       </draggable>
     </div>
     <p v-else>No meals have been drawn yet.</p>
+
+    <!-- Nothing is written until this is confirmed. Checking a meal off can
+         clear timers, and clearing is the one thing this app will not do
+         quietly. -->
+    <MealCookedSheet
+      v-if="cookingMeal"
+      :meal="cookingMeal"
+      @close="cookingMeal = null"
+    />
   </div>
 </template>
 
 <script>
 import draggable from 'vuedraggable';
+import MealCookedSheet from '@/components/MealCookedSheet.vue';
 import {
   toISODate, fromISODate, withDrawnDate, nextMealId
 } from '@/store/schedule';
@@ -42,12 +53,16 @@ import {
 export default {
   name: 'DrawnMealSchedule',
   components: {
+    MealCookedSheet,
     draggable
   },
   data () {
     return {
       selectedMeal: {},
-      drag: false
+      drag: false,
+      // The meal whose "made it" sheet is open, or null. Holds the MEAL, not
+      // the drawn row: the plan is about the recipe's ingredients.
+      cookingMeal: null
     }
   },
   computed: {
@@ -141,6 +156,12 @@ export default {
         this.selectedMeal = drawnMeal;
       }
     },
+    openCookedSheet (drawnMeal) {
+      // `element.meal` is resolved from the hat by the drawnMeals computed; a
+      // drawn row whose meal has since been deleted has nothing to consume.
+      if (!drawnMeal || !drawnMeal.meal) return;
+      this.cookingMeal = drawnMeal.meal;
+    },
     async deleteMeal (drawnMeal) {
       const isoDate = toISODate(drawnMeal.assignedDate);
       const meal = drawnMeal.meal;
@@ -225,12 +246,28 @@ export default {
             padding: 8px 6px 8px 12px;
             position: relative;
 
-            &.hide-delete .delete-button{
+            &.hide-delete .delete-button,
+            &.hide-delete .made-button {
               width: 0;
               padding: 0;
               border: 0;
               pointer-events: none;
               opacity: 0;
+            }
+
+            // Same reveal as Delete, so tapping a row shows both actions and
+            // the meal name keeps its width until then.
+            .made-button {
+              width: 80px;
+              margin-right: 4px;
+              transition: all 0.10s ease-out;
+              white-space: nowrap;
+              display: flex;
+              justify-content: center;
+              align-items: center;
+              line-height: 1;
+              opacity: 1;
+              overflow: hidden;
             }
 
             .delete-button {

@@ -447,6 +447,43 @@ under `.fridge-app`. It all rides in the lazy-loaded fridge chunk, so no other
 screen pays for it. Break the scoping and every meal-hat screen turns black and
 starts fighting Bootstrap's reboot.
 
+### Checking a meal off
+
+"Made it" on a schedule row opens a sheet, and the sheet is the point: cooking a
+meal can CLEAR timers, and clearing is the one thing this app will not do
+quietly. The plan shown is literally the plan applied (`planMealConsumption` is
+pure and returns it), so what you agreed to and what happens cannot drift.
+
+**`packageSize` is the bridge, and it exists because the units do not line up.**
+A meal ingredient is `{ groceryItemId, quantity }` with no unit of its own, and
+across real meals those quantities are not one kind of thing:
+
+    1  Ziti          (Pound)  package count
+    2  Mozzarella    (cups)   recipe measure
+    13 Ricotta       (Oz)     recipe measure
+    28 Tomato Sauce  (can)    28 OUNCES, mislabelled as cans
+    24 Cottage cheese ()      no unit at all
+
+So a timer cannot just hold "quantity" and have meals subtract from it — buying
+one can of tomato sauce and subtracting 28 would clear a can that was exactly
+right. `packageSize` says how much of a food comes in one package, in whatever
+unit that food's recipes already use (Tomato Sauce 28, Mozzarella 2, Ricotta
+15, a Box of orzo 1). Timers then hold PACKAGES, and every comparison happens
+inside one food's own unit. No meal had to be re-recorded.
+
+Unknown `packageSize` assumes one whole package and **says so in the sheet**. A
+guess that clears a timer has to be visible before it happens.
+
+Two rules carried over from the scan flow: a food with no timer is reported and
+never acted on (no record ≠ you are out of it), and wanting more than the fridge
+holds clamps at zero and reports the shortfall rather than going negative.
+
+Confirming also writes `lastCooked`, which `mealWeight` prefers over the drawn
+date. Being drawn is a plan; being cooked is what happened. A meal drawn and
+then skipped used to count as recent anyway, so the meals most often skipped
+were the ones the hat kept skipping. Meals with no `lastCooked` fall back to the
+drawn dates and behave exactly as before.
+
 ### The scan endpoint
 
 `aws-lambda/perishable-vision.js` (the file name is the Lambda's configured

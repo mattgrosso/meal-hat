@@ -735,6 +735,26 @@ export default createStore({
       const valueWithId = { ...dbEntry.value, id: `${timestamp}-${uuid}` };
       return set(ref(db, `${context.state.databaseTopKey}/${dbEntry.path}/${timestamp}-${uuid}`), removeNaNAndUndefined(valueWithId));
     },
+    // Record that a meal was ACTUALLY cooked, not merely drawn.
+    //
+    // The draw weights by how overdue a meal is, and it used to read the drawn
+    // date — a plan, not an event. A meal drawn onto Tuesday and then not made
+    // still counted as recent and stayed unlikely for its whole interval, so
+    // the meals most often skipped were the ones the hat kept skipping.
+    //
+    // Written per-key rather than by writing the meal back whole: meals are a
+    // shared collection and someone else may be editing the same one.
+    async markMealCooked (context, { mealId, date }) {
+      if (!context.state.databaseTopKey || !mealId || !date) return;
+
+      // Meals are stored as a MAP keyed by the meal's own uuid — `state.meals`
+      // is an array only because the subscription flattens it. Writing by array
+      // index would land on whatever meal happened to sort into that slot.
+      return update(ref(db, `${context.state.databaseTopKey}/meals/${mealId}`), {
+        lastCooked: date
+      });
+    },
+
     async updateDBValue (context, dbEntry) {
       return set(ref(db, `${context.state.databaseTopKey}/${dbEntry.path}`), removeNaNAndUndefined(dbEntry.value));
     },

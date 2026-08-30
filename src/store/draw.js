@@ -44,7 +44,20 @@ function daysBetween (fromISO, toISO) {
 export function mealWeight (meal, isoDate) {
   if (!meal) return 0;
 
-  const lastDrawn = toISODate((meal.drawnDates || [])[0]) || toISODate(meal.lastDrawn);
+  // WHEN IT WAS ACTUALLY COOKED beats when it was drawn.
+  //
+  // Being drawn is a plan; being cooked is what happened. A meal drawn onto
+  // Tuesday and then not made — takeaway, leftovers, a night out — used to
+  // count as recent anyway and stayed unlikely for its whole interval, so the
+  // meals most often skipped were the ones the hat kept skipping. Checking a
+  // meal off records `lastCooked`, and that is the honest input.
+  //
+  // Falls back to the drawn dates, so every meal that predates check-off
+  // behaves exactly as it did before.
+  const lastCooked = toISODate(meal.lastCooked);
+  const lastDrawn = lastCooked ||
+    toISODate((meal.drawnDates || [])[0]) ||
+    toISODate(meal.lastDrawn);
 
   // Never drawn, or a date we cannot read: as overdue as it gets. A meal added
   // and never eaten should be a strong candidate, not an average one.

@@ -262,6 +262,50 @@ export default {
       }
     },
 
+    // Apply a consumption plan that a person has already confirmed.
+    //
+    // Takes the plan rather than the meal on purpose. Planning is pure and
+    // shown before anything happens (see consume.js); this only performs what
+    // was on screen, so what you agreed to and what gets written cannot drift.
+    //
+    // Every change lands in the change log. A depleted timer clearing itself is
+    // the one place this app removes something without being asked, so it had
+    // better be able to say what happened and why.
+    async applyConsumption ({ state, dispatch }, { plan, mealName = '' } = {}) {
+      if (!state.fridgeKey || !plan?.uses?.length) return
+
+      for (const use of plan.uses) {
+        try {
+          if (use.clears) {
+            await remove(ref(db, `${timersPath(state.fridgeKey)}/${use.timerId}`))
+            dispatch('recordHistory', {
+              action: 'used up',
+              title: use.name,
+              detail: mealName ? `made ${mealName}` : '',
+              source: 'meal'
+            })
+          } else {
+            await update(ref(db, `${timersPath(state.fridgeKey)}/${use.timerId}`), {
+              quantity: use.after,
+              updatedAt: new Date().toISOString()
+            })
+            dispatch('recordHistory', {
+              action: 'used some',
+              title: use.name,
+              detail: `${use.before} → ${use.after}${mealName ? `, made ${mealName}` : ''}`,
+              source: 'meal'
+            })
+          }
+        } catch (error) {
+          // One failure must not abandon the rest. A half-applied plan is
+          // recoverable — the quantities are still visible and the log says
+          // what did land — whereas stopping leaves the fridge disagreeing with
+          // a meal that was definitely cooked.
+          console.error(`Failed to consume ${use.name}:`, error)
+        }
+      }
+    },
+
     // Bring the catalog and the fridge's templates back into agreement.
     //
     // ONLY a signed-in client may run this: it writes the grocery catalog,
