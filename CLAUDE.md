@@ -78,11 +78,13 @@ The shopping data uses a **unified model** (the current source of truth):
 - `shoppingList` — `id → { groceryId, quantity, units, aisle, location, source, mealId?, purchased }`
   where `source` is `'manual'` (added by the user) or `'meal'` (generated from drawn meals).
 
-A **deprecated split model** (`groceryItems`, `nonMealShoppingList`,
-`purchasedIngredients`, `nonMealGroceryItems`) still lingers and is read during
-`initializeDB` for backward-compat / one-time migration (`migrateToUnifiedSystem`).
-Prefer the unified model for new work; finishing the migration and removing the
-deprecated paths is outstanding cleanup.
+A **deprecated split model** still lingers in the database
+(`grocery-items`, `non-meal-grocery-items`) but is **dead data**: nothing reads
+it. `migrateToUnifiedSystem` no longer exists in the store, so those nodes are
+neither read at startup nor kept in step with the catalog. They hold stale
+copies of records the catalog has since renamed or merged. Do not update them
+alongside a catalog change — rewriting dead data only makes it look live. They
+are safe to delete whenever someone wants to.
 
 ### Drawing meals
 
@@ -484,6 +486,67 @@ then skipped used to count as recent anyway, so the meals most often skipped
 were the ones the hat kept skipping. Meals with no `lastCooked` fall back to the
 drawn dates and behave exactly as before.
 
+### Names are the join, and they were broken
+
+`planMealConsumption` matches a timer to a catalog entry by **exact name**
+(lowercased and trimmed, nothing fuzzier). `reconcileShelfLives` uses the same
+equality to decide whether a template names a food the catalog already knows.
+So a food spelled two ways is not a cosmetic problem — it is a silently
+severed join, and both sides fail quietly.
+
+It happened twice, in mirror-image forms, and both were repaired on 2026-08-30:
+
+- **A template naming nothing.** `migrate-fridge.mjs` used its `RESOLVED` map
+  to push each template's shelf life onto the right catalog entry but never
+  renamed the template, so the fridge said `Mozzarella Cheese` where the catalog
+  said `Mozzarella`. Twelve of them. Only 15 of the 53 groceries the meals use
+  could be matched to a timer at all, and the next signed-in visit to `/fridge`
+  would have invented twelve duplicate catalog foods.
+  `scripts/align-fridge-names.mjs`.
+- **Two catalog entries for one food.** `Parmesean` (5 meals) beside
+  `Parmesan Cheese` (1 meal), and `Sliced Cheese` beside a
+  `fridge-american-cheese-slices` that the migration invented and no meal used.
+  `scripts/merge-duplicate-groceries.mjs`.
+
+If a timer looks right on the wall but "Made it" declines to touch it, this is
+the first thing to check — compare the timer's title against the catalog name,
+not against what the food is called out loud.
+
+### Every grocery needs a packageSize
+
+`consume.js` explains the mechanism; what the comment cannot say is that for a
+long time **no entry had one** — 0 of 112 — so every meal assumed one whole
+package and a recipe calling for `1 Bottle` of olive oil cleared the olive oil
+timer. Filled in on 2026-08-30 from Matt's numbers
+(`scripts/set-package-sizes.mjs`, which records the arithmetic per row).
+
+He gives these as **uses per purchase**, which is the natural way to think about
+it and is NOT what the field holds. `packageSize` is in the recipe's own unit:
+
+    packageSize = uses per purchase x what one recipe asks for
+
+Olive oil is 25 either way, because the recipe asks for 1 Bottle. Basil is not:
+30 uses of 2 tbsp is a 60 tbsp jar. Ask for uses, then convert, and show the
+conversion — a wrong number should be visibly wrong.
+
+Err large. Too big means a timer survives a meal that should have cleared it,
+which costs a glance; too small deletes a timer on food that is still there.
+
+**A new grocery ships with no packageSize**, so anything added since needs one
+before it consumes correctly. There is no UI for the field yet.
+
+### Starting the fridge over
+
+`scripts/reset-fridge.mjs` clears every timer so the house can be
+re-photographed from scratch. **Timers only** — templates and the catalog's
+shelf lives are the accumulated knowledge, and they are what makes the re-scan
+fast: a template match arrives with its duration filled in, so re-photographing
+is a few taps rather than forty manual answers.
+
+All four scripts here are dry by default, take `--apply`, and write a
+timestamped backup into `backups/` (gitignored) BEFORE they delete anything.
+`reset-fridge` prints the `firebase database:set` line that puts it all back.
+
 ### The scan endpoint
 
 `aws-lambda/perishable-vision.js` (the file name is the Lambda's configured
@@ -593,11 +656,11 @@ CloudFront, all via the **`personal-deploy`** AWS profile. Infra (account
 - CloudFront distribution **`E1C9X1FV3WBDN6`**, custom domain `mealhat.com` + www
 - Route 53 hosted zone `Z097753917S7LG3I2FEWJ`, ACM cert in us-east-1
 
-**Gotcha:** `yarn build` runs `update-version` (`src/assets/javascript/version.js`),
-which prompts for a semver bump via `process.stdin.setRawMode`. That throws in a
-non-interactive/non-TTY shell. It works fine in a real terminal. To build from a
-non-TTY context, run `npx vue-cli-service build` directly (skips the bump), then
-sync + invalidate manually.
+`yarn build` runs `update-version` (`src/assets/javascript/version.js`), which
+prompts for a semver bump. It no longer needs a terminal: name the bump up
+front with **`VERSION_BUMP=minor yarn deploy`** (`patch`/`minor`/`major`), and
+with no TTY and no variable it patches quietly rather than throwing. The
+interactive prompt still falls back to a patch after 20 seconds.
 
 ## Dates
 
