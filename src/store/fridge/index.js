@@ -7,11 +7,12 @@
 // hat in the database is fridgeless; keeping this self-contained is what makes
 // the feature opt-in rather than a schema change landing in 13 accounts.
 
-import { ref, push, set, remove, onValue, query, limitToLast } from 'firebase/database'
+import { ref, push, set, update, remove, onValue, query, limitToLast } from 'firebase/database'
 import { db, ensureSession } from '@/firebase'
 import { sortTimers, spanInDays, formatDaySpan } from './timers'
 import { sortHistory, HISTORY_LIMIT } from './history'
 import { timersPath, templatesPath, historyPath, templateKey } from './paths'
+import { reconcileShelfLives, fridgeFoodId } from './reconcile'
 
 export default {
   namespaced: true,
@@ -237,6 +238,68 @@ export default {
       } catch (error) {
         console.error('Failed to remove fridge template:', error)
       }
+    },
+
+    // Bring the catalog and the fridge's templates back into agreement.
+    //
+    // ONLY a signed-in client may run this: it writes the grocery catalog,
+    // which the wall tablet cannot even read. The wall keeps teaching templates
+    // and this picks the knowledge up next time a phone opens the app.
+    //
+    // Writes are MERGED, never set. Writing the whole grocery-catalog node from
+    // a computed object would clobber concurrent edits and anything added on
+    // another device — the invariant CLAUDE.md spells out.
+    async reconcileCatalog ({ state, rootState, dispatch }) {
+      const hat = rootState.databaseTopKey
+      if (!hat || !state.fridgeKey) return
+      // No catalog yet means the subscription has not filled in, not that the
+      // catalog is empty. Reconciling against nothing would publish nothing and
+      // adopt everything as a new food.
+      if (!Object.keys(rootState.groceryCatalog || {}).length) return
+
+      const { toCatalog, toTemplates, newFoods, conflicts } = reconcileShelfLives({
+        catalog: rootState.groceryCatalog,
+        templates: state.templates
+      })
+
+      const patch = {}
+      toCatalog.forEach((item) => {
+        // The value AND the base move together. Recording the base is what
+        // makes the next edit attributable to the side that made it.
+        patch[`${item.id}/shelfLifeDays`] = item.days
+        patch[`${item.id}/shelfLifeSyncedDays`] = item.days
+      })
+      newFoods.forEach((item) => {
+        const id = fridgeFoodId(item.title)
+        patch[id] = {
+          id,
+          name: item.title,
+          shelfLifeDays: item.days,
+          shelfLifeSyncedDays: item.days,
+          ...(item.fridgeOnly ? { fridgeOnly: true } : {})
+        }
+      })
+
+      try {
+        if (Object.keys(patch).length) {
+          await update(ref(db, `${hat}/grocery-catalog`), patch)
+        }
+        for (const item of toTemplates) {
+          await dispatch('saveTemplate', { title: item.title, days: item.days, source: 'catalog' })
+        }
+      } catch (error) {
+        // Non-fatal by design. A failed sync leaves both copies as they were;
+        // it does not cost anyone a timer or a shopping-list row.
+        console.error('Failed to reconcile the fridge with the catalog:', error)
+        return
+      }
+
+      conflicts.forEach((c) => {
+        console.warn(
+          `Shelf life for ${c.name}: the fridge says ${c.fromFridge}d, the catalog said ` +
+          `${c.inCatalog}d, both changed from ${c.base}d. Took the fridge's.`
+        )
+      })
     }
   }
 }

@@ -113,7 +113,11 @@ export default {
       viewMode: 'wall',
       justAdded: '',
       pastedKey: '',
-      stamp: buildStamp()
+      stamp: buildStamp(),
+      // Once per visit. The watcher below fires whenever either side's
+      // subscription updates, and re-running the merge on every snapshot would
+      // write the catalog repeatedly for no gain.
+      reconciled: false
     };
   },
   computed: {
@@ -145,6 +149,29 @@ export default {
     },
     pastedKeyValid () {
       return Boolean(extractKey(this.pastedKey));
+    },
+    // Both halves loaded, and a signed-in user to do the writing. The wall
+    // tablet can never satisfy this — it is a member of no hat and cannot read
+    // or write the catalog — which is exactly the intent.
+    canReconcile () {
+      return Boolean(
+        this.$store.state.databaseTopKey &&
+        Object.keys(this.$store.state.groceryCatalog || {}).length &&
+        Object.keys(this.$store.state.fridge.templates || {}).length
+      );
+    }
+  },
+  watch: {
+    // Runs once, when both sides have actually arrived — not on a timer and
+    // not on mount. Both are async subscriptions and either can land second;
+    // reconciling against a half-loaded catalog would read every food as new.
+    canReconcile: {
+      immediate: true,
+      handler (ready) {
+        if (!ready || this.reconciled) return;
+        this.reconciled = true;
+        this.$store.dispatch('fridge/reconcileCatalog');
+      }
     }
   },
   mounted () {
