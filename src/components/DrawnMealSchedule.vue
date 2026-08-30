@@ -264,6 +264,14 @@ export default {
               overflow: hidden;
               text-overflow: ellipsis;
               white-space: nowrap;
+              transition: padding-right 0.10s ease-out;
+            }
+
+            // Both buttons float above the row, so while they are showing the
+            // name has to be held clear of them or it slides underneath.
+            // 131px = 91 + 40, the far edge of the "made" button.
+            &:not(.hide-delete) > span:first-child {
+              padding-right: 131px;
             }
 
             &.hide-delete .delete-button,
@@ -275,16 +283,21 @@ export default {
               opacity: 0;
             }
 
-            // 40px, not the 80px a "Made it" label needs. The staple
-            // checkbox taught this the expensive way (2026-08-19) and this row
-            // is worse off: it is one column of a two-column grid, so it has
-            // about half the phone to play with. Paired with the name's
-            // min-width:0 above, the NAME gives up space rather than the
-            // buttons being pushed out of view.
+            // ABSOLUTELY POSITIONED, because .delete-button is.
+            //
+            // Delete floats over the row at right:10px and is out of normal
+            // flow. An in-flow button lands in exactly that spot and sits
+            // UNDERNEATH it — invisible, except for a tenth of a second as
+            // Delete fades out, which is precisely what Matt saw. It was never
+            // an overflow problem; it was covered.
+            //
+            // 91px = Delete's 10px offset + its 75px width + 6px of gap.
             .made-button {
               width: 40px;
-              flex: 0 0 40px;
-              margin-right: 4px;
+              position: absolute;
+              right: 91px;
+              top: 50%;
+              transform: translateY(-50%);
               transition: all 0.10s ease-out;
               white-space: nowrap;
               display: flex;
