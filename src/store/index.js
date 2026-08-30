@@ -68,6 +68,12 @@ export default createStore({
     // every guarded navigation.
     mirrorFeedSubscribedFor: null,
 
+    // This hat's fridge key, or null if the hat has no fridge. Per-hat, so
+    // clearState drops it, and paired with its own subscribed-for marker for
+    // the same reason mirrorFeedKey has one: null is the normal answer.
+    fridgeKeyForHat: null,
+    fridgeKeySubscribedFor: null,
+
     // A newer build is live. Set by App.vue's bundle comparison (the primary
     // signal) and by registerServiceWorker's updated() hook (the secondary
     // one); App.vue watches it and applies the update at a safe moment.
@@ -175,6 +181,12 @@ export default createStore({
     setMirrorFeedSubscribedFor (state, hat) {
       state.mirrorFeedSubscribedFor = hat || null;
     },
+    setFridgeKeyForHat (state, key) {
+      state.fridgeKeyForHat = key || null;
+    },
+    setFridgeKeySubscribedFor (state, hat) {
+      state.fridgeKeySubscribedFor = hat || null;
+    },
     clearState (state) {
       state.meals = null;
       state.drawnMealsWithHistory = null;
@@ -184,6 +196,8 @@ export default createStore({
       state.mealHatsList = null;
       state.mirrorFeedKey = null;
       state.mirrorFeedSubscribedFor = null;
+      state.fridgeKeyForHat = null;
+      state.fridgeKeySubscribedFor = null;
     }
   },
   actions: {
@@ -641,6 +655,25 @@ export default createStore({
       if (Object.keys(context.state.groceryCatalog).length === 0) {
         onValue(ref(db, `${context.state.databaseTopKey}/grocery-catalog`), (snapshot) => {
           context.commit('setGroceryCatalog', snapshot.val());
+        });
+      }
+
+      // Which fridge belongs to this hat.
+      //
+      // Subscribed the same way as mirrorFeedKey, and guarded the same way —
+      // on "have we subscribed for this hat", not on the value being empty.
+      // Most hats have no fridge, so null is the NORMAL answer here, and an
+      // emptiness check would attach a fresh listener on every guarded
+      // navigation.
+      //
+      // This is what lets a signed-in phone open the fridge without the secret
+      // ever being pasted into it: the pointer is readable only by the hat's
+      // members, and the wall tablet — which is a member of nothing — carries
+      // the key in its URL instead.
+      if (context.state.fridgeKeySubscribedFor !== context.state.databaseTopKey) {
+        context.commit('setFridgeKeySubscribedFor', context.state.databaseTopKey);
+        onValue(ref(db, `${context.state.databaseTopKey}/fridgeKey`), (snapshot) => {
+          context.commit('setFridgeKeyForHat', snapshot.val());
         });
       }
 

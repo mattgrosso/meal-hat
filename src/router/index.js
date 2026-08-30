@@ -17,6 +17,7 @@ const DrawMeals = () => import(/* webpackChunkName: "draw-meals" */ '@/component
 const ShowMeals = () => import(/* webpackChunkName: "show-meals" */ '@/components/ShowMeals.vue');
 const ShoppingList = () => import(/* webpackChunkName: "shopping-list" */ '@/components/ShoppingList.vue');
 const MealHats = () => import(/* webpackChunkName: "meal-hats" */ '@/components/MealHats.vue');
+const Fridge = () => import(/* webpackChunkName: "fridge" */ '@/components/Fridge.vue');
 
 const loggedIn = () => {
   const databaseTopKeyFromLocalStorage = window.localStorage.getItem('mealHatDatabaseTopKey');
@@ -83,6 +84,25 @@ const routes = [
     name: 'MealHats',
     component: MealHats,
     meta: { requiresLogin: true }
+  },
+  {
+    // The ONLY route that does not require login, besides the login screen
+    // itself, and it is deliberate.
+    //
+    // The kitchen wall tablet is a Galaxy in Fully Kiosk. It cannot complete a
+    // Google popup, and a lapsed session there fails silently — a blank kitchen
+    // screen nobody notices for a week. It authorizes with the capability key
+    // in its URL instead (/?k=<key>#/fridge) and an anonymous Firebase session,
+    // which is what the fridge rules ask for.
+    //
+    // This is not a hole in the login guard: without a valid key the route
+    // renders its own loud NOT-CONNECTED screen and reads nothing. A signed-in
+    // phone reaching /fridge with no key in the URL falls back to the hat's
+    // fridgeKey pointer, which only members can read.
+    path: '/fridge',
+    name: 'Fridge',
+    component: Fridge,
+    meta: { requiresLogin: false }
   }
 ];
 
