@@ -66,4 +66,29 @@ const authReady = new Promise((resolve) => { markAuthReady = resolve; });
 
 onAuthStateChanged(auth, (user) => markAuthReady(user));
 
+// SOME session, for the kitchen wall tablet.
+//
+// The rules require `auth != null` everywhere, which the phone satisfies with
+// its Google sign-in. The wall display has no Google sign-in and cannot get
+// one: the popup refuses to run inside a kiosk WebView, and a session that
+// lapses on a wall fails silently — a blank kitchen screen nobody notices for
+// a week. Anonymous auth is the one kind a kiosk can do. No popup, no account,
+// and the SDK refreshes the token forever, so there is nothing to lapse. If
+// the browser loses its storage, the next load mints a fresh anonymous
+// account; the identity carries nothing, so a new one costs nothing.
+//
+// It grants nothing on its own — the fridge rules want the 32-char capability
+// key in the path as well.
+//
+// ONLY the fridge may call this. A signed-out phone on a normal meal-hat route
+// must reach the Login screen, not quietly acquire an anonymous session.
+export const ensureSession = async () => {
+  const user = await authReady;
+  if (user) return user;
+
+  const { signInAnonymously } = await import('firebase/auth');
+  const credential = await signInAnonymously(auth);
+  return credential.user;
+};
+
 export { app, db, auth, authReady };

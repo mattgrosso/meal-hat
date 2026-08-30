@@ -8,6 +8,7 @@ import { analyzeDuplicates, findSimilar, aggregateMealIngredients, remapMealIngr
 import { withDrawnDate, compareByDate, isUpcoming, toISODate, isoDaysAgo } from './schedule';
 import { withPreservedPurchases } from './purchases';
 import { buildMirrorFeed } from '../assets/javascript/mirrorFeed';
+import fridge from './fridge';
 
 // How far back drawnMeals is loaded.
 //
@@ -1044,5 +1045,12 @@ export default createStore({
         return null;
       }
     },
+  },
+  modules: {
+    // The fridge, ported from perishable. Namespaced because it is reached by
+    // a different door — the wall tablet arrives with a capability key and no
+    // Google session — so its state must be able to exist while userEmail is
+    // null and no hat is loaded.
+    fridge
   }
 })
