@@ -213,6 +213,7 @@
 import { preparePhoto, renderAtEdge } from '@/utils/fridge/photo'
 import { cropToDataUrl } from '@/utils/fridge/crop'
 import { scanPhoto, ScanError } from '@/utils/fridge/scan'
+import { ensureSession } from '@/firebase'
 import {
   buildReviewList,
   reviewReady,
@@ -308,6 +309,17 @@ export default {
     }
   },
   methods: {
+    // A CURRENT token, fetched per scan rather than held.
+    //
+    // Firebase ID tokens last an hour, and a wall tablet sits on this page for
+    // weeks. One captured at mount would be long dead by the time anyone
+    // photographed a shopping bag, and the failure looks like a rejected key
+    // rather than an expired session. getIdToken() returns the cached one and
+    // refreshes only when it is close to expiry, so this is cheap.
+    async freshIdToken () {
+      const user = await ensureSession();
+      return user ? user.getIdToken() : '';
+    },
     formatDays (days) {
       return formatDaySpan(days)
     },
@@ -340,6 +352,7 @@ export default {
           this.photos.push(photo)
           const result = await scanPhoto(photo, {
             householdKey: this.householdKey,
+            idToken: await this.freshIdToken(),
             knownFoods
           })
           scans.push(result)

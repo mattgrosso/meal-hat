@@ -200,3 +200,48 @@ describe('renderAtEdge', () => {
     expect(close).toHaveBeenCalled()
   })
 })
+
+// THE REGRESSION THIS BLOCK EXISTS FOR.
+//
+// The endpoint verifies the capability key by READING the fridge, and every
+// database path requires auth != null. The read used to go out
+// unauthenticated, which worked only while the node was open to anyone. When
+// the rules tightened (perishable, 2026-08-29, commit df34068) that read began
+// returning 401 for EVERY key — verification failed for everybody and every
+// scan was rejected before reaching the model. Nothing logged it as a fault;
+// scanning simply stopped working, and stayed broken until the merge found it.
+//
+// So the client must send its Firebase ID token alongside the key, on BOTH the
+// submit and the poll. Drop either and scanning silently dies again.
+describe('the ID token rides along with the key', () => {
+  it('sends it when submitting', async () => {
+    const fetchImpl = vi.fn(async () => reply(202, { jobId: 'abc' }))
+    await submitScan(
+      { image: 'x', mediaType: 'image/jpeg' },
+      options(fetchImpl, { idToken: 'token-123' })
+    )
+
+    const [, init] = fetchImpl.mock.calls[0]
+    expect(init.headers.Authorization).toBe(`Bearer ${'k'.repeat(32)}`)
+    expect(init.headers['X-Firebase-Token']).toBe('token-123')
+  })
+
+  it('sends it when polling, or the job is paid for and then stranded', async () => {
+    const fetchImpl = vi.fn(async () => reply(200, { status: 'done', result: {} }))
+    await awaitScan('abc', options(fetchImpl, { idToken: 'token-123' }))
+
+    const [, init] = fetchImpl.mock.calls[0]
+    expect(init.headers['X-Firebase-Token']).toBe('token-123')
+  })
+
+  it('sends an empty string rather than "undefined" when there is no token', async () => {
+    // A missing token has to read as absent to the endpoint. The string
+    // "undefined" is a truthy header value and would sail past a plain
+    // presence check into a failing database read.
+    const fetchImpl = vi.fn(async () => reply(202, { jobId: 'abc' }))
+    await submitScan({ image: 'x', mediaType: 'image/jpeg' }, options(fetchImpl))
+
+    const [, init] = fetchImpl.mock.calls[0]
+    expect(init.headers['X-Firebase-Token']).toBe('')
+  })
+})

@@ -37,12 +37,17 @@ const readBody = async (response) => {
  * the reading hasn't started yet. knownFoods is the household's template
  * names, so the model answers in the household's own vocabulary.
  */
-export const submitScan = async (photo, { url = SCAN_URL, householdKey, knownFoods = [], fetchImpl = fetch } = {}) => {
+export const submitScan = async (photo, { url = SCAN_URL, householdKey, idToken, knownFoods = [], fetchImpl = fetch } = {}) => {
   const response = await fetchImpl(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${householdKey}`
+      Authorization: `Bearer ${householdKey}`,
+      // The endpoint verifies the key by READING the fridge, and that read now
+      // needs a session — every path requires auth != null. Without this the
+      // endpoint 401s on every scan no matter how good the key is. See the
+      // verification block in aws-lambda/perishable-vision.js.
+      'X-Firebase-Token': idToken || ''
     },
     body: JSON.stringify({ image: photo.image, mediaType: photo.mediaType, knownFoods })
   })
@@ -69,6 +74,7 @@ export const submitScan = async (photo, { url = SCAN_URL, householdKey, knownFoo
 export const awaitScan = async (jobId, {
   url = SCAN_URL,
   householdKey,
+  idToken,
   fetchImpl = fetch,
   sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms) }),
   now = () => Date.now(),
@@ -88,7 +94,13 @@ export const awaitScan = async (jobId, {
     let body
     try {
       const response = await fetchImpl(`${url}?job=${encodeURIComponent(jobId)}`, {
-        headers: { Authorization: `Bearer ${householdKey}` }
+        // The poll is verified exactly like the submit, so it carries the same
+        // pair. Omitting the token here would 401 every poll and strand a job
+        // that had already been paid for.
+        headers: {
+          Authorization: `Bearer ${householdKey}`,
+          'X-Firebase-Token': idToken || ''
+        }
       })
       // A 404 means the job is genuinely gone — retrying can't bring it back.
       if (response.status === 404) throw new ScanError('That scan expired before it finished.')
