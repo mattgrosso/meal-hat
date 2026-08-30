@@ -1,7 +1,7 @@
 import { createStore } from 'vuex';
-import { initializeApp } from "firebase/app";
-import { getDatabase, onValue, ref, set, get, update, query, orderByChild, startAt, connectDatabaseEmulator } from "firebase/database";
-import { getAuth, GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut, connectAuthEmulator } from "firebase/auth";
+import { onValue, ref, set, get, update, query, orderByChild, startAt } from "firebase/database";
+import { GoogleAuthProvider, signInWithPopup, signOut } from "firebase/auth";
+import { db, auth, authReady, firebaseConfig } from '@/firebase';
 import { v4 as uuidv4 } from 'uuid';
 import router from '@/router';
 import { analyzeDuplicates, findSimilar, aggregateMealIngredients, remapMealIngredients } from './ingredients';
@@ -22,16 +22,6 @@ const DRAWN_MEALS_WINDOW_DAYS = 400;
 // Kept per-hat, since hats are shared and migrate independently.
 const DRAWN_MEALS_SCHEMA = 'iso';
 
-const firebaseConfig = {
-  apiKey: process.env.VUE_APP_GOOGLE_API_KEY,
-  authDomain: "meal-hat.firebaseapp.com",
-  projectId: "meal-hat",
-  storageBucket: "meal-hat.appspot.com",
-  messagingSenderId: "871807065045",
-  appId: "1:871807065045:web:eaaf302a198f18c41a3b5c",
-  databaseURL: "https://meal-hat-default-rtdb.firebaseio.com",
-}
-
 const removeNaNAndUndefined = (obj) => {
   for (const key in obj) {
     if (Object.prototype.hasOwnProperty.call(obj, key)) {
@@ -45,49 +35,6 @@ const removeNaNAndUndefined = (obj) => {
   }
   return obj;
 };
-
-const app = initializeApp(firebaseConfig);
-const db = getDatabase(app);
-
-// The Playwright suite runs against the Firebase EMULATORS, not production.
-//
-// Two reasons, both discovered the hard way (2026-08-27). The E2E tests used
-// to fake a session with two localStorage keys; when initializeDB started
-// requiring a real Firebase user (the membership lockdown), every test landed
-// on the Login screen — and a Google popup is not something an automated
-// browser can complete. And worse: for as long as the tests DID work, they
-// were writing meals into the production database.
-//
-// The flag is compile-time (vue-cli inlines process.env.VUE_APP_*), so a
-// production build contains `if (false)` and no emulator code path exists to
-// trigger by accident. playwright.config.js sets it on the dev server it
-// starts; nothing else does.
-const useEmulators = process.env.VUE_APP_FIREBASE_EMULATORS === '1';
-if (useEmulators) {
-  connectDatabaseEmulator(db, 'localhost', 9000);
-}
-
-// Auth has to be initialized HERE, at boot, not only inside the login action.
-//
-// Sign-in state is restored from localStorage by the router's loggedIn(), which
-// is enough to decide what to render but tells Firebase nothing. Until getAuth()
-// runs, the Auth SDK never rehydrates its persisted session, so the database
-// client sends its requests with no token at all. That was invisible while the
-// rules were open. Under rules that require `auth != null` it would mean every
-// returning user silently reads nothing: past the route guard, into an app with
-// no meals and no explanation.
-const auth = getAuth(app);
-if (useEmulators) {
-  connectAuthEmulator(auth, 'http://localhost:9099', { disableWarnings: true });
-}
-
-// Resolves with the restored user (or null) the first time Firebase reports auth
-// state. Restoration is asynchronous, so anything that touches the database has
-// to wait for this or it races the token.
-let markAuthReady;
-const authReady = new Promise((resolve) => { markAuthReady = resolve; });
-
-onAuthStateChanged(auth, (user) => markAuthReady(user));
 
 export default createStore({
   state: {
