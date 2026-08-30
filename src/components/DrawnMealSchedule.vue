@@ -33,7 +33,12 @@
               aria-label="I made this"
               @click.stop="openCookedSheet(element)"
             ><i class="bi bi-check-lg"></i></button>
-            <button class="btn btn-sm btn-warning delete-button" @click.stop="deleteMeal(element)">Delete</button>
+            <button
+              class="btn btn-sm btn-warning delete-button"
+              title="Remove this meal from the schedule"
+              aria-label="Remove this meal from the schedule"
+              @click.stop="confirmDelete(element)"
+            ><i class="bi bi-trash-fill"></i></button>
             <i v-if="selectedMeal.id !== element.id" class="bi bi-grip-vertical"/>
           </li>
         </template>
@@ -49,12 +54,34 @@
       :meal="cookingMeal"
       @close="cookingMeal = null"
     />
+
+    <!-- Deleting is destructive and silent: it drops the schedule row, rolls
+         back the meal's drawn history AND regenerates the shopping list. It
+         now sits behind a confirm, because the button is a 40px target next
+         to one you press most nights. -->
+    <AppModal
+      v-if="deletingMeal"
+      :show-modal="true"
+      title="Remove this meal?"
+      primary-button-text="Remove it"
+      secondary-button-text="Keep it"
+      :primary-button-callback="reallyDelete"
+      :secondary-button-callback="() => (deletingMeal = null)"
+      :close-modal-callback="() => (deletingMeal = null)"
+    >
+      <p class="mb-0">
+        <strong>{{ deletingMeal.meal ? deletingMeal.meal.name : 'This meal' }}</strong>
+        comes off {{ formatDate(deletingMeal.assignedDate) }}, and the shopping
+        list is rebuilt without its ingredients.
+      </p>
+    </AppModal>
   </div>
 </template>
 
 <script>
 import draggable from 'vuedraggable';
 import MealCookedSheet from '@/components/MealCookedSheet.vue';
+import AppModal from '@/components/Modal.vue';
 import {
   toISODate, fromISODate, withDrawnDate, nextMealId
 } from '@/store/schedule';
@@ -63,6 +90,7 @@ export default {
   name: 'DrawnMealSchedule',
   components: {
     MealCookedSheet,
+    AppModal,
     draggable
   },
   data () {
@@ -71,7 +99,9 @@ export default {
       drag: false,
       // The meal whose "made it" sheet is open, or null. Holds the MEAL, not
       // the drawn row: the plan is about the recipe's ingredients.
-      cookingMeal: null
+      cookingMeal: null,
+      // The row awaiting a delete confirm, or null.
+      deletingMeal: null
     }
   },
   computed: {
@@ -164,6 +194,15 @@ export default {
       } else {
         this.selectedMeal = drawnMeal;
       }
+    },
+    confirmDelete (drawnMeal) {
+      if (!drawnMeal) return;
+      this.deletingMeal = drawnMeal;
+    },
+    async reallyDelete () {
+      const drawnMeal = this.deletingMeal;
+      this.deletingMeal = null;
+      if (drawnMeal) await this.deleteMeal(drawnMeal);
     },
     openCookedSheet (drawnMeal) {
       // `element.meal` is resolved from the hat by the drawnMeals computed; a
@@ -269,9 +308,9 @@ export default {
 
             // Both buttons float above the row, so while they are showing the
             // name has to be held clear of them or it slides underneath.
-            // 131px = 91 + 40, the far edge of the "made" button.
+            // 96px = 56 + 40, the far edge of the delete button.
             &:not(.hide-delete) > span:first-child {
-              padding-right: 131px;
+              padding-right: 96px;
             }
 
             &.hide-delete .delete-button,
@@ -291,11 +330,13 @@ export default {
             // Delete fades out, which is precisely what Matt saw. It was never
             // an overflow problem; it was covered.
             //
-            // 91px = Delete's 10px offset + its 75px width + 6px of gap.
+            // The check sits at the right edge — it is the one pressed most
+            // nights. Delete moves inboard of it, so the destructive control
+            // is not the one under your thumb.
             .made-button {
               width: 40px;
               position: absolute;
-              right: 91px;
+              right: 10px;
               top: 50%;
               transform: translateY(-50%);
               transition: all 0.10s ease-out;
@@ -309,7 +350,7 @@ export default {
             }
 
             .delete-button {
-              width: 75px;
+              width: 40px;
               transition: all 0.10s ease-out;
               white-space: nowrap;
               display: flex;
@@ -318,7 +359,7 @@ export default {
               line-height: 1;
               opacity: 1;
               position: absolute;
-              right: 10px;
+              right: 56px;
               top: 50%;
               transform: translateY(-50%);
             }
