@@ -79,6 +79,40 @@
       }
     },
 
+    // The fridge — countdown timers for things that go off, merged in from
+    // perishable on 2026-08-29.
+    //
+    // Authorized by a capability key IN THE PATH, not by hat membership, and
+    // that is not a shortcut around the sign-in above. The kitchen wall tablet
+    // is a Galaxy running Fully Kiosk: Google's popup refuses to run in a kiosk
+    // WebView, and a session that lapses on a wall display fails silently — a
+    // blank kitchen screen nobody notices for a week. Knowing the 32-char
+    // secret IS the authorization. There is nowhere in an RTDB request to put a
+    // credential, so the secret has to be the path.
+    //
+    // `auth != null` rides alongside it: the client signs in ANONYMOUSLY and
+    // silently at boot (src/firebase.js ensureSession), which a kiosk can do
+    // with no popup and no session to lapse. It also keeps this node out of
+    // Firebase's daily insecure-rules email. An anonymous account grants
+    // nothing by itself — it still needs the key.
+    //
+    // Named at the root for the same load-bearing reason as bugReports and
+    // mirrorFeed: left to the $hat wildcard below, "fridge" would be treated as
+    // a hat, and that wildcard's `!data.exists()` write clause would let any
+    // signed-in user create it.
+    //
+    // The grant is at $key, never at "fridge", so a read of fridge.json is
+    // denied and the fridges cannot be enumerated. The key for a hat's own
+    // fridge lives at <hat>/fridgeKey, readable only by that hat's members.
+    "fridge": {
+      ".read": false,
+      ".write": false,
+      "$key": {
+        ".read": "auth != null && $key.length >= 32",
+        ".write": "auth != null && $key.length >= 32"
+      }
+    },
+
     "$hat": {
       // Membership, not name-knowledge.
       //
