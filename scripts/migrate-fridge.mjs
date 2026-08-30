@@ -215,7 +215,14 @@ if (conflicts.length) {
 }
 console.log()
 console.log(`New foods from templates: ${creations.length}`)
-creations.forEach((c) => console.log(`  ${c.title} (${c.days}d)${c.fridgeOnly ? '  [fridge only]' : ''}`))
+creations.forEach((c) => {
+  const id = `fridge-${templateKey(c.title).replace(/\s+/g, '-').toLowerCase()}`
+  const already = Boolean(catalog[id])
+  console.log(
+    `  ${c.title} (${c.days}d)${c.fridgeOnly ? '  [fridge only]' : ''}` +
+    (already ? '  [already exists — shelf life only]' : '')
+  )
+})
 if (skipped.length) {
   console.log()
   console.log(`Skipped: ${skipped.length}`)
@@ -250,6 +257,21 @@ updates.forEach((u) => {
 })
 creations.forEach((c) => {
   const id = `fridge-${templateKey(c.title).replace(/\s+/g, '-').toLowerCase()}`
+
+  // A food this script created on an earlier run is NOT a new food any more.
+  //
+  // The four RESOLVED refusals (Peppers, Cherries, Ice Cream, Sausage Pasta)
+  // are always creations by construction — refusing the match is the whole
+  // point — so on a --refresh they would come back through here and be written
+  // as a WHOLE OBJECT at the same id. Firebase's update() replaces a child it
+  // is given an object for, so an aisle or units added to Peppers in the
+  // meantime would vanish silently. Once the entry exists, only the shelf life
+  // is ours to touch.
+  if (catalog[id]) {
+    catalogPatch[`${id}/shelfLifeDays`] = c.days
+    return
+  }
+
   catalogPatch[id] = {
     id,
     name: c.title,
