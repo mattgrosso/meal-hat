@@ -42,6 +42,28 @@ export default {
     // list. This is the whole point of the merge: `lastPurchased` plus a
     // 60-day default is a GUESS at whether the olive oil is still there, and
     // the fridge holds the answer.
+    // Normalized food name -> the LATEST expiry among its live timers.
+    //
+    // This is what lets the shopping list stop guessing. It answers exactly one
+    // question — "is this food physically in the house right now?" — and the
+    // staple logic may only ever act on a YES. A name missing from here means
+    // nothing was photographed, not that the cupboard is bare.
+    //
+    // Latest rather than soonest: two cartons of eggs means you have eggs until
+    // the later one goes. Taking the soonest would put eggs back on the list
+    // while a good carton sat in the door.
+    onHandUntil: (state) => {
+      const out = {};
+      Object.values(state.timers || {}).forEach((timer) => {
+        const name = String(timer?.title || '').trim().toLowerCase();
+        if (!name || !timer.expiryDate) return;
+        const at = new Date(timer.expiryDate).getTime();
+        if (Number.isNaN(at)) return;
+        if (!out[name] || at > new Date(out[name]).getTime()) out[name] = timer.expiryDate;
+      });
+      return out;
+    },
+
     shelfLifeByName: (state) => {
       const out = {}
       Object.values(state.templates || {}).forEach((template) => {

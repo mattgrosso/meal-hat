@@ -3,7 +3,8 @@ import {
   daysSincePurchase,
   stapleIsDue,
   partitionStaples,
-  DEFAULT_STAPLE_INTERVAL_DAYS
+  DEFAULT_STAPLE_INTERVAL_DAYS,
+  isOnHand
 } from '../../src/store/staples.js';
 
 const NOW = new Date(2026, 7, 19); // 2026-08-19
@@ -133,5 +134,82 @@ describe('partitionStaples', () => {
   it('survives empty and missing input', () => {
     expect(partitionStaples([], {}, NOW)).toEqual({ list: [], cupboard: [] });
     expect(partitionStaples(null, null, NOW)).toEqual({ list: [], cupboard: [] });
+  });
+});
+
+// THE POINT OF THE PERISHABLE MERGE.
+//
+// Before it, "do we still have olive oil?" was answered by lastPurchased plus a
+// 60-day guess. The fridge knows. But it may only ever answer in ONE direction:
+// a live timer is positive evidence the food is in the house and can suppress a
+// staple; nothing about the fridge may ever push a staple onto the list that
+// the date arithmetic would have left off, and absence of a timer means nothing
+// was photographed — not that the cupboard is bare.
+describe('the fridge answering for staples', () => {
+  const NOW = new Date('2026-08-29T12:00:00Z');
+  const staple = (name, extra = {}) => ({
+    id: 'g1', name, staple: true, ...extra
+  });
+  const until = (name, iso) => ({ [name]: iso });
+
+  it('keeps a staple off the list when the fridge holds a live one', () => {
+    // Bought 400 days ago — long overdue by the date rule — but there is a
+    // physical bottle in the house with a week left on it.
+    const entry = staple('Olive Oil', { lastPurchased: '2025-07-25' });
+    expect(stapleIsDue(entry, NOW)).toBe(true);
+    expect(stapleIsDue(entry, NOW, until('olive oil', '2026-09-05T12:00:00Z'))).toBe(false);
+  });
+
+  it('does NOT suppress on an expired timer', () => {
+    // Evidence the food was here and is now past it. That argues for buying
+    // more, not less — the opposite of what a naive "we have a record" check
+    // would conclude.
+    const entry = staple('Olive Oil', { lastPurchased: '2025-07-25' });
+    expect(stapleIsDue(entry, NOW, until('olive oil', '2026-08-01T12:00:00Z'))).toBe(true);
+  });
+
+  it('falls through to the dates when the fridge has never seen the food', () => {
+    const recent = staple('Olive Oil', { lastPurchased: '2026-08-20' });
+    const old = staple('Olive Oil', { lastPurchased: '2025-07-25' });
+    expect(stapleIsDue(recent, NOW, {})).toBe(false);
+    expect(stapleIsDue(old, NOW, {})).toBe(true);
+  });
+
+  it('ignores an unreadable expiry rather than treating it as possession', () => {
+    const entry = staple('Olive Oil', { lastPurchased: '2025-07-25' });
+    expect(stapleIsDue(entry, NOW, until('olive oil', 'not a date'))).toBe(true);
+    expect(stapleIsDue(entry, NOW, until('olive oil', ''))).toBe(true);
+  });
+
+  it('matches on the name case-insensitively, the way the fridge stores it', () => {
+    const entry = staple('Cheddar Cheese', { lastPurchased: '2025-07-25' });
+    expect(stapleIsDue(entry, NOW, until('cheddar cheese', '2026-09-05T12:00:00Z'))).toBe(false);
+  });
+
+  it('still cannot lose a row — everything in comes out somewhere', () => {
+    const rows = [
+      { id: 'r1', groceryId: 'g1' },
+      { id: 'r2', groceryId: 'g2' },
+      { id: 'r3', groceryId: 'missing' }
+    ];
+    const catalog = {
+      g1: { id: 'g1', name: 'Olive Oil', staple: true, lastPurchased: '2025-07-25' },
+      g2: { id: 'g2', name: 'Chicken' }
+    };
+    const { list, cupboard } = partitionStaples(
+      rows, catalog, NOW, until('olive oil', '2026-09-05T12:00:00Z')
+    );
+    expect(list.length + cupboard.length).toBe(3);
+    expect(cupboard.map((r) => r.id)).toEqual(['r1']);
+    expect(cupboard[0].onHand).toBe(true);
+  });
+
+  it('marks WHY a row is in the cupboard, so a wrong call is visible', () => {
+    const catalog = {
+      g1: { id: 'g1', name: 'Olive Oil', staple: true, lastPurchased: '2026-08-20' }
+    };
+    const { cupboard } = partitionStaples([{ id: 'r1', groceryId: 'g1' }], catalog, NOW, {});
+    // Held back by the date guess, not by evidence.
+    expect(cupboard[0].onHand).toBe(false);
   });
 });

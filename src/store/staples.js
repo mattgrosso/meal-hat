@@ -44,14 +44,50 @@ export function daysSincePurchase (catalogEntry, now = new Date()) {
 }
 
 /**
+ * Is the fridge holding this food right now?
+ *
+ * `onHandUntil` maps a normalized food name to the LATEST expiry among its live
+ * timers — see the fridge module's getter of the same name.
+ *
+ * THE FRIDGE MAY ONLY EVER SAY "YOU HAVE IT". It can suppress a staple, never
+ * summon one. A missing timer means nothing was ever photographed, not that the
+ * cupboard is bare, so absence has to fall through to the date arithmetic
+ * rather than be read as evidence. Same reasoning as the scan flow, where a
+ * thing missing from a photo never deletes a timer — it might just be behind
+ * the milk.
+ */
+export function isOnHand (catalogEntry, onHandUntil = {}, now = new Date()) {
+  const name = (catalogEntry?.name || '').trim().toLowerCase();
+  if (!name) return false;
+
+  const until = onHandUntil[name];
+  if (!until) return false;
+
+  const expiry = new Date(until);
+  if (Number.isNaN(expiry.getTime())) return false;
+
+  return expiry.getTime() > now.getTime();
+}
+
+/**
  * Should this staple be on the shopping list right now?
  *
  * True when it has never been bought, when we cannot tell, or when it has been
  * longer than its interval. Every uncertain case resolves to "put it on the
  * list" — that is the direction that cannot leave you short.
+ *
+ * The one thing that can say otherwise is the fridge, and only in the
+ * suppressing direction: a live unexpired timer is positive evidence that the
+ * food is physically in the house. That is what the merge bought — before it,
+ * "do we still have olive oil?" was answered by a 60-day guess.
+ *
+ * An EXPIRED timer deliberately does not suppress. It is evidence the food was
+ * here and is now past it, which argues for buying more, not less.
  */
-export function stapleIsDue (catalogEntry, now = new Date()) {
+export function stapleIsDue (catalogEntry, now = new Date(), onHandUntil = {}) {
   if (!catalogEntry) return true;
+
+  if (isOnHand(catalogEntry, onHandUntil, now)) return false;
 
   const days = daysSincePurchase(catalogEntry, now);
   if (days === null) return true;
@@ -70,7 +106,7 @@ export function stapleIsDue (catalogEntry, now = new Date()) {
  * Only a staple you have bought recently moves to `cupboard`, and it keeps its
  * row — nothing is discarded here.
  */
-export function partitionStaples (rows, catalog = {}, now = new Date()) {
+export function partitionStaples (rows, catalog = {}, now = new Date(), onHandUntil = {}) {
   const list = [];
   const cupboard = [];
 
@@ -84,14 +120,21 @@ export function partitionStaples (rows, catalog = {}, now = new Date()) {
       return;
     }
 
-    if (stapleIsDue(entry, now)) {
+    if (stapleIsDue(entry, now, onHandUntil)) {
       // Carry why it resurfaced, so the row can say so rather than just
       // reappearing without explanation.
       list.push({ ...row, stapleDue: true, daysSincePurchase: daysSincePurchase(entry, now) });
       return;
     }
 
-    cupboard.push({ ...row, daysSincePurchase: daysSincePurchase(entry, now) });
+    cupboard.push({
+      ...row,
+      daysSincePurchase: daysSincePurchase(entry, now),
+      // "The fridge has one" and "you bought one recently" are different
+      // reassurances, and the second is much weaker. Saying which one is
+      // holding an item back lets a wrong call be spotted.
+      onHand: isOnHand(entry, onHandUntil, now)
+    });
   });
 
   return { list, cupboard };

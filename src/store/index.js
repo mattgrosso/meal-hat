@@ -673,7 +673,20 @@ export default createStore({
       if (context.state.fridgeKeySubscribedFor !== context.state.databaseTopKey) {
         context.commit('setFridgeKeySubscribedFor', context.state.databaseTopKey);
         onValue(ref(db, `${context.state.databaseTopKey}/fridgeKey`), (snapshot) => {
-          context.commit('setFridgeKeyForHat', snapshot.val());
+          const key = snapshot.val();
+          context.commit('setFridgeKeyForHat', key);
+
+          // Subscribe here rather than only on the /fridge route.
+          //
+          // The SHOPPING LIST needs the timers: a staple with a live timer is
+          // in the house and must stay off the list. Waiting for someone to
+          // visit /fridge first would mean the list quietly fell back to the
+          // 60-day guess for the whole session — a wrong answer that looks
+          // exactly like a right one.
+          //
+          // `subscribe` is guarded on its own subscribedTo, so dispatching it
+          // on every guarded navigation costs nothing.
+          if (key) context.dispatch('fridge/subscribe', key);
         });
       }
 

@@ -136,10 +136,16 @@
               <li class="list-group-item d-flex justify-content-between align-items-center cupboard-item" v-for="ingredient in cupboardItems" :key="ingredient.id">
                 <span>
                   {{ ingredient.groceryItem ? ingredient.groceryItem.name : ingredient.name }}
+                  <!-- Which reason is keeping this off the list. "The fridge
+                       has one" is evidence; "you bought one recently" is a
+                       guess from a date. Saying which lets a wrong call be
+                       spotted rather than silently trusted. -->
                   <span class="cupboard-meta">
-                    {{ ingredient.daysSincePurchase === null || ingredient.daysSincePurchase === undefined
-                      ? 'no purchase recorded'
-                      : `bought ${ingredient.daysSincePurchase} days ago` }}
+                    {{ ingredient.onHand
+                      ? 'in the fridge'
+                      : ingredient.daysSincePurchase === null || ingredient.daysSincePurchase === undefined
+                        ? 'no purchase recorded'
+                        : `bought ${ingredient.daysSincePurchase} days ago` }}
                   </span>
                 </span>
                 <button class="btn btn-sm btn-outline-secondary" title="Add to the list anyway" aria-label="Add to the list anyway" @click="needStapleNow(ingredient)">
@@ -448,7 +454,11 @@ export default {
     stapleSplit () {
       const { list, cupboard } = partitionStaples(
         this.$store.getters.unpurchasedShoppingItems,
-        this.$store.state.groceryCatalog || {}
+        this.$store.state.groceryCatalog || {},
+        new Date(),
+        // What the fridge actually holds. Empty until the hat has a fridge, in
+        // which case this falls back to the date arithmetic exactly as before.
+        this.$store.getters['fridge/onHandUntil']
       );
 
       // Anything explicitly asked for this session goes back on the list.
