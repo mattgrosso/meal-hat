@@ -1,0 +1,11 @@
+{
+  "name": "perishable-vision-lambda",
+  "version": "1.0.0",
+  "description": "AWS Lambda: reads grocery items out of a photo with Claude",
+  "main": "perishable-vision.js",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.120.0",
+    "@aws-sdk/client-lambda": "^3.1116.0",
+    "@aws-sdk/client-s3": "^3.1116.0"
+  }
+}
