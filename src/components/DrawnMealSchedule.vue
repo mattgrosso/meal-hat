@@ -23,7 +23,16 @@
             <span class="">
               {{ element.meal.name }}
             </span>
-            <button class="btn btn-sm btn-success made-button" @click.stop="openCookedSheet(element)">Made it</button>
+            <!-- Revealed by tapping the row, alongside Delete. Icon-only,
+                 because this row is one column of a two-column grid — it has
+                 roughly half the phone's width, and two text buttons did not
+                 fit in it. -->
+            <button
+              class="btn btn-sm btn-success made-button"
+              title="I made this"
+              aria-label="I made this"
+              @click.stop="openCookedSheet(element)"
+            ><i class="bi bi-check-lg"></i></button>
             <button class="btn btn-sm btn-warning delete-button" @click.stop="deleteMeal(element)">Delete</button>
             <i v-if="selectedMeal.id !== element.id" class="bi bi-grip-vertical"/>
           </li>
@@ -243,8 +252,19 @@ export default {
             display: flex;
             justify-content: flex-start;
             justify-content: space-between;
+            align-items: center;
+            gap: 4px;
             padding: 8px 6px 8px 12px;
             position: relative;
+
+            // Without this a long meal name refuses to shrink and pushes the
+            // row wider than the phone.
+            > span:first-child {
+              min-width: 0;
+              overflow: hidden;
+              text-overflow: ellipsis;
+              white-space: nowrap;
+            }
 
             &.hide-delete .delete-button,
             &.hide-delete .made-button {
@@ -255,10 +275,15 @@ export default {
               opacity: 0;
             }
 
-            // Same reveal as Delete, so tapping a row shows both actions and
-            // the meal name keeps its width until then.
+            // 40px, not the 80px a "Made it" label needs. The staple
+            // checkbox taught this the expensive way (2026-08-19) and this row
+            // is worse off: it is one column of a two-column grid, so it has
+            // about half the phone to play with. Paired with the name's
+            // min-width:0 above, the NAME gives up space rather than the
+            // buttons being pushed out of view.
             .made-button {
-              width: 80px;
+              width: 40px;
+              flex: 0 0 40px;
               margin-right: 4px;
               transition: all 0.10s ease-out;
               white-space: nowrap;
