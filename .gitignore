@@ -4,6 +4,10 @@ node_modules
 .env
 invalidation_output.txt
 
+# Database snapshots written by scripts/reset-fridge.mjs — real household data,
+# and the only copy of what a reset deleted. Keep them on disk, out of git.
+/backups
+
 # local env files
 .env.local
 .env.*.local
