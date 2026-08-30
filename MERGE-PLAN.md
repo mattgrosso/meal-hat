@@ -93,6 +93,27 @@ life" are independent properties of one record, not two record types.
 5. **Lambda.** Repoint verification at meal-hat's database and fix the auth bug.
 6. **Ship.** Deploy, re-point the tablet, then retire perishable.
 
+## The kiosk cannot read the grocery catalog
+
+Found while building phase 4, and it shapes the whole UI phase.
+
+The unified food record lives in the hat, at `<hat>/grocery-catalog`, and the
+rules grant that only to hat members keyed by `auth.uid`. The wall tablet has an
+anonymous session and a capability key — it is not a member of anything, and
+cannot be made one without the sign-in it exists to avoid. **So the wall display
+can never read the catalog directly.**
+
+That is not a flaw in the merge, it is the same shape as the Magic Mirror, and
+it takes the same answer: the authenticated app PUBLISHES what the unauthored
+surface needs. `fridge/<key>/templates` stays, no longer as a second food
+database but as a **projection of the catalog's shelf lives**, written by the
+signed-in app and read by the kiosk.
+
+Writes flowing the other way — the wall learning a shelf life from a scan — land
+in the same node and are reconciled into the catalog by the app on its next
+load. The catalog stays authoritative; the projection is a cache with one
+writer that matters.
+
 ## Open question for Matt
 
 Perishable's phone view deliberately does **not** show timers — it is a capture
