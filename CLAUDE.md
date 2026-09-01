@@ -449,6 +449,30 @@ under `.fridge-app`. It all rides in the lazy-loaded fridge chunk, so no other
 screen pays for it. Break the scoping and every meal-hat screen turns black and
 starts fighting Bootstrap's reboot.
 
+### Putting a meal on the schedule by hand
+
+Bug report (2026-08-31, Carrie): *"I'd like to be able to manually enter a
+meal."* The schedule could reorder and delete; the only way to get anything
+ONTO it was the draw — so there was no way to say "chili on Thursday", and no
+way to record a night the hat has no opinion about.
+
+`scheduleMeal` writes one of two shapes, in the same atomic `update()` as
+`applyDraw`:
+
+- **a meal from the hat** — `{ mealId }`, and the meal's `drawnDates` gains the
+  date exactly as a draw would, so `mealWeight` keeps counting it. A meal you
+  placed and ate yesterday must not come straight back up.
+- **a one-off** — `{ name, manual: true }` and NO `mealId`. Nothing is added to
+  the hat: "we're getting pizza" is not a meal you want drawn later. It brings
+  no ingredients, and `aggregateMealIngredients` already skips a drawn row
+  whose meal it cannot resolve, so the shopping list is untouched.
+
+**Both readers of a drawn row must fall back to its own `name`.** The schedule's
+`drawnMeals` computed and `buildMirrorFeed` each drop a row they cannot resolve
+to a hat meal — correct for a meal deleted out of the hat, catastrophic for a
+one-off, which would simply never appear. Anything new that joins `mealId` to a
+meal needs the same fallback.
+
 ### Checking a meal off
 
 "Made it" on a schedule row opens a sheet, and the sheet is the point: cooking a

@@ -822,6 +822,57 @@ export default createStore({
       await context.dispatch('publishMirrorFeed');
     },
 
+    /**
+     * Put one meal on one date, by hand.
+     *
+     * Bug report (2026-08-31, Carrie): "I'd like to be able to manually enter
+     * a meal." The schedule could reorder and delete, but the only way to get
+     * anything ONTO it was the random draw — so there was no way to say "we're
+     * having chili on Thursday", and no way to record a night the hat has no
+     * opinion about (takeout, leftovers, dinner at someone else's).
+     *
+     * Two shapes, one action:
+     *   - a meal from the hat -> { mealId }, and the meal's drawnDates gains
+     *     the date, exactly as a draw would, so the overdue weighting keeps
+     *     counting it (a hand-placed meal you just ate should not immediately
+     *     come up again).
+     *   - a one-off -> { name } and NO mealId. Nothing is added to the hat:
+     *     "we're getting pizza" is not a meal you want drawn later.
+     *
+     * Same atomic update() as applyDraw, for the same reason.
+     */
+    async scheduleMeal (context, { meal, isoDate, oneOffName } = {}) {
+      if (!context.state.databaseTopKey || !isoDate) return null;
+
+      const name = String(oneOffName || '').trim().slice(0, 80);
+      if (!meal?.id && !name) return null;
+
+      const drawnMealId = `${Date.now()}-${uuidv4()}`;
+      const updates = {};
+
+      updates[`drawnMeals/${drawnMealId}`] = meal?.id
+        ? { id: drawnMealId, mealId: meal.id, assignedDate: isoDate }
+        // `manual: true` is not read anywhere yet. It is stored because a
+        // one-off is otherwise indistinguishable from a drawn meal whose hat
+        // entry was deleted, and those deserve different treatment the day
+        // anything wants to tell them apart.
+        : { id: drawnMealId, name, assignedDate: isoDate, manual: true };
+
+      if (meal?.id) {
+        updates[`meals/${meal.id}`] = removeNaNAndUndefined({ ...withDrawnDate(meal, isoDate) });
+      }
+
+      await update(ref(db, context.state.databaseTopKey), updates);
+
+      // A hand-placed hat meal brings its ingredients with it; a one-off has
+      // none, and aggregateMealIngredients skips it. Regenerating either way
+      // costs one read and keeps the list honest.
+      await context.dispatch('generateShoppingListFromMeals');
+      await context.dispatch('publishMirrorFeed');
+
+      return drawnMealId;
+    },
+
     // ------------------------------------------------------------------
     // Magic Mirror feed. See src/assets/javascript/mirrorFeed.js for why this
     // exists: the mirror used to read the whole hat over unauthenticated REST

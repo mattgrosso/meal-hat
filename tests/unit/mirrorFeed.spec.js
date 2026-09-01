@@ -160,3 +160,50 @@ describe('buildMirrorFeed', () => {
     expect(Object.keys(feed.upcoming[0].meal).sort()).toEqual(['id', 'name']);
   });
 });
+
+// Bug report (2026-08-31, Carrie): "I'd like to be able to manually enter a
+// meal." A hand-placed one-off (store scheduleMeal) carries its own name and
+// has no hat entry at all — "we're getting pizza Friday" belongs on the mirror
+// just as much as a drawn meal does.
+describe('hand-placed one-off meals', () => {
+  const now = at('2026-08-24');
+
+  it('publishes a one-off using the name stored on the record', () => {
+    const feed = buildMirrorFeed(
+      [{ id: 'd9', name: 'Takeout', assignedDate: '2026-08-25', manual: true }],
+      MEALS,
+      { now }
+    );
+
+    expect(feed.upcoming).toHaveLength(1);
+    expect(feed.upcoming[0].meal.name).toBe('Takeout');
+    expect(feed.upcoming[0].assignedDate).toBe('2026-08-25');
+  });
+
+  it('mixes one-offs and drawn meals in date order', () => {
+    const feed = buildMirrorFeed(
+      [
+        drawn('d1', 'm2', '2026-08-27'),
+        { id: 'd9', name: 'Leftovers', assignedDate: '2026-08-25' },
+        drawn('d2', 'm1', '2026-08-26')
+      ],
+      MEALS,
+      { now }
+    );
+
+    expect(feed.upcoming.map((u) => u.meal.name)).toEqual(['Leftovers', 'Tacos', 'Curry']);
+  });
+
+  // The pre-existing guard has to keep working: a drawn row whose hat meal was
+  // deleted has neither a mealId match nor a name of its own, and would render
+  // as a blank line.
+  it('still drops a record with no meal and no name of its own', () => {
+    const feed = buildMirrorFeed(
+      [drawn('d1', 'gone', '2026-08-25'), { id: 'd2', name: '   ', assignedDate: '2026-08-26' }],
+      MEALS,
+      { now }
+    );
+
+    expect(feed.upcoming).toEqual([]);
+  });
+});

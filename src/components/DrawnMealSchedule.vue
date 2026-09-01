@@ -55,6 +55,59 @@
       @close="cookingMeal = null"
     />
 
+    <!-- Bug report (2026-08-31, Carrie): "I'd like to be able to manually
+         enter a meal." The schedule could reorder and delete; the only way to
+         get anything ONTO it was the draw. -->
+    <button class="btn btn-outline-primary btn-sm mt-3" @click="openAddMeal">
+      <i class="bi bi-plus-lg me-1"></i>Add a meal
+    </button>
+
+    <AppModal
+      v-if="addingMeal"
+      :show-modal="true"
+      title="Add a meal"
+      primary-button-text="Add it"
+      secondary-button-text="Cancel"
+      :primary-button-callback="reallyAddMeal"
+      :secondary-button-callback="closeAddMeal"
+      :close-modal-callback="closeAddMeal"
+    >
+      <div class="mb-3">
+        <label class="form-label" for="add-meal-date">Date</label>
+        <input id="add-meal-date" v-model="addDate" type="date" class="form-control" />
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label" for="add-meal-pick">Meal</label>
+        <select id="add-meal-pick" v-model="addMealId" class="form-select">
+          <option value="">Something else&hellip;</option>
+          <option v-for="meal in hatMealsByName" :key="meal.id" :value="meal.id">
+            {{ meal.name }}
+          </option>
+        </select>
+      </div>
+
+      <!-- The one-off: a night the hat has no opinion about. Nothing is added
+           to the hat — "we're getting pizza" isn't a meal you want drawn
+           later — so it brings no ingredients and the shopping list is
+           unaffected. -->
+      <div v-if="!addMealId" class="mb-3">
+        <label class="form-label" for="add-meal-name">What are you having?</label>
+        <input
+          id="add-meal-name"
+          v-model.trim="addOneOffName"
+          class="form-control"
+          maxlength="80"
+          placeholder="Takeout, leftovers, dinner at Mom's…"
+        />
+        <div class="form-text">
+          Just for this night. It won't go in the hat or on the shopping list.
+        </div>
+      </div>
+
+      <p v-if="addError" class="text-danger small mb-0">{{ addError }}</p>
+    </AppModal>
+
     <!-- Deleting is destructive and silent: it drops the schedule row, rolls
          back the meal's drawn history AND regenerates the shopping list. It
          now sits behind a confirm, because the button is a 40px target next
@@ -101,7 +154,14 @@ export default {
       // the drawn row: the plan is about the recipe's ingredients.
       cookingMeal: null,
       // The row awaiting a delete confirm, or null.
-      deletingMeal: null
+      deletingMeal: null,
+      // The "add a meal" dialog.
+      addingMeal: false,
+      addDate: '',
+      addMealId: '',
+      addOneOffName: '',
+      addError: '',
+      addBusy: false
     }
   },
   computed: {
@@ -110,6 +170,15 @@ export default {
     // exists to have prevented.
     nextMealId () {
       return nextMealId(this.drawnMeals);
+    },
+    // The hat's meals, A-Z — the draw's own order is deliberately random, and
+    // a picker you're scanning for one name wants the opposite.
+    hatMealsByName () {
+      const meals = this.$store.state.meals;
+      if (typeof meals !== 'object' || meals === null) return [];
+      return Object.values(meals)
+        .filter((meal) => meal?.id && meal.name)
+        .sort((a, b) => String(a.name).localeCompare(String(b.name)));
     },
     drawnMeals () {
       if (!this.$store.state.drawnMealsWithHistory || !this.$store.state.drawnMealsWithHistory.length) {
@@ -120,10 +189,14 @@ export default {
         const cutoff = toISODate(oneWeekAgo);
 
         return this.$store.state.drawnMealsWithHistory.map((drawnMeal) => {
-          return {
-            ...drawnMeal,
-            meal: this.$store.getters.getMeal(drawnMeal.mealId)
-          }
+          // A hand-placed one-off carries its own name and has no hat entry
+          // (store scheduleMeal). Without this fallback the filter below would
+          // drop it on the floor — the row would simply never appear, which is
+          // the worst possible outcome for something you typed in yourself.
+          const meal = this.$store.getters.getMeal(drawnMeal.mealId) ||
+            (drawnMeal.name ? { id: drawnMeal.id, name: drawnMeal.name, oneOff: true } : null);
+
+          return { ...drawnMeal, meal };
         }).filter((drawnMeal) => {
           const date = toISODate(drawnMeal.assignedDate);
           return drawnMeal.meal && date && date >= cutoff;
@@ -132,6 +205,63 @@ export default {
     }
   },
   methods: {
+    openAddMeal () {
+      this.addError = '';
+      this.addMealId = '';
+      this.addOneOffName = '';
+      // Default to the first day the schedule has nothing on, so the common
+      // case — filling a gap the draw left — is one tap.
+      this.addDate = this.firstFreeDate();
+      this.addingMeal = true;
+    },
+    closeAddMeal () {
+      this.addingMeal = false;
+    },
+    // Today, or the earliest later day with no meal on it. Looks a fortnight
+    // ahead and then gives up and returns today rather than running forever.
+    firstFreeDate () {
+      const taken = new Set(this.drawnMeals.map((d) => toISODate(d.assignedDate)));
+      const day = new Date();
+      for (let i = 0; i < 14; i++) {
+        const iso = toISODate(day);
+        if (iso && !taken.has(iso)) return iso;
+        day.setDate(day.getDate() + 1);
+      }
+      return toISODate(new Date());
+    },
+    async reallyAddMeal () {
+      if (this.addBusy) return;
+      this.addError = '';
+
+      const isoDate = toISODate(this.addDate);
+      if (!isoDate) {
+        this.addError = 'Pick a date first.';
+        return;
+      }
+
+      const meal = this.addMealId
+        ? this.$store.getters.getMeal(this.addMealId)
+        : null;
+
+      if (!meal && !this.addOneOffName) {
+        this.addError = 'Pick a meal, or say what you\'re having.';
+        return;
+      }
+
+      this.addBusy = true;
+      try {
+        await this.$store.dispatch('scheduleMeal', {
+          meal,
+          isoDate,
+          oneOffName: meal ? '' : this.addOneOffName
+        });
+        this.addingMeal = false;
+      } catch (error) {
+        this.addError = 'Could not add that just now. Try again in a moment.';
+      } finally {
+        this.addBusy = false;
+      }
+    },
     startDrag (event) {
       this.drag = true;
     },

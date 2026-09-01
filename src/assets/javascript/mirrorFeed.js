@@ -72,7 +72,15 @@ export function buildMirrorFeed (drawnMeals, meals, { now = Date.now(), windowDa
     // Inclusive of today — you have not eaten tonight's dinner yet, which is
     // the same call isUpcoming() makes for the shopping list.
     .filter(({ iso }) => iso && iso >= today && iso <= horizon)
-    .map(({ drawn, iso }) => ({ drawn, iso, meal: catalog.get(String(drawn.mealId)) }))
+    // A hand-placed one-off (store scheduleMeal) carries its own name and has
+    // no hat entry at all — "we're getting pizza Friday" belongs on the mirror
+    // just as much as a drawn meal does.
+    .map(({ drawn, iso }) => ({
+      drawn,
+      iso,
+      meal: catalog.get(String(drawn.mealId)) ||
+        (drawn?.name ? { id: drawn.id, name: drawn.name } : undefined)
+    }))
     // A drawn record whose meal has since been deleted from the hat would
     // render as a blank line on the mirror. Drop it here rather than shipping
     // a name-less entry and hoping the display copes.
