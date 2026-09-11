@@ -385,6 +385,10 @@ body.fridge-active {
   min-height: 100vh;
   width: 100%;
   padding: 16px;
+  /* Set here and not only on body: meal-hat's #app puts Mulish on everything
+   * beneath it, and inheritance walks through #app before it reaches the
+   * fridge. Perishable's wall is Roboto Serif and stays that way. */
+  font-family: 'Roboto Serif', serif;
 
   .timers-grid {
     display: grid;
