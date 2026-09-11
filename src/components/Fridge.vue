@@ -361,14 +361,24 @@ body.fridge-active {
   font-family: 'Roboto Serif', serif;
   background: #000;
   color: #fff;
+}
 
-  /* Perishable's global reset, confined to the fridge. Bootstrap's reboot
-   * still owns every other screen. */
-  .fridge-app * {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-  }
+/* Perishable's global reset, confined to the fridge. Bootstrap's reboot still
+ * owns every other screen.
+ *
+ * SPECIFICITY IS THE WHOLE POINT of this selector. Perishable's reset was a
+ * bare `*` — specificity zero — so every component's own `.timer-card`
+ * padding beat it. The first port nested this under `body.fridge-active`,
+ * which made it (0,2,1): heavier than any scoped component rule, so it
+ * stripped the padding and margins off every card, and the wall came up
+ * squashed the first time it was seen in meal-hat (2026-09-11). `:where()`
+ * contributes nothing, leaving (0,1,0) from `.fridge-app`: enough to beat
+ * Bootstrap's element-level reboot (`p`, `h1`, `button`…), and less than any
+ * scoped rule, which carries a class plus a data attribute. */
+:where(body.fridge-active) .fridge-app * {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
 }
 
 .fridge-app {
