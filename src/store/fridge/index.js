@@ -7,12 +7,30 @@
 // hat in the database is fridgeless; keeping this self-contained is what makes
 // the feature opt-in rather than a schema change landing in 13 accounts.
 
-import { ref, push, set, update, remove, onValue, query, limitToLast } from 'firebase/database'
+import { ref, push, set, update, remove, get, onValue, off, query, limitToLast, serverTimestamp } from 'firebase/database'
 import { db, ensureSession } from '@/firebase'
 import { sortTimers, spanInDays, formatDaySpan } from './timers'
 import { sortHistory, HISTORY_LIMIT } from './history'
 import { timersPath, templatesPath, historyPath, templateKey } from './paths'
 import { reconcileShelfLives, fridgeFoodId } from './reconcile'
+import { pairingPath, isFreshPairing } from '@/utils/fridge/pairing'
+import { isValidKey } from '@/utils/fridge/fridgeKey'
+
+// Every real fridge has templates — the migration wrote them and every
+// signed-in visit republishes them — so their absence is the honest test for
+// "no fridge has this key". Timers are checked too, in case a fridge was ever
+// emptied of templates by hand. A read failure counts as absent: either way
+// this key is not one to subscribe to.
+const fridgeExists = async (key) => {
+  try {
+    const templates = await get(ref(db, templatesPath(key)))
+    if (templates.exists()) return true
+    const timers = await get(ref(db, timersPath(key)))
+    return timers.exists()
+  } catch {
+    return false
+  }
+}
 
 export default {
   namespaced: true,
@@ -98,22 +116,39 @@ export default {
     // fridge is a perfectly normal answer — it is what a brand new one looks
     // like — so an emptiness check would re-attach a fresh listener every time
     // the route was entered.
-    async subscribe ({ commit, state }, fridgeKey) {
-      const key = fridgeKey || state.fridgeKey
+    //
+    // Takes a key, or `{ key, verify }`. `verify` is for a key that arrived
+    // by URL or was typed: the rules grant any well-formed key a read of its
+    // own (empty) node, so a key with one character wrong subscribes fine and
+    // shows an EMPTY FRIDGE — which is what Matt's tablet did on 2026-09-11
+    // after the key was typed in by hand. A verified key that names no fridge
+    // is reported as `unknown` instead, and nothing is subscribed. The hat's
+    // own pointer is never verified: it came from the database, not a keyboard.
+    async subscribe ({ commit, state }, payload) {
+      const { key: given, verify = false } = typeof payload === 'string' || !payload
+        ? { key: payload }
+        : payload
+      const key = given || state.fridgeKey
       if (!key) {
         commit('SET_ERROR', 'unauthorized')
         return
       }
       if (state.subscribedTo === key) return
 
-      commit('SET_FRIDGE_KEY', key)
-      commit('SET_SUBSCRIBED_TO', key)
-      commit('SET_LOADING', true)
-
       // The token has to exist before the first read, or the SDK sends the
       // request unauthenticated and the rules answer with a permission error
       // that reads exactly like a bad key.
       await ensureSession()
+
+      if (verify && !(await fridgeExists(key))) {
+        commit('SET_ERROR', 'unknown')
+        commit('SET_LOADING', false)
+        return
+      }
+
+      commit('SET_FRIDGE_KEY', key)
+      commit('SET_SUBSCRIBED_TO', key)
+      commit('SET_LOADING', true)
 
       onValue(ref(db, timersPath(key)), (snapshot) => {
         commit('SET_TIMERS', snapshot.val())
@@ -138,6 +173,38 @@ export default {
       }, (error) => {
         console.error('Failed to load fridge history:', error)
       })
+    },
+
+    // The phone's half of pairing a wall display: publish this hat's key under
+    // the code the wall is showing. Only a signed-in member has the pointer,
+    // and the rules refuse the write from an anonymous session anyway.
+    async offerPairing ({ rootState }, code) {
+      const key = rootState.fridgeKeyForHat
+      if (!key) throw new Error('This account has no fridge to pair.')
+      await ensureSession()
+      await set(ref(db, pairingPath(code)), { key, createdAt: serverTimestamp() })
+    },
+
+    // The wall's half: wait at `pairings/<code>` for a phone to answer.
+    // Resolves with the key, having deleted the pairing so the code is spent
+    // the instant it is used. `cancel` detaches the listener — the screen
+    // calls it on unmount, and when a key arrives some other way first.
+    async awaitPairing (_context, code) {
+      await ensureSession()
+      const pairingRef = ref(db, pairingPath(code))
+      let settle
+      const promise = new Promise((resolve) => { settle = resolve })
+      const listener = onValue(pairingRef, (snapshot) => {
+        const record = snapshot.val()
+        if (!isFreshPairing(record, Date.now(), { isValidKey })) return
+        off(pairingRef, 'value', listener)
+        // Fire-and-forget: a pairing left behind expires by age anyway.
+        remove(pairingRef).catch(() => {})
+        settle(record.key)
+      }, (error) => {
+        console.error('Could not listen for a pairing:', error)
+      })
+      return { promise, cancel: () => off(pairingRef, 'value', listener) }
     },
 
     // Write one line to the change log. Deliberately fire-and-forget and

@@ -23,6 +23,16 @@
         That doesn't have a key in it — paste the whole link, the one containing
         <code>?k=…</code>
       </p>
+      <!-- Or don't type anything here at all: a signed-in phone can hand this
+           device the key against a code it can read off the wall. -->
+      <div v-if="pairingCode" class="pair">
+        <div class="pair-label">Or pair from your phone</div>
+        <div class="pair-code">{{ pairingCodeSpaced }}</div>
+        <div class="pair-hint">
+          On your phone, open the fridge in Meal Hat, tap
+          “Pair a wall display”, and enter this code.
+        </div>
+      </div>
     </div>
 
     <div v-else-if="awaitingHatKey" class="loading">
@@ -95,6 +105,7 @@ import ScanFlow from './fridge/ScanFlow.vue';
 import PhoneView from './fridge/PhoneView.vue';
 import HistorySheet from './fridge/HistorySheet.vue';
 import { adoptFridgeKey, extractKey, storeFridgeKey } from '@/utils/fridge/fridgeKey';
+import { generatePairingCode, urlWithKey } from '@/utils/fridge/pairing';
 import { resolveViewMode } from '@/utils/fridge/viewMode';
 import { buildStamp } from '@/utils/buildStamp';
 
@@ -117,6 +128,9 @@ export default {
       viewMode: 'wall',
       justAdded: '',
       pastedKey: '',
+      // The code on the not-connected screen, and the listener behind it.
+      pairingCode: '',
+      cancelPairing: null,
       stamp: buildStamp(),
       // Once per visit. The watcher below fires whenever either side's
       // subscription updates, and re-running the merge on every snapshot would
@@ -138,7 +152,11 @@ export default {
       return this.$store.state.fridge.loading;
     },
     error () {
-      return this.$store.state.fridge.error === 'unauthorized' ? null : this.$store.state.fridge.error;
+      const error = this.$store.state.fridge.error;
+      return error === 'unauthorized' || error === 'unknown' ? null : error;
+    },
+    pairingCodeSpaced () {
+      return this.pairingCode ? `${this.pairingCode.slice(0, 3)} ${this.pairingCode.slice(3)}` : '';
     },
     // Signed in, no key in the URL, and the hat's pointer hasn't reported
     // yet. That is a moment to wait through, not a failure: the pointer is a
@@ -149,16 +167,21 @@ export default {
         !this.$store.state.fridgeKeyLoaded;
     },
     notConnected () {
+      const error = this.$store.state.fridge.error;
       return (this.missingKey && !this.awaitingHatKey) ||
-        this.$store.state.fridge.error === 'unauthorized';
+        error === 'unauthorized' || error === 'unknown';
     },
-    // Say which of the two it actually is. The old copy claimed "no key" even
-    // when the key was present and the database had refused it, which sent you
-    // looking for the wrong problem.
+    // Say which of the three it actually is. The old copy claimed "no key"
+    // even when the key was present and the database had refused it, which
+    // sent you looking for the wrong problem. "Unknown" is the typo case: a
+    // well-formed key that names no fridge, which used to render as an empty
+    // fridge and say nothing.
     notConnectedReason () {
-      return this.missingKey
-        ? 'This device has no fridge key yet.'
-        : 'The fridge key on this device was refused. It may have been replaced.';
+      if (this.missingKey) return 'This device has no fridge key yet.';
+      if (this.$store.state.fridge.error === 'unknown') {
+        return 'No fridge has the key in this link — there is probably a typo in it.';
+      }
+      return 'The fridge key on this device was refused. It may have been replaced.';
     },
     pastedKeyValid () {
       return Boolean(extractKey(this.pastedKey));
@@ -175,6 +198,15 @@ export default {
     }
   },
   watch: {
+    // The not-connected screen always offers a pairing code, and the listener
+    // behind it lives exactly as long as the screen does.
+    notConnected: {
+      immediate: true,
+      handler (shown) {
+        if (shown) this.startPairing();
+        else this.stopPairing();
+      }
+    },
     // The hat's pointer landing after mount is the NORMAL cold-load order.
     // connect() ran once already and found nothing; run it again now.
     '$store.state.fridgeKeyForHat' (key) {
@@ -206,6 +238,7 @@ export default {
   beforeUnmount () {
     document.body.classList.remove('fridge-active');
     clearTimeout(this.justAddedTimer);
+    this.stopPairing();
   },
   methods: {
     // Two doors to the same fridge. The kiosk arrives holding the key in its
@@ -213,13 +246,42 @@ export default {
     // hat's pointer instead, so the secret never has to be pasted onto a
     // device that is already authenticated.
     connect () {
-      const key = adoptFridgeKey() || this.$store.state.fridgeKeyForHat;
+      const fromUrl = adoptFridgeKey();
+      const key = fromUrl || this.$store.state.fridgeKeyForHat;
       if (key) {
-        this.$store.dispatch('fridge/subscribe', key);
+        // A key from the address bar or storage was typed by someone at some
+        // point, so it is verified; the hat's own pointer is not.
+        this.$store.dispatch('fridge/subscribe', { key, verify: Boolean(fromUrl) });
         this.missingKey = false;
       } else {
         this.missingKey = true;
       }
+    },
+    async startPairing () {
+      if (this.cancelPairing) return;
+      const code = generatePairingCode();
+      this.pairingCode = code;
+      const { promise, cancel } = await this.$store.dispatch('fridge/awaitPairing', code);
+      this.cancelPairing = cancel;
+      promise.then((key) => {
+        if (this.cancelPairing !== cancel) return; // superseded or unmounted
+        this.cancelPairing = null;
+        this.pairingCode = '';
+        this.adoptKey(key);
+      });
+    },
+    stopPairing () {
+      if (this.cancelPairing) this.cancelPairing();
+      this.cancelPairing = null;
+      this.pairingCode = '';
+    },
+    // A full reload rather than re-dispatching: it re-runs adoptFridgeKey,
+    // which puts the key in the address bar, and clears any half-built state
+    // from the failed attempt. The hash and the wall's view pin are carried
+    // explicitly — assigning to location.search alone would drop the route.
+    adoptKey (key) {
+      storeFridgeKey(key);
+      window.location.href = urlWithKey(key, window.location);
     },
     addTimer (timerData) {
       this.$store.dispatch('fridge/addTimer', {
@@ -233,12 +295,7 @@ export default {
     reconnect () {
       const key = extractKey(this.pastedKey);
       if (!key) return;
-      storeFridgeKey(key);
-      // A full reload rather than re-dispatching: it re-runs adoptFridgeKey,
-      // which puts the key in the address bar, and clears any half-built state
-      // from the failed attempt. The hash has to be carried explicitly —
-      // assigning to location.search alone would drop the route.
-      window.location.href = `${window.location.pathname}?k=${key}#/fridge`;
+      this.adoptKey(key);
     },
     // The phone leads with the camera, so a write needs to say so out loud.
     noteAdded (message) {
@@ -418,6 +475,34 @@ body.fridge-active {
       code {
         font-family: 'IBM Plex Mono', monospace;
       }
+    }
+
+    .pair {
+      margin-top: 3rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .pair-label {
+      font-size: 1.25rem;
+      opacity: 0.7;
+    }
+
+    // Readable from across the kitchen while holding a phone.
+    .pair-code {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 4.5rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      color: #fff;
+    }
+
+    .pair-hint {
+      font-size: 1.1rem;
+      opacity: 0.6;
+      max-width: 28rem;
     }
   }
 

@@ -410,6 +410,33 @@ The tablet is a member of no hat, so it can **never** read
 catalog's shelf lives, published by the signed-in app — the same arrangement as
 the Magic Mirror feed, for the same reason.
 
+### A wrong key must be loud, and the wall pairs by code
+
+Two rules, both learned on 2026-09-11 when Matt typed the kiosk URL into the
+tablet by hand and got one character wrong.
+
+**A well-formed key that names no fridge is an error, not an empty fridge.**
+The rules grant any 32+ character key a read of its own node, so a typo
+subscribes successfully to nothing and the wall shows an empty fridge with no
+hint why. `fridge/subscribe` now takes `{ key, verify }`; a key that arrived by
+URL or storage is verified (templates or timers must exist — every real fridge
+has templates) and reported as `unknown`, which the screen says out loud. The
+hat's own pointer is never verified: it came from the database, not a keyboard.
+
+**Nobody types the key on the tablet.** The not-connected screen shows a
+six-digit code and listens at `pairings/<code>`; the phone's "Pair a wall
+display" writes `{ key, createdAt }` there; the tablet adopts the key, deletes
+the pairing, and reloads with `?k=` in its URL as before (`urlWithKey` keeps
+the `view=wall` pin and the `#/fridge` hash). Rules: an anonymous session may
+read a pairing and may only write null; creating one needs a real account.
+`src/utils/fridge/pairing.js`. From the CLI, the phone's half is
+`firebase database:set /pairings/<code> '{"key":"<key>","createdAt":<ms>}'`.
+
+**Fully Kiosk's start URL still has to be right.** A pairing fixes THIS load;
+the next kiosk restart reloads the start URL, and a valid-looking key in the
+URL wins over the stored one. If the wall keeps asking to pair after restarts,
+fix the one character in Fully's settings.
+
 ### Two copies of a shelf life, and how they stay honest
 
 The catalog is authoritative. Templates are the wall-readable cache. But the

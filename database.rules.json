@@ -113,6 +113,28 @@
       }
     },
 
+    // Pairing a wall display: see src/utils/fridge/pairing.js.
+    //
+    // A signed-in phone (a real account — the anonymous session a kiosk holds
+    // may NOT create one) writes `{ key, createdAt }` under a six-digit code
+    // the tablet is showing. The tablet, anonymous, reads it and then deletes
+    // it — the only write an anonymous session is allowed here is null. The
+    // key shape is checked so a pairing can never hand a tablet a malformed
+    // key, and createdAt is pinned to the server clock so a stale record is
+    // recognisable as stale.
+    //
+    // At the root for the same reason as fridge: under the $hat wildcard,
+    // "pairings" would be a creatable hat.
+    "pairings": {
+      ".read": false,
+      ".write": false,
+      "$code": {
+        ".read": "auth != null && $code.matches(/^[0-9]{6}$/)",
+        ".write": "auth != null && $code.matches(/^[0-9]{6}$/) && (!newData.exists() || auth.token.firebase.sign_in_provider != 'anonymous')",
+        ".validate": "newData.hasChildren(['key', 'createdAt']) && newData.child('key').isString() && newData.child('key').val().matches(/^[A-Za-z0-9_-]{32,}$/) && newData.child('createdAt').isNumber()"
+      }
+    },
+
     "$hat": {
       // Membership, not name-knowledge.
       //

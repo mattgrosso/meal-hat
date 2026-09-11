@@ -22,6 +22,32 @@
       {{ justAdded }} — it's on the kitchen screen now.
     </p>
 
+    <!-- Hand the wall its key without typing the key on the wall. The tablet
+         shows a six-digit code on its not-connected screen; this is where it
+         gets typed. Only a member with the hat's pointer can do it. -->
+    <template v-if="canPair">
+      <button v-if="!showPair" class="manual-cta" @click="showPair = true">
+        Pair a wall display
+      </button>
+      <form v-else class="pair-form" @submit.prevent="pair">
+        <label class="pair-label" for="pair-code">The code on the wall</label>
+        <input
+          id="pair-code"
+          v-model="pairCode"
+          class="pair-input"
+          type="text"
+          inputmode="numeric"
+          autocomplete="one-time-code"
+          placeholder="482 116"
+          :disabled="pairing"
+        >
+        <button class="pair-btn" type="submit" :disabled="!pairCodeValid || pairing">
+          {{ pairing ? 'Sending…' : 'Pair' }}
+        </button>
+        <p v-if="pairMessage" class="pair-message">{{ pairMessage }}</p>
+      </form>
+    </template>
+
     <!-- What's on hand.
          Perishable's phone deliberately showed no timers: the wall was three
          steps away and doing that job. Inside meal-hat the phone is also where
@@ -46,6 +72,7 @@
 
 <script>
 import { computeTimeLeft, timerStatus } from '@/store/fridge/timers'
+import { normalizePairingCode } from '@/utils/fridge/pairing'
 
 // The phone. A capture surface first — see utils/fridge/viewMode.js — with a
 // collapsed on-hand list underneath for the grocery store.
@@ -59,10 +86,20 @@ export default {
     return {
       // Collapsed by default. The camera is why this screen exists; a list
       // opened every time would bury it.
-      showOnHand: false
+      showOnHand: false,
+      showPair: false,
+      pairCode: '',
+      pairing: false,
+      pairMessage: ''
     }
   },
   computed: {
+    canPair () {
+      return Boolean(this.$store.state.fridgeKeyForHat)
+    },
+    pairCodeValid () {
+      return Boolean(normalizePairingCode(this.pairCode))
+    },
     onHand () {
       // Already sorted soonest-expiring first by the allTimers getter.
       return this.$store.getters['fridge/allTimers'].map((timer) => {
@@ -81,6 +118,24 @@ export default {
               : `${left.hours}h`
         }
       })
+    }
+  },
+  methods: {
+    async pair () {
+      const code = normalizePairingCode(this.pairCode)
+      if (!code) return
+      this.pairing = true
+      this.pairMessage = ''
+      try {
+        await this.$store.dispatch('fridge/offerPairing', code)
+        this.pairMessage = 'Sent — the wall should switch over in a moment.'
+        this.pairCode = ''
+      } catch (error) {
+        console.error('Pairing failed:', error)
+        this.pairMessage = "That didn't go through. Check the code and try again."
+      } finally {
+        this.pairing = false
+      }
     }
   }
 }
@@ -145,6 +200,64 @@ export default {
     font-size: 1.4rem;
     font-weight: 600;
   }
+}
+
+.pair-form {
+  width: 100%;
+  max-width: 340px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  align-items: stretch;
+}
+
+.pair-label {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.95rem;
+}
+
+.pair-input {
+  padding: 0.9rem 1rem;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 12px;
+  color: #fff;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 1.6rem;
+  letter-spacing: 0.15em;
+  text-align: center;
+
+  &::placeholder {
+    color: rgba(255, 255, 255, 0.3);
+    letter-spacing: 0.15em;
+  }
+
+  &:focus {
+    outline: none;
+    border-color: rgba(255, 255, 255, 0.6);
+  }
+}
+
+.pair-btn {
+  padding: 1rem;
+  background: #4CAF50;
+  border: none;
+  border-radius: 12px;
+  color: #fff;
+  font-family: inherit;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+}
+
+.pair-message {
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 0.95rem;
 }
 
 .manual-cta {
