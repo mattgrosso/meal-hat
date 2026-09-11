@@ -135,6 +135,13 @@ export default {
       }
       if (state.subscribedTo === key) return
 
+      // Loading goes up BEFORE the first await. The wall renders its grid the
+      // moment loading is false and the timer list is empty, so a session
+      // handshake with loading still false paints an empty wall with a lone
+      // Add Timer card for a second on every load.
+      commit('SET_LOADING', true)
+      commit('SET_ERROR', null)
+
       // The token has to exist before the first read, or the SDK sends the
       // request unauthenticated and the rules answer with a permission error
       // that reads exactly like a bad key.
@@ -148,7 +155,6 @@ export default {
 
       commit('SET_FRIDGE_KEY', key)
       commit('SET_SUBSCRIBED_TO', key)
-      commit('SET_LOADING', true)
 
       onValue(ref(db, timersPath(key)), (snapshot) => {
         commit('SET_TIMERS', snapshot.val())
