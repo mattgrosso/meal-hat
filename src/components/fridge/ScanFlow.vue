@@ -68,7 +68,7 @@
               >
                 <img :src="newCrops[index]" class="review-crop" alt="">
               </button>
-              <input type="text" v-model="item.name" class="review-name" :disabled="!item.included">
+              <input type="text" v-model="item.name" class="review-name" :disabled="!item.included" @change="rename(item)">
             </div>
             <!-- Same chips as the haul review: a template match has to SAY it
                  is one, or a 51-day shelf life rides along invisibly. -->
@@ -134,7 +134,7 @@
             >
               <img :src="crops[index]" class="review-crop" alt="">
             </button>
-            <input type="text" v-model="item.name" class="review-name" :disabled="!item.included">
+            <input type="text" v-model="item.name" class="review-name" :disabled="!item.included" @change="rename(item)">
           </div>
           <!-- The receipt line as printed, so a bad expansion is catchable. -->
           <p v-if="item.printedText" class="review-printed">{{ item.printedText }}</p>
@@ -220,9 +220,14 @@ import {
   confirmPayload,
   buildReconcile,
   reconcileReady,
-  isStorageScan
+  isStorageScan,
+  renameReviewItem
 } from '@/store/fridge/scanReview'
 import { formatDaySpan } from '@/store/fridge/timers'
+import { markBusy, clearBusy } from '@/utils/appUpdate'
+
+// The reason string this sheet registers with the auto-update machinery.
+const BUSY_REASON = 'fridge-scan'
 
 // How large to re-render an original photo for the close-up view. Beyond
 // this a phone photo costs seconds of canvas work and tens of megabytes of
@@ -236,6 +241,16 @@ export default {
     timers: { type: Array, default: () => [] }
   },
   emits: ['close', 'confirm', 'reconcile'],
+  mounted () {
+    // No auto-update while this sheet is open. A half-reviewed scan lives
+    // only in memory: a reload mid-review throws away the photos, the model's
+    // reading (already paid for) and every rename and tick so far. The sheet
+    // is transient — the hold lifts the moment it closes.
+    markBusy(BUSY_REASON)
+  },
+  beforeUnmount () {
+    clearBusy(BUSY_REASON)
+  },
   data () {
     return {
       stage: 'pick',
@@ -319,6 +334,11 @@ export default {
     async freshIdToken () {
       const user = await ensureSession();
       return user ? user.getIdToken() : '';
+    },
+    // On change (blur/enter), not on every keystroke: snapping the text to a
+    // template's title mid-word would fight the typing.
+    rename (item) {
+      renameReviewItem(item, item.name, this.templates)
     },
     formatDays (days) {
       return formatDaySpan(days)

@@ -111,6 +111,24 @@ export const buildReviewItem = (scanItem, templates, now, photoIndex = 0, starts
   }
 }
 
+// A row renamed by hand is re-matched against the templates, because the
+// shelf life came with the NAME, not the photo. Real case (2026-09-11): the
+// scan reads a mozzarella as "Cheddar", the row arrives with cheddar's 74 days
+// as "your usual", and typing "Mozzarella" over it left those 74 days in
+// place. So a rename that lands on a template takes that template's title
+// (names are the join with the catalog — the spelling has to be exact) and
+// its days; one that lands on nothing becomes a new food, which per the rule
+// above stops for input rather than keeping the wrong food's duration.
+export const renameReviewItem = (item, newName, templates) => {
+  const typed = String(newName || '').trim()
+  const template = findTemplate(typed, templates)
+  item.name = template ? template.title : typed
+  item.days = template ? template.days : null
+  item.fromTemplate = Boolean(template)
+  item.readAs = ''
+  return item
+}
+
 // Many photos -> one deduplicated review list. The same food seen in two
 // photos of the same haul is one item; the first sighting keeps its crop.
 export const buildReviewList = (scans, templates, now) => {

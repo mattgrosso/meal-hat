@@ -8,6 +8,7 @@ import {
   buildReviewItem,
   buildReviewList,
   reviewReady,
+  renameReviewItem,
   confirmPayload,
   buildReconcile,
   reconcileReady,
@@ -359,5 +360,34 @@ describe('isStorageScan', () => {
     expect(isStorageScan({ photoKind: 'groceries' })).toBe(false)
     expect(isStorageScan({ photoKind: 'receipt' })).toBe(false)
     expect(isStorageScan(null)).toBe(false)
+  })
+})
+
+describe('renameReviewItem', () => {
+  it('a rename onto a known food takes that food\'s title and shelf life', () => {
+    const item = buildReviewItem(scanItem({ name: 'Cheddar', knownFoodMatch: 'Cheddar Cheese' }), TEMPLATES, NOW)
+    expect(item.days).toBe(74)
+    renameReviewItem(item, ' cucumbers ', TEMPLATES)
+    expect(item.name).toBe('Cucumber')
+    expect(item.days).toBe(5)
+    expect(item.fromTemplate).toBe(true)
+    expect(item.readAs).toBe('')
+  })
+
+  it('a rename onto an unknown food drops the old shelf life and stops for input', () => {
+    // The bug: "Cheddar" with 74 days retyped as "Mozzarella" kept the 74 days.
+    const item = buildReviewItem(scanItem({ name: 'Cheddar', knownFoodMatch: 'Cheddar Cheese' }), TEMPLATES, NOW)
+    renameReviewItem(item, 'Mozzarella', TEMPLATES)
+    expect(item.name).toBe('Mozzarella')
+    expect(item.days).toBeNull()
+    expect(item.fromTemplate).toBe(false)
+    expect(reviewReady([item])).toBe(false)
+  })
+
+  it('a rename clears the read-as note, since the substitution is now yours', () => {
+    const item = buildReviewItem(scanItem({ name: 'SRDGH BREAD', knownFoodMatch: 'Cheddar Cheese' }), TEMPLATES, NOW)
+    expect(item.readAs).toBe('SRDGH BREAD')
+    renameReviewItem(item, 'Sourdough', TEMPLATES)
+    expect(item.readAs).toBe('')
   })
 })
