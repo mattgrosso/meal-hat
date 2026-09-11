@@ -590,6 +590,16 @@ strands a job already paid for. `tests/unit/fridge/scan.spec.js` fences this.
 The token is fetched per scan, never held: Firebase tokens last an hour and a
 wall tablet sits on this page for weeks.
 
+**API Gateway's CORS config overrides the Lambda's.** `ALLOWED_ORIGINS` in the
+Lambda is not what the browser sees: the HTTP API `ifnzds1okb` has its own CORS
+configuration, and when one is set API Gateway answers the preflight itself and
+rewrites the CORS headers on every response. On 2026-09-11 it still listed only
+Perishable's old CloudFront origin and no `x-firebase-token` header, so every
+scan from mealhat.com reached the model and then failed in the browser as
+"Something went wrong reading that photo." Fixed with `aws apigatewayv2
+update-api --cors-configuration` (profile `personal`). Keep the two lists in
+step; the gateway's is the one that counts.
+
 ## Bug reports
 
 In-app reports go to a top-level `bugReports/` node, outside any hat, and the
