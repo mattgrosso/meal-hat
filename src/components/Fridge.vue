@@ -104,7 +104,7 @@ import AddTimerModal from './fridge/AddTimerModal.vue';
 import ScanFlow from './fridge/ScanFlow.vue';
 import PhoneView from './fridge/PhoneView.vue';
 import HistorySheet from './fridge/HistorySheet.vue';
-import { adoptFridgeKey, extractKey, storeFridgeKey } from '@/utils/fridge/fridgeKey';
+import { adoptFridgeKey, extractKey, storeFridgeKey, isValidKey, rememberKeyAlias } from '@/utils/fridge/fridgeKey';
 import { generatePairingCode, urlWithKey } from '@/utils/fridge/pairing';
 import { resolveViewMode } from '@/utils/fridge/viewMode';
 import { buildStamp } from '@/utils/buildStamp';
@@ -280,6 +280,11 @@ export default {
     // from the failed attempt. The hash and the wall's view pin are carried
     // explicitly — assigning to location.search alone would drop the route.
     adoptKey (key) {
+      // If the address bar holds a different well-formed key — the typo this
+      // pairing is correcting — remember the mapping, so the kiosk's saved
+      // start URL keeps working after a restart instead of asking again.
+      const fromUrl = new URLSearchParams(window.location.search).get('k');
+      if (isValidKey(fromUrl) && fromUrl !== key) rememberKeyAlias(fromUrl, key);
       storeFridgeKey(key);
       window.location.href = urlWithKey(key, window.location);
     },

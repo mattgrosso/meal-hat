@@ -134,6 +134,31 @@ const ensureKeyInUrl = (key, location, history) => {
 }
 
 // Returns the active key or null, and leaves it in the URL either way.
+// A typo'd key the kiosk's start URL keeps loading, and the key a pairing
+// resolved it to. Fully Kiosk reloads its saved start URL on every restart;
+// without this, a tablet paired over a mistyped URL would ask to be paired
+// again after each one. Storage-only (no cookie): if storage is wiped the
+// tablet asks for a pairing, which is six digits on a phone, not a URL.
+const ALIAS_KEY = 'mealHat.fridgeKeyAlias'
+
+export const rememberKeyAlias = (wrong, right, { storage = window.localStorage } = {}) => {
+  if (!isValidKey(wrong) || !isValidKey(right) || wrong === right) return
+  try {
+    storage.setItem(ALIAS_KEY, JSON.stringify({ [wrong]: right }))
+  } catch {
+    // Storage blocked — the next restart pairs again. Survivable.
+  }
+}
+
+const readAlias = (wrong, storage) => {
+  try {
+    const right = JSON.parse(storage.getItem(ALIAS_KEY) || '{}')[wrong]
+    return isValidKey(right) ? right : null
+  } catch {
+    return null
+  }
+}
+
 export const adoptFridgeKey = ({
   location = window.location,
   storage = window.localStorage,
@@ -144,6 +169,12 @@ export const adoptFridgeKey = ({
   const fromUrl = new URLSearchParams(location.search).get('k')
 
   if (isValidKey(fromUrl)) {
+    const aliased = readAlias(fromUrl, storage)
+    if (aliased) {
+      storeFridgeKey(aliased, { storage, doc, isSecure })
+      ensureKeyInUrl(aliased, location, history)
+      return aliased
+    }
     storeFridgeKey(fromUrl, { storage, doc, isSecure })
     return fromUrl
   }

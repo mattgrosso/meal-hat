@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import {
   adoptFridgeKey,
+  rememberKeyAlias,
   storeFridgeKey,
   generateFridgeKey,
   extractKey,
@@ -134,6 +135,25 @@ describe('adoptFridgeKey', () => {
     const ctx = fakeContext({ search: `?k=${newKey}`, stored: GOOD_KEY })
     expect(adoptFridgeKey(ctx)).toBe(newKey)
     expect(ctx.storage.map['mealHat.fridgeKey']).toBe(newKey)
+  })
+
+  it('a typo\'d URL key that a pairing once resolved maps to the real key', () => {
+    // The kiosk start URL keeps its typo forever; the tablet must not ask to
+    // be paired again on every restart.
+    const typo = GOOD_KEY.slice(0, -1) + 'X'
+    const ctx = fakeContext({ search: `?k=${typo}&view=wall`, hash: '#/fridge' })
+    rememberKeyAlias(typo, GOOD_KEY, { storage: ctx.storage })
+    expect(adoptFridgeKey(ctx)).toBe(GOOD_KEY)
+    expect(ctx.storage.map['mealHat.fridgeKey']).toBe(GOOD_KEY)
+    expect(ctx.history.replaceState).toHaveBeenCalledWith(null, '', `/?k=${GOOD_KEY}&view=wall#/fridge`)
+  })
+
+  it('an alias never maps a key to itself or to a malformed key', () => {
+    const ctx = fakeContext({ search: `?k=${GOOD_KEY}` })
+    rememberKeyAlias(GOOD_KEY, GOOD_KEY, { storage: ctx.storage })
+    rememberKeyAlias(GOOD_KEY, 'short', { storage: ctx.storage })
+    expect(ctx.storage.map['mealHat.fridgeKeyAlias']).toBeUndefined()
+    expect(adoptFridgeKey(ctx)).toBe(GOOD_KEY)
   })
 
   it('returns null with no key anywhere — the loud not-connected case', () => {
