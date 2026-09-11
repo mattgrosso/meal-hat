@@ -114,7 +114,14 @@ const router = createRouter({
 // Single auth guard for every route that requires login — replaces the identical
 // beforeEnter block that used to be copy-pasted onto each protected route.
 router.beforeEach((to, from, next) => {
-  if (to.meta.requiresLogin && !loggedIn()) {
+  // loggedIn() is also what STARTS the session (initializeDB), so it runs for
+  // /fridge too even though that route never redirects. Without it, a phone
+  // opening #/fridge cold — a home-screen shortcut, a bookmark, the reload an
+  // auto-update performs — never subscribed to the hat's fridgeKey pointer and
+  // sat on THE FRIDGE ISN'T CONNECTED, while the same phone arriving from Home
+  // worked. The kiosk has no session, so for it this is a harmless no-op.
+  const signedIn = to.path === '/login' ? false : loggedIn();
+  if (to.meta.requiresLogin && !signedIn) {
     next('/login');
   } else {
     next();

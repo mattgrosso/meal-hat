@@ -73,6 +73,11 @@ export default createStore({
     // the same reason mirrorFeedKey has one: null is the normal answer.
     fridgeKeyForHat: null,
     fridgeKeySubscribedFor: null,
+    // Whether the pointer subscription has reported at all. null is the normal
+    // VALUE (most hats have no fridge), so the value alone cannot say "still
+    // loading" — and the fridge screen needs that distinction to avoid
+    // declaring itself not connected while the answer is still on its way.
+    fridgeKeyLoaded: false,
 
     // A newer build is live. Set by App.vue's bundle comparison (the primary
     // signal) and by registerServiceWorker's updated() hook (the secondary
@@ -183,6 +188,7 @@ export default createStore({
     },
     setFridgeKeyForHat (state, key) {
       state.fridgeKeyForHat = key || null;
+      state.fridgeKeyLoaded = true;
     },
     setFridgeKeySubscribedFor (state, hat) {
       state.fridgeKeySubscribedFor = hat || null;
@@ -198,6 +204,7 @@ export default createStore({
       state.mirrorFeedSubscribedFor = null;
       state.fridgeKeyForHat = null;
       state.fridgeKeySubscribedFor = null;
+      state.fridgeKeyLoaded = false;
     }
   },
   actions: {

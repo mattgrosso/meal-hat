@@ -25,6 +25,10 @@
       </p>
     </div>
 
+    <div v-else-if="awaitingHatKey" class="loading">
+      <div class="loading-text">Finding your fridge...</div>
+    </div>
+
     <div v-else-if="loading && timers.length === 0" class="loading">
       <div class="loading-text">Loading timers...</div>
     </div>
@@ -136,8 +140,17 @@ export default {
     error () {
       return this.$store.state.fridge.error === 'unauthorized' ? null : this.$store.state.fridge.error;
     },
+    // Signed in, no key in the URL, and the hat's pointer hasn't reported
+    // yet. That is a moment to wait through, not a failure: the pointer is a
+    // Firebase subscription and always lands AFTER mount on a cold load.
+    awaitingHatKey () {
+      return this.missingKey &&
+        Boolean(this.$store.state.databaseTopKey) &&
+        !this.$store.state.fridgeKeyLoaded;
+    },
     notConnected () {
-      return this.missingKey || this.$store.state.fridge.error === 'unauthorized';
+      return (this.missingKey && !this.awaitingHatKey) ||
+        this.$store.state.fridge.error === 'unauthorized';
     },
     // Say which of the two it actually is. The old copy claimed "no key" even
     // when the key was present and the database had refused it, which sent you
@@ -162,6 +175,11 @@ export default {
     }
   },
   watch: {
+    // The hat's pointer landing after mount is the NORMAL cold-load order.
+    // connect() ran once already and found nothing; run it again now.
+    '$store.state.fridgeKeyForHat' (key) {
+      if (key && this.missingKey) this.connect();
+    },
     // Runs once, when both sides have actually arrived — not on a timer and
     // not on mount. Both are async subscriptions and either can land second;
     // reconciling against a half-loaded catalog would read every food as new.
