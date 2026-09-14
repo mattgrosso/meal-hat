@@ -355,10 +355,10 @@ export default {
  * body-level rules hang off `.fridge-active`, which mounted()/beforeUnmount()
  * add and remove, and everything else is nested under `.fridge-app`.
  */
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;1,100;1,200;1,300;1,400;1,500;1,600;1,700&family=Roboto+Serif:ital,opsz,wght@0,8..144,100..900;1,8..144,100..900&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;1,100;1,200;1,300;1,400;1,500;1,600;1,700&family=Roboto+Serif:ital,opsz,wght@0,8..144,100..900;1,8..144,100..900&display=swap");
 
 body.fridge-active {
-  font-family: 'Roboto Serif', serif;
+  font-family: "Roboto Serif", serif;
   background: #000;
   color: #fff;
 }
@@ -388,7 +388,7 @@ body.fridge-active {
   /* Set here and not only on body: meal-hat's #app puts Mulish on everything
    * beneath it, and inheritance walks through #app before it reaches the
    * fridge. Perishable's wall is Roboto Serif and stays that way. */
-  font-family: 'Roboto Serif', serif;
+  font-family: "Roboto Serif", serif;
 
   .timers-grid {
     display: grid;
@@ -434,7 +434,7 @@ body.fridge-active {
       max-width: 32rem;
 
       code {
-        font-family: 'IBM Plex Mono', monospace;
+        font-family: "IBM Plex Mono", monospace;
       }
     }
 
@@ -492,7 +492,7 @@ body.fridge-active {
       opacity: 0.6;
 
       code {
-        font-family: 'IBM Plex Mono', monospace;
+        font-family: "IBM Plex Mono", monospace;
       }
     }
 
@@ -511,7 +511,7 @@ body.fridge-active {
 
     // Readable from across the kitchen while holding a phone.
     .pair-code {
-      font-family: 'IBM Plex Mono', monospace;
+      font-family: "IBM Plex Mono", monospace;
       font-size: 4.5rem;
       font-weight: 700;
       letter-spacing: 0.12em;
@@ -522,6 +522,42 @@ body.fridge-active {
       font-size: 1.1rem;
       opacity: 0.6;
       max-width: 28rem;
+    }
+  }
+
+  /* The phone's sheets (add by hand, scan, what's changed). Bug report,
+   * 2026-09-11: "Everything looks really weird and cramped along the
+   * edges." Each sheet was a 90vw box centred in the viewport with 2rem of
+   * padding: on a 402px phone that left 297px for content, and the add-by-
+   * hand box, which had no height cap, was taller than the screen and got
+   * centred right off the top of it — its header and close button out of
+   * reach. Below the wall's width (viewMode.js: 900px) every sheet is a
+   * bottom sheet instead: full width, its own scroll, room at the bottom for
+   * the home indicator. (0,3,0) on purpose: heavier than the components'
+   * own scoped (0,2,0) rules, so this wins without touching them — and the
+   * wall, above 900px, never sees any of it. */
+  @media (max-width: 899px) {
+    .modal-overlay {
+      align-items: flex-end;
+    }
+
+    .modal-overlay .modal-content {
+      width: 100%;
+      max-width: none;
+      /* Bootstrap's reboot gives a .modal-content a margin; a sheet sits
+         flush with the edges and the bottom of the screen. */
+      margin: 0;
+      max-height: 92vh;
+      max-height: 92dvh;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      border-radius: 20px 20px 0 0;
+      border-width: 1px 0 0;
+      padding: 1.25rem 1.25rem calc(1.5rem + env(safe-area-inset-bottom));
+    }
+
+    .modal-overlay .modal-header {
+      margin-bottom: 1.25rem;
     }
   }
 
@@ -551,7 +587,7 @@ body.fridge-active {
     padding: 8px;
     font-size: 10px;
     opacity: 0.35;
-    font-family: 'IBM Plex Mono', monospace;
+    font-family: "IBM Plex Mono", monospace;
     background: none;
     border: none;
     color: inherit;

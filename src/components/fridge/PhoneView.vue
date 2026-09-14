@@ -149,7 +149,9 @@ export default {
   align-items: center;
   justify-content: center;
   gap: 1.25rem;
-  padding: 1.5rem;
+  // Extra at the bottom: the build stamp and the bug button are fixed in the
+  // bottom-left corner and sat on top of the last rows of the on-hand list.
+  padding: 1.5rem 1.5rem calc(5rem + env(safe-area-inset-bottom));
   text-align: center;
 }
 
@@ -222,7 +224,7 @@ export default {
   border: 1px solid rgba(255, 255, 255, 0.3);
   border-radius: 12px;
   color: #fff;
-  font-family: 'IBM Plex Mono', monospace;
+  font-family: "IBM Plex Mono", monospace;
   font-size: 1.6rem;
   letter-spacing: 0.15em;
   text-align: center;
@@ -307,7 +309,7 @@ export default {
     justify-content: space-between;
     align-items: baseline;
     gap: 0.75rem;
-    padding: 0.55rem 0.25rem;
+    padding: 0.6rem 0.5rem;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     font-size: 1rem;
   }
@@ -319,7 +321,7 @@ export default {
   // The same three-state colouring the wall cards use, so a glance here and a
   // glance there mean the same thing.
   .on-hand-left {
-    font-family: 'IBM Plex Mono', monospace;
+    font-family: "IBM Plex Mono", monospace;
     font-size: 0.9rem;
     color: rgba(255, 255, 255, 0.45);
     white-space: nowrap;

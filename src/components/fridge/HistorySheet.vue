@@ -20,11 +20,14 @@
           :class="entry.action"
         >
           <span class="history-time">{{ time(entry) }}</span>
+          <!-- The source sits UNDER the detail, not beside it. As a third
+               column it squeezed the middle one down to a word a line on a
+               phone ("Re- / learned / Potatoes"). -->
           <span class="history-body">
             <span class="history-what">{{ describe(entry) }}</span>
             <span v-if="entry.detail" class="history-detail">{{ entry.detail }}</span>
+            <span v-if="source(entry)" class="history-source">{{ source(entry) }}</span>
           </span>
-          <span v-if="source(entry)" class="history-source">{{ source(entry) }}</span>
         </div>
       </div>
     </div>
@@ -147,12 +150,13 @@ export default {
 }
 
 .history-time {
-  font-family: 'IBM Plex Mono', monospace;
+  font-family: "IBM Plex Mono", monospace;
   font-size: 0.7rem;
   color: rgba(255, 255, 255, 0.4);
   white-space: nowrap;
-  // Times are the left rail; a ragged one is hard to read down.
-  min-width: 4.2rem;
+  // Times are the left rail; a ragged one is hard to read down. Sized to
+  // "12:00 PM" and no wider — the rail was 4.2rem, a third of a phone row.
+  min-width: 3.6rem;
 }
 
 .history-body {
@@ -173,8 +177,9 @@ export default {
 }
 
 .history-source {
-  font-size: 0.7rem;
-  color: rgba(255, 255, 255, 0.35);
-  white-space: nowrap;
+  display: block;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.4);
+  margin-top: 0.15rem;
 }
 </style>

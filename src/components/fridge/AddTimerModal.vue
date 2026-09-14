@@ -215,6 +215,13 @@ export default {
   padding: 2rem;
   width: 90vw;
   max-width: 400px;
+  // Capped and scrolling, like the other two sheets. Without this the box
+  // grew with the existing-foods grid, and a flex-centred child taller than
+  // the viewport is clipped at the TOP — the header and the close button
+  // were above the screen on a phone.
+  max-height: 90vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
