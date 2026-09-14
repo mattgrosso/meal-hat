@@ -48,11 +48,13 @@ module.exports = defineConfig({
    *  - the dev server, with VUE_APP_FIREBASE_EMULATORS=1 so the app points
    *    itself at those emulators (compile-time flag; see store/index.js).
    *
-   * Port 8085, not vue-cli's default 8080: Matt keeps another app's dev
+   * Port 8085, not `yarn serve`'s own 8080: Matt keeps another app's dev
    * server running continuously, usually on 8080. With reuseExistingServer,
    * an occupied 8080 would silently run this suite against WHATEVER APP is
-   * there — and without it, vue-cli would auto-increment to 8081 and the
-   * baseURL would point at nothing. A pinned port sidesteps both.
+   * there — and without it, Vite would auto-increment to 8081 and the
+   * baseURL would point at nothing. A pinned port sidesteps both. (`yarn
+   * serve --port 8085` reaches Vite directly now; it used to have to get
+   * past a nodemon wrapper.)
    */
   webServer: [
     {

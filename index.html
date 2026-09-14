@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Mulish:ital,wght@0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;0,1000;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900;1,1000&family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400;1,500;1,600;1,700;1,800;1,900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.1/font/bootstrap-icons.css">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <!--[if IE]><link rel="icon" href="/favicon.ico"><![endif]-->
+    <link rel="apple-touch-icon" href="/favicon.ico">
+    <title>meal-hat</title>
+    <!-- The entry. On `vite build` this tag is replaced by a hashed
+         js/app.<hash>.js one, re-emitted at the bottom of this head next to
+         the stylesheet link Vite injects there. src/utils/appUpdate.js reads
+         that bundle filename back off this document to detect a new deploy, so
+         it must stay a real `<script src>` and the bundle must stay named
+         js/app.<hex>.js — see vite.config.mjs. -->
+    <script type="module" src="/src/main.js"></script>
+    <!-- Everything below was injected at build time by @vue/cli-plugin-pwa,
+         from the `pwa` block of the old vue.config.js, and appended to the end
+         of the head. Vite (2026-09-14) injects nothing but its own script and
+         stylesheet tags, so the plugin's set is now hand-written here,
+         verbatim and in the same order as the last webpack build shipped it —
+         duplicate apple-touch-icon and all. The <head> every installed phone
+         already knows is therefore unchanged. The manifest these point at is
+         public/manifest.json, that plugin's generated file committed as-is.
+         Note /img/icons/favicon.svg does not exist in public/: that link was
+         already being shipped before the move and browsers fall through to
+         the PNGs below it, so it stays, for identical behaviour.
+
+         DO NOT write the head's closing tag inside a comment anywhere in this
+         file. Vite injects its script/stylesheet immediately before the FIRST
+         literal occurrence of that string, and a commented-out one swallows
+         both tags — the built page then loads with no JavaScript at all,
+         while the build, the tests and the lint all pass. -->
+    <link rel="icon" type="image/svg+xml" href="/img/icons/favicon.svg">
+    <link rel="icon" type="image/png" sizes="32x32" href="/img/icons/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/img/icons/favicon-16x16.png">
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#000000">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <meta name="apple-mobile-web-app-title" content="Meal Hat">
+    <link rel="apple-touch-icon" href="/img/icons/apple-touch-icon-152x152.png">
+    <link rel="mask-icon" href="/img/icons/safari-pinned-tab.svg" color="#000000">
+    <meta name="msapplication-TileImage" content="/img/icons/msapplication-icon-144x144.png">
+    <meta name="msapplication-TileColor" content="#ffffff">
+  </head>
+  <body>
+    <noscript>
+      <strong>We're sorry but meal-hat doesn't work properly without JavaScript enabled. Please enable it to continue.</strong>
+    </noscript>
+    <div id="app"></div>
+  </body>
+</html>

@@ -13,18 +13,51 @@ drawn meals' ingredients.
 
 ## Stack
 
-- **Vue 3** (Vue CLI 5), **Vuex** (single store), **Vue Router** in **hash mode**
-  (`createWebHashHistory` — no server-side routing/SPA fallback needed)
+- **Vue 3** built by **Vite 5** (`vite.config.mjs`), **Vuex** (single store),
+  **Vue Router** in **hash mode** (`createWebHashHistory` — no server-side
+  routing/SPA fallback needed)
 - **Bootstrap 5** + bootstrap-icons, **Shepherd.js** for the guided tours
 - **Firebase 9** — Google auth (`signInWithPopup`) + Realtime Database
 - **Playwright** for tests (`tests/`, `playwright.config.js`)
 
 ## Commands
 
-- `yarn serve` — dev server (hot reload)
+- `yarn serve` — Vite dev server (hot reload) on **port 8080**, on every interface
 - `yarn build` — production build into `dist/` (runs an interactive version bump first; see Deploy gotcha)
+- `yarn preview` — serve the built `dist/` (port 4173), which is the only way to
+  exercise the service worker locally: it is never generated on `yarn serve`
 - `yarn lint` — eslint (vue3-essential + @vue/standard) + stylelint
 - `yarn test` / `yarn test:headed` / `yarn test:report` — Playwright
+
+## The build is Vite, not Vue CLI
+
+Since 2026-09-14 (the twelfth app of Matt's to move; the recipe is no-thanks
+`e817419`, and Cinema Roll `ee3e00e` is the closest analogue). Nothing in `src/`
+changed its behaviour: every `process.env.VUE_APP_*` and `process.env.BASE_URL`
+read is statically replaced by Vite's `define`, exactly as webpack's
+DefinePlugin did, so `.env` keeps the same variable names and `buildStamp.js` /
+`firebase.js` / `bugReports.js` are untouched. `vite.config.mjs` carries the
+reasoning for each option — read it before changing any of them. The three
+that are load-bearing:
+
+- **Output must stay `js/app.<hex>.js` and `css/app.<hash>.css`.** That is what
+  `rollupOptions.output` (entry named `app`, `hashCharacters: 'hex'`) exists
+  for. `appUpdate.js`'s `ENTRY_BUNDLE_PATTERN` reads the bundle name off
+  index.html, and Rollup's default base64 hash alphabet would never match it.
+- **The service worker must stay `service-worker.js` and precache exactly
+  index.html** — see the auto-update section below.
+- **`postcss.config.cjs` must exist.** Vue CLI ran autoprefixer over every
+  stylesheet against the `browserslist` block in package.json; Vite only does
+  when a PostCSS config is present. Without it iOS loses its `-webkit-` twins.
+
+`index.html` lives at the repo ROOT now (Vite's entry), not in `public/`, and
+it hand-writes the manifest/apple/favicon tags `@vue/cli-plugin-pwa` used to
+inject. `public/manifest.json` is that plugin's generated file, committed
+byte-for-byte. Two webpack-only spellings in `src/` had to go: the `require()`
+calls for `uuid` (ShoppingList) and for the header icon (Header.vue) are now
+imports. The `/* webpackChunkName */` hints are inert — Rollup names lazy
+chunks after their module, so `js/Home.<hash>.js` rather than
+`js/home.<hash>.js`. Nothing reads those names.
 
 ## The E2E suite runs against the Firebase EMULATORS
 
@@ -248,7 +281,7 @@ off its own `<script>` tags. The SW `updated()` hook is a race the app usually
 loses — `skipWaiting: true` means a new worker activates instead of sitting in
 the `installed` state where the hook fires — so it is kept only as a SECONDARY
 signal, setting the same `updateAvailable` flag. Both bundle helpers live in
-`appUpdate.js` behind `ENTRY_BUNDLE_PATTERN`, so a change in Vue CLI's output
+`appUpdate.js` behind `ENTRY_BUNDLE_PATTERN`, so a change in the build's output
 naming breaks `tests/unit/appUpdate.spec.js` instead of silently switching
 auto-update off.
 
@@ -286,9 +319,17 @@ gets through.
 bytes. Precaching index.html is what supplies the variance, via its revision
 hash — with an empty manifest the generated worker is pure static config and
 comes out byte-identical every time. Silent: the app looks healthy and deploys
-simply never arrive. Do not set `exclude` to everything. The BannerPlugin's
-"Current version" does NOT reach this file — workbox generates it after
-webpack's banner stage.
+simply never arrive. The one-entry manifest is now
+`workbox.globPatterns: ['index.html']` in `vite.config.mjs` (it was workbox's
+inverse, `exclude: [/^(?!index\.html$).*/]`, under Vue CLI); do not widen it and
+do not empty it. After any build, check the worker: `precacheAndRoute()` must
+list exactly one URL, `/index.html`, **with** a non-null revision.
+
+The worker's filename is also load-bearing: `service-worker.js`, never the
+vite-plugin-pwa default `sw.js`. It is what `registerServiceWorker.js`
+registers and what every installed phone is checking for updates at; a rename
+leaves them controlled by the old worker forever. So is `cacheId: 'meal-hat'` —
+same prefix means the new worker updates the existing precache in place.
 
 If a deploy is not reaching an open app, check in that order: is the bundle
 comparison seeing a different filename, is something holding a busy reason,
@@ -699,13 +740,23 @@ responsive utilities and delete that test.
 with "incompatible module". It stayed invisible because the committed
 `node_modules` kept working.
 
-**`.yarnrc` sets `--ignore-engines`.** `@achrinza/node-ipc`, a transitive
-dependency of `@vue/cli-service`'s dev server, declares `engines.node` as an
-enumeration ending at 19 and is unmaintained; it runs fine on 22. Nothing else
-in the tree has an upper bound. The flag is blunt — it silences engine checks
-for every package — so delete it the day the Vue CLI dev server goes away, and
-re-run a clean install to see what it was covering. Same call, same caveat, as
-the Cinema Roll repo.
+**`.yarnrc` and its `--ignore-engines` are gone** (2026-09-14). It existed for
+`@achrinza/node-ipc`, a transitive dependency of `@vue/cli-service`'s dev
+server, which declares `engines.node` as an enumeration ending at 19 and is
+unmaintained. The Vue CLI dev server went away with the Vite move and that
+package is no longer anywhere in the lockfile, so the flag was deleted and a
+clean `yarn install --frozen-lockfile` re-run to see what it had been
+covering: nothing. Engine checks are enforced again.
+
+**`postcss-html` is NOT a direct devDependency, deliberately.** It was pinned
+at `^1.6.0`, which stylelint 13 cannot use (1.x is for stylelint 14+'s
+`customSyntax`, and `.stylelintrc.json` sets none). `stylelint@13.12.0` brings
+its own `postcss-html@^0.36.0`, whose `extract.js` is what `postcss-syntax`
+requires to read `.vue` files. It only ever worked because yarn happened to
+nest `postcss-syntax` under `stylelint/`; when the dependency set changed,
+`postcss-syntax` hoisted to the root, found the 1.6.0 copy, and `yarn lint`
+died with "Cannot find module 'postcss-html/extract'". Put it back and you get
+that crash on the next clean install.
 
 ## Deploy (AWS S3 + CloudFront)
 

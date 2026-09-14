@@ -118,7 +118,7 @@ export default {
      *
      * The service worker's `updated()` hook only fires while a new worker sits
      * in the `installed` state — but this app builds with `skipWaiting: true`
-     * (vue.config.js, load-bearing against the 2026-08-19 reload loop), so a
+     * (vite.config.mjs, load-bearing against the 2026-08-19 reload loop), so a
      * new worker activates itself immediately instead of waiting. That makes
      * the hook a race the app often loses: you get the new version, you just
      * do not get told. Comparing what the server serves against what this page

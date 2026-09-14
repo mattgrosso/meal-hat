@@ -34,3 +34,6 @@ pnpm-debug.log*
 # Firebase CLI debug output
 firebase-debug.log
 firebase-debug.*.log
+
+# Vite writes vite.config.mjs.timestamp-<n>.mjs beside the config while loading it
+vite.config.*.timestamp-*

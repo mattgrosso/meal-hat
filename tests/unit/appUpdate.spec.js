@@ -34,8 +34,15 @@ const safeArgs = (overrides = {}) => ({
 });
 
 describe('entry bundle detection', () => {
-  // Verified against a real production build of this repo. Vue CLI emits
-  // exactly these two scripts, vendors first.
+  // Verified against a real Vue CLI production build of this repo, which
+  // emitted exactly these two scripts, vendors first. Kept verbatim after the
+  // 2026-09-14 Vite move, because this is the HARDER shape: a vendors script
+  // the pattern must skip, sitting before the entry it must find. Vite folds
+  // the vendors chunk into the entry and emits a single
+  // `<script type="module" crossorigin src="/js/app.<hex>.js">`, which the
+  // cases below cover as the easy subset. The hex hash is not incidental —
+  // `hashCharacters: 'hex'` in vite.config.mjs exists so this pattern keeps
+  // matching.
   const realIndexHtml =
     '<!doctype html><html lang="en"><head><meta charset="utf-8">' +
     '<title>Meal Hat</title>' +

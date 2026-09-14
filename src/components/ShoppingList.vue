@@ -305,6 +305,7 @@
 
 <script>
 import pluralize from 'pluralize';
+import { v4 as uuidv4 } from 'uuid';
 import { Modal } from 'bootstrap';
 // Shepherd is loaded ON DEMAND, inside startTour().
 //
@@ -578,7 +579,7 @@ export default {
 
     // Confirm adding new item from modal
     confirmAddItem () {
-      const groceryId = require('uuid').v4();
+      const groceryId = uuidv4();
 
       // Create grocery catalog entry
       const groceryCatalogItem = {
@@ -622,7 +623,7 @@ export default {
       const shoppingList = this.$store.state.shoppingList;
       // Find existing item by groceryId (not id)
       const existingItem = shoppingList ? Object.values(shoppingList).find(listItem => listItem.groceryId === item.id) : null;
-      const shoppingItemId = require('uuid').v4();
+      const shoppingItemId = uuidv4();
 
       if (existingItem) {
         // If item already in shopping list, increase quantity

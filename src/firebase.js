@@ -35,7 +35,8 @@ const db = getDatabase(app);
 // browser can complete. And worse: for as long as the tests DID work, they
 // were writing meals into the production database.
 //
-// The flag is compile-time (vue-cli inlines process.env.VUE_APP_*), so a
+// The flag is compile-time (vite.config.mjs `define`s process.env.VUE_APP_*
+// the way vue-cli used to inline it), so a
 // production build contains `if (false)` and no emulator code path exists to
 // trigger by accident. playwright.config.js sets it on the dev server it
 // starts; nothing else does.

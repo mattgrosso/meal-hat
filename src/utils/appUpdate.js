@@ -33,12 +33,16 @@ export async function reloadForUpdate () {
 // The hashed entry bundle, e.g. `js/app.1acf3f22.js`.
 //
 // This one pattern is the whole update detector: the filename the server hands
-// out versus the one this page actually loaded. Verified against a real
-// production build — Vue CLI emits exactly two scripts, `js/chunk-vendors.<hash>.js`
-// FIRST and `js/app.<hash>.js` second, both lowercase hex. `chunk-vendors`
-// deliberately does not match: it changes only when a dependency does, so it
-// would miss most deploys. Kept in one place so a build-output change breaks a
-// test rather than silently disabling auto-update.
+// out versus the one this page actually loaded. Verified against real
+// production builds of both toolchains: Vue CLI emitted two scripts,
+// `js/chunk-vendors.<hash>.js` FIRST and `js/app.<hash>.js` second, and Vite
+// emits the one `js/app.<hash>.js` the vendors chunk folded into — lowercase
+// hex either way, which is what `hashCharacters: 'hex'` in vite.config.mjs is
+// for (Rollup's default base64 alphabet would never match this). The dead
+// `chunk-vendors` deliberately does not match: it changed only when a
+// dependency did, so it would have missed most deploys. Kept in one place so a
+// build-output change breaks a test rather than silently disabling
+// auto-update.
 export const ENTRY_BUNDLE_PATTERN = /js\/app\.[a-z0-9]+\.js/;
 
 /** The entry bundle the server is currently serving, from index.html's text. */

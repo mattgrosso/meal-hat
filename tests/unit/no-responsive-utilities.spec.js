@@ -3,7 +3,9 @@ import { readFileSync, readdirSync } from 'fs';
 import { resolve, join } from 'path';
 
 // Responsive variants of the Bootstrap UTILITIES are not generated — see the
-// `responsive: false` block in vue.config.js. That saved ~4KB gzipped, on the
+// `responsive: false` block at the end of src/assets/scss/bootstrap.scss (it
+// was never in vue.config.js, whatever this comment used to claim). That saved
+// ~4KB gzipped, on the
 // evidence that the templates used exactly one breakpoint class and it was a
 // grid column rather than a utility.
 //
@@ -51,7 +53,7 @@ describe('responsive utility classes are not used', () => {
 
     expect(
       offenders,
-      'Responsive utility variants are not generated (vue.config.js sets responsive: false ' +
+      'Responsive utility variants are not generated (bootstrap.scss sets responsive: false ' +
       'on $utilities to save ~4KB gzipped). These classes will silently do NOTHING. ' +
       'Either use a plain utility plus a media query in the component\'s own <style>, ' +
       'or re-enable responsive utilities and drop this test.'

@@ -791,7 +791,7 @@ export default {
   .review-printed {
     margin-top: 0.5rem;
     margin-left: 2rem;
-    font-family: 'IBM Plex Mono', monospace;
+    font-family: "IBM Plex Mono", monospace;
     font-size: 0.78rem;
     letter-spacing: 0.02em;
     color: rgba(255, 255, 255, 0.45);

@@ -42,9 +42,10 @@ export const buildStampText = ({ version, buildTime, now } = {}) => {
 };
 
 // VUE_APP_VERSION comes from .env (bumped by src/assets/javascript/version.js
-// on build); VUE_APP_BUILD_TIME is stamped by vue.config.js when the build
-// runs. Both are inlined by vue-cli's DefinePlugin, and both are undefined
-// under vitest — which is exactly the degraded case above.
+// on build); VUE_APP_BUILD_TIME is stamped by vite.config.mjs when the build
+// runs. Both are inlined by Vite's `define` (webpack's DefinePlugin before
+// that), and both are undefined under vitest — which is exactly the degraded
+// case above.
 export const buildStamp = () => buildStampText({
   version: process.env.VUE_APP_VERSION,
   buildTime: process.env.VUE_APP_BUILD_TIME,

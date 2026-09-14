@@ -4,9 +4,10 @@
   "private": true,
   "scripts": {
     "update-version": "node src/assets/javascript/version.js",
-    "serve": "nodemon --watch .env --exec \"vue-cli-service serve\"",
-    "build": "yarn update-version && vue-cli-service build",
-    "lint": "vue-cli-service lint && stylelint '**/*.vue' --formatter verbose --fix",
+    "serve": "vite",
+    "preview": "vite preview",
+    "build": "yarn update-version && vite build",
+    "lint": "eslint src tests *.js --ext .js,.jsx,.vue --fix && stylelint '**/*.vue' --formatter verbose --fix",
     "deploy": "yarn build && aws s3 sync dist/ s3://meal-hat --profile personal-deploy && aws cloudfront create-invalidation --distribution-id E1C9X1FV3WBDN6 --paths '/*' --profile personal-deploy > invalidation_output.txt",
     "test": "playwright test",
     "test:unit": "vitest run",
@@ -37,23 +38,19 @@
     "@babel/core": "^7.12.16",
     "@babel/eslint-parser": "^7.12.16",
     "@playwright/test": "^1.55.0",
-    "@vue/cli-plugin-babel": "~5.0.0",
-    "@vue/cli-plugin-eslint": "~5.0.0",
-    "@vue/cli-plugin-pwa": "~5.0.0",
-    "@vue/cli-plugin-vuex": "~5.0.0",
-    "@vue/cli-service": "~5.0.0",
+    "@vitejs/plugin-vue": "5.2.4",
     "@vue/eslint-config-standard": "^6.1.0",
+    "autoprefixer": "^10.4.20",
     "eslint": "^7.32.0",
     "eslint-plugin-import": "^2.25.3",
     "eslint-plugin-node": "^11.1.0",
     "eslint-plugin-promise": "^5.1.0",
     "eslint-plugin-vue": "^8.0.3",
-    "nodemon": "^3.1.0",
-    "postcss-html": "^1.6.0",
     "sass": "^1.58.0",
-    "sass-loader": "^13.2.0",
     "stylelint": "13.12.0",
     "stylelint-config-sass-guidelines": "^11.1.0",
+    "vite": "5.4.21",
+    "vite-plugin-pwa": "1.3.0",
     "vitest": "^1.6.1"
   },
   "eslintConfig": {
@@ -66,7 +63,8 @@
       "@vue/standard"
     ],
     "parserOptions": {
-      "parser": "@babel/eslint-parser"
+      "parser": "@babel/eslint-parser",
+      "requireConfigFile": false
     },
     "rules": {
       "vue/multi-word-component-names": "off",

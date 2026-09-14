@@ -287,7 +287,7 @@ export default {
     min-width: 50px;
 
     .number {
-      font-family: 'IBM Plex Mono', monospace;
+      font-family: "IBM Plex Mono", monospace;
       font-size: 48px;
       line-height: 1;
       font-variant-numeric: tabular-nums;

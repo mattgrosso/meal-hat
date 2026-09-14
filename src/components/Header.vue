@@ -1,7 +1,7 @@
 <template>
   <div class="header col-12">
     <h1>{{headerText}}</h1>
-    <img @click="$router.push('/')" :src="require('@/assets/icon.png')" alt="Icon">
+    <img @click="$router.push('/')" :src="iconSrc" alt="Icon">
     <div class="user-and-hat col-12">
       <p class="col-6 col-md-2" @click.stop="logout">{{$store.state.userEmail}}</p>
       <p class="col-6 col-md-2" @click.stop="$router.push('/meal-hats')">{{hatTitle}}</p>
@@ -12,6 +12,11 @@
 
 <script>
 import { buildStamp } from '../utils/buildStamp.js';
+// Was `require('@/assets/icon.png')` inline in the template — a webpack-only
+// spelling that Vite/Rollup cannot honour (there is no `require` in an ES
+// module). A static import does exactly what require() did: the bundler
+// rewrites it to the hashed `img/icon.<hash>.png` URL it emits.
+import iconSrc from '@/assets/icon.png';
 
 export default {
   props: {
@@ -19,6 +24,9 @@ export default {
       type: String,
       required: true
     }
+  },
+  data () {
+    return { iconSrc };
   },
   computed: {
     // The house build stamp — "v1.14.0 · built Aug 22, 8:15 AM". Was the bare
