@@ -30,3 +30,7 @@ pnpm-debug.log*
 
 # Claude Code local permissions (machine-specific)
 .claude/settings.local.json
+
+# Firebase CLI debug output
+firebase-debug.log
+firebase-debug.*.log

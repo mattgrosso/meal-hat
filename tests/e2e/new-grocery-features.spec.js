@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { setupAuthAndDisableTutorial, navigateDirectly, emulatorSignIn, seedFirebaseSession } = require('./test-utils.js');
+const { emulatorSignIn, seedFirebaseSession } = require('./test-utils.js');
 
 /**
  * NEW GROCERY PAGE FEATURES TESTS

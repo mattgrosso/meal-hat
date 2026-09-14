@@ -3,8 +3,7 @@ import {
   daysSincePurchase,
   stapleIsDue,
   partitionStaples,
-  DEFAULT_STAPLE_INTERVAL_DAYS,
-  isOnHand
+  DEFAULT_STAPLE_INTERVAL_DAYS
 } from '../../src/store/staples.js';
 
 const NOW = new Date(2026, 7, 19); // 2026-08-19

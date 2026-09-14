@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { nextMealId,
+import {
+  nextMealId,
   toISODate,
   fromISODate,
   isUpcoming,

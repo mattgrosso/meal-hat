@@ -3,7 +3,7 @@
  * This file handles bypassing or mocking Firebase authentication for testing
  */
 
-const { test, expect } = require('@playwright/test');
+const { expect } = require('@playwright/test');
 
 // Set up test user credentials in localStorage
 async function setupTestAuth (page) {

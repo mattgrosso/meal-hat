@@ -21,7 +21,6 @@ const path = require('path');
 
 const TEST_EMAIL = 'test@example.com';
 const TEST_PASSWORD = 'test-password';
-const TEST_HAT_KEY = 'test-example-com';
 const AUTH_EMULATOR = 'http://localhost:9099';
 
 // The app's real web API key - the IndexedDB record is keyed by it, so it has
