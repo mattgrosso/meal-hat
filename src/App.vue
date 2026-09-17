@@ -203,6 +203,14 @@ export default {
 </script>
 
 <style lang="scss">
+:root {
+  /* Every safe-area inset in this app goes through these, so one measurement
+     can adjust them in one place. Requires viewport-fit=cover in index.html —
+     without it iOS reports 0 here. */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
 body {
   touch-action: manipulation;
 }

@@ -57,7 +57,13 @@ export default {
     background: #274C77;
     color: white;
     cursor: pointer;
-    padding: 45px 1rem;
+    /* iOS 26+ paints a Liquid Glass blur band over the top edge of an
+       installed web app, regardless of the 'black' status-bar style. The
+       title and icon used to sit ~8px from pixel 0, i.e. inside that band.
+       The header grows by the inset, and because h1/img are absolutely
+       positioned they resolve against the padding box — padding alone would
+       not move them, so each carries the inset too. */
+    padding: calc(45px + var(--safe-top, 0px)) 1rem 45px;
     position: relative;
 
     h1 {
@@ -66,13 +72,13 @@ export default {
       margin: 0;
       text-align: center;
       position: absolute;
-      top: 8px;
+      top: calc(8px + var(--safe-top, 0px));
       left: 16px;
     }
 
     img {
       position: absolute;
-      top: 9px;
+      top: calc(9px + var(--safe-top, 0px));
       right: 16px;
       height: 48px;
     }
