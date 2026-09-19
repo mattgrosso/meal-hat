@@ -6,12 +6,12 @@
       <p class="col-6 col-md-2" @click.stop="logout">{{$store.state.userEmail}}</p>
       <p class="col-6 col-md-2" @click.stop="$router.push('/meal-hats')">{{hatTitle}}</p>
     </div>
-    <span class="build-stamp">{{buildStamp}}</span>
+    <span class="build-stamp" role="button" title="Tap to reload" @click="reloadApp">{{ refreshing ? 'reloading…' : buildStamp }}</span>
   </div>
 </template>
 
 <script>
-import { buildStamp } from '../utils/buildStamp.js';
+import { buildStamp, forceRefresh } from '../utils/buildStamp.js';
 // Was `require('@/assets/icon.png')` inline in the template — a webpack-only
 // spelling that Vite/Rollup cannot honour (there is no `require` in an ES
 // module). A static import does exactly what require() did: the bundler
@@ -26,7 +26,7 @@ export default {
     }
   },
   data () {
-    return { iconSrc };
+    return { iconSrc, refreshing: false };
   },
   computed: {
     // The house build stamp — "v1.14.0 · built Aug 22, 8:15 AM". Was the bare
@@ -44,6 +44,11 @@ export default {
     }
   },
   methods: {
+    // The stamp is the reload button: an installed PWA has no other one.
+    reloadApp () {
+      this.refreshing = true;
+      forceRefresh();
+    },
     logout () {
       this.$store.dispatch('logout');
       this.$router.push('/login');
