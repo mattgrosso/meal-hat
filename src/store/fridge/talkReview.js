@@ -27,6 +27,7 @@ import { normalizeFoodName, findTemplate, daysSince } from './scanReview'
 // Shared with the receipt flow — both ways food enters the house have to
 // answer "does this go off?" identically. See perishable.js.
 import { isPerishable, DEFAULT_PANTRY_DAYS } from './perishable'
+import { guessDays } from './shelfLife'
 
 export { isPerishable, PANTRY_THRESHOLD_DAYS, DEFAULT_PANTRY_DAYS } from './perishable'
 
@@ -51,17 +52,13 @@ export const buildTalkItem = (item, templates, now) => {
     ? item.estimatedShelfLifeDays
     : null
 
-  // A NEW food arrives with a number rather than blocking, which is a
-  // deliberate departure from the scan flow's "every new food stops for your
-  // input". That rule was written where a PRINTED date and a guess were both
-  // on offer and picking for him would have hidden the difference. Here there
-  // is only ever an estimate, and forty of them in one sitting is not a review,
-  // it is data entry. The number is shown, labelled as an estimate, and
-  // editable on the row — so nothing unreviewed becomes a timer, which is what
-  // the original rule was actually protecting.
-  const days = template
-    ? template.days
-    : (perishable ? estimate : (estimate || DEFAULT_PANTRY_DAYS))
+  // NOBODY IS ASKED HOW LONG ANYTHING LASTS. Matt, 2026-09-20: "Just make your
+  // best guess." The household's own history and the model's general knowledge
+  // are blended in shelfLife.js — neither is treated as fact — and the result
+  // is simply applied.
+  const days = perishable
+    ? guessDays({ estimate, template })
+    : (estimate || DEFAULT_PANTRY_DAYS)
 
   return {
     name,
@@ -76,6 +73,11 @@ export const buildTalkItem = (item, templates, now) => {
     days,
     fromTemplate: Boolean(template),
     estimateDays: estimate,
+    // What the household has to learn from this row. A spoken description
+    // carries real information about THIS item — "the lettuce is starting to
+    // go" is an observation — so it is worth folding in. A row that merely
+    // accepted the standing guess is an echo and is not.
+    learn: Boolean(estimate) && perishable,
     // Pantry rows are tracked so the shopping list can stop asking for food
     // that is demonstrably in the house — but they are kept off the wall,
     // which exists to show what is about to go off.
@@ -224,12 +226,14 @@ export const talkPayload = (review, now) => {
 
   return {
     timers,
-    // The templates learn only from food that actually goes off. Teaching the
-    // app that a can of beans lasts 730 days would put beans on the wall the
-    // next time somebody typed one in by hand.
+    // The templates learn only from food that actually goes off, and only from
+    // rows carrying a real signal. An observation is EVIDENCE — the store
+    // folds it into a running mean rather than overwriting anything. Teaching
+    // the app that a can of beans lasts 730 days would put beans on the wall
+    // the next time somebody typed one in by hand.
     templates: included
-      .filter((item) => !item.shelfStable)
-      .map((item) => ({ title: item.name, days: item.days })),
+      .filter((item) => !item.shelfStable && item.learn)
+      .map((item) => ({ title: item.name, observed: item.days, anchor: item.estimateDays })),
     remove: (review?.notHeard || []).filter((row) => row.remove).map((row) => row.id)
   }
 }

@@ -10,6 +10,7 @@
 import { ref, push, set, update, remove, get, onValue, off, query, limitToLast, serverTimestamp } from 'firebase/database'
 import { db, ensureSession } from '@/firebase'
 import { sortTimers, spanInDays, formatDaySpan } from './timers'
+import { foldObservation } from './shelfLife'
 import { sortHistory, HISTORY_LIMIT } from './history'
 import { timersPath, templatesPath, historyPath, templateKey } from './paths'
 import { reconcileShelfLives, fridgeFoodId } from './reconcile'
@@ -315,27 +316,53 @@ export default {
       }
     },
 
-    async saveTemplate ({ state, dispatch }, { source = 'scan', ...template }) {
-      // What the fridge believed before this write, so a changed shelf life can
-      // be logged. This is the drift that bit us: a re-taught template silently
-      // rewrote how long a food lasts, forever, with no record.
-      const previous = state.templates[templateKey(template.title)]
+    // Teach the household something about a food.
+    //
+    // THIS FOLDS, IT DOES NOT SET, and that is the 2026-09-20 change. It used
+    // to write `days` outright — last edit wins, forever — which is how
+    // sandwich bread and hamburger buns reached 76 days one extension at a
+    // time. Matt: "If I modify a timer on perishable, that should inform
+    // future guesses mostly. It shouldn't be seen as a fact of how long
+    // something can last."
+    //
+    // Takes `{ title, observed, anchor }`. `observed` is one sighting, not a
+    // verdict; shelfLife.js decides what it does to the running mean.
+    async saveTemplate ({ state, dispatch }, { source = 'scan', title, observed, anchor, days }) {
+      // `days` is still accepted for a caller that really does mean "this is
+      // the number" — the hand-typed add form, where a person typed it on
+      // purpose about this food rather than about one item of it.
+      const observation = Number(observed ?? days)
+      if (!Number.isFinite(observation) || observation <= 0) return
+
+      const previous = state.templates[templateKey(title)]
+      const next = foldObservation(previous, observation, { anchor })
+      if (!next) return
+
       try {
-        await set(ref(db, `${templatesPath(state.fridgeKey)}/${templateKey(template.title)}`), {
-          ...template,
-          createdAt: new Date().toISOString()
+        await set(ref(db, `${templatesPath(state.fridgeKey)}/${templateKey(title)}`), {
+          title,
+          days: next.days,
+          // The precise running mean, so the belief can keep converging rather
+          // than stalling on a rounding boundary. See shelfLife.js.
+          mean: next.mean ?? next.days,
+          count: next.count,
+          anchor: next.anchor,
+          updatedAt: new Date().toISOString(),
+          createdAt: previous?.createdAt || new Date().toISOString()
         })
       } catch (error) {
         console.error('Failed to save fridge template:', error)
         return
       }
 
-      if (previous && Number.isInteger(previous.days) &&
-          Number.isInteger(template.days) && previous.days !== template.days) {
+      // Only a CHANGE is worth a line, and now it can say how sure the house
+      // is — "now 2 weeks, was 1 week (seen 4 times)" reads very differently
+      // from the same sentence after one sighting.
+      if (previous && Number.isInteger(previous.days) && previous.days !== next.days) {
         dispatch('recordHistory', {
           action: 'relearned',
-          title: template.title,
-          detail: `now ${formatDaySpan(template.days)}, was ${formatDaySpan(previous.days)}`,
+          title,
+          detail: `now ${formatDaySpan(next.days)}, was ${formatDaySpan(previous.days)} (seen ${next.count}x)`,
           source
         })
       }

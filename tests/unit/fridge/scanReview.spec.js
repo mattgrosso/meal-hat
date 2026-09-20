@@ -65,8 +65,11 @@ describe('buildReviewItem', () => {
   it('a template match arrives ready, named in the household vocabulary', () => {
     const row = buildReviewItem(scanItem({ name: 'cheddar', knownFoodMatch: 'Cheddar Cheese' }), TEMPLATES, NOW)
     expect(row.name).toBe('Cheddar Cheese')
-    expect(row.days).toBe(74)
     expect(row.fromTemplate).toBe(true)
+    // The household's 74-day cheddar is the runaway drift, and the model says
+    // a week. Capped at twice the model — see shelfLife.js. The house is
+    // believed, but not past the point of absurdity.
+    expect(row.days).toBe(14)
   })
 
   it('falls back to local matching when the model missed the known food', () => {
@@ -75,14 +78,29 @@ describe('buildReviewItem', () => {
     expect(row.days).toBe(10)
   })
 
-  // Matt's call: a new food ALWAYS stops for input. The printed date and the
-  // estimate are options, never a prefill.
-  it('a new food arrives with days unset, options carried', () => {
+  // NOBODY IS ASKED ANY MORE (Matt, 2026-09-20: "just make your best guess").
+  // The rule this replaces — "a new food ALWAYS stops for input" — was right
+  // when a printed date and a guess were both on offer; it is wrong as a
+  // standing rule, because it turns describing a kitchen into forty decisions.
+  it('a new food arrives with a guess rather than a question', () => {
     const row = buildReviewItem(scanItem({ printedDate: '2026-09-02' }), TEMPLATES, NOW)
-    expect(row.days).toBe(null)
     expect(row.fromTemplate).toBe(false)
+    // A PRINTED use-by date is the one genuinely authoritative source and
+    // still wins outright over any guess.
+    expect(row.days).toBe(8)
     expect(row.printedDays).toBe(8)
     expect(row.estimateDays).toBe(7)
+    // And it is a real observation about this item, so it is worth learning.
+    expect(row.learn).toBe(true)
+    expect(reviewReady([row])).toBe(true)
+  })
+
+  it('a new food with no printed date falls back to the model, and teaches nothing', () => {
+    const row = buildReviewItem(scanItem({ printedDate: '' }), TEMPLATES, NOW)
+    expect(row.days).toBe(7)
+    // Folding a guess back in would make the belief more confident about what
+    // it already thought. An echo is not evidence.
+    expect(row.learn).toBe(false)
   })
 
   it('drops a nonsense estimate rather than offering it', () => {
@@ -224,14 +242,23 @@ describe('receipt rows', () => {
     expect(timers[0].expiryDate.slice(0, 10)).toBe('2026-09-01') // Aug 22 + 10
   })
 
-  // Otherwise photographing an old receipt would permanently teach the app
-  // that strawberries last a week less than they do.
-  it('teaches the template the full shelf life, not the shortened remainder', () => {
+  // THE INVARIANT: photographing an old receipt must never teach the app that
+  // strawberries last a week less than they do. It used to be protected by
+  // teaching the full shelf life rather than the shortened remainder; since
+  // 2026-09-20 it is protected more simply, by a receipt teaching NOTHING.
+  //
+  // A receipt carries no use-by dates, so every duration on one is a guess —
+  // and folding a guess back into the belief that produced it is an echo, not
+  // evidence. The backdating still shortens the TIMER, which is the part that
+  // matters in the kitchen.
+  it('never teaches a shortened remainder, because a receipt teaches nothing', () => {
     const list = buildReviewList([
       receiptScan('2026-08-22', [scanItem({ name: 'Strawberries' })])
     ], TEMPLATES, NOW)
-    const { templates } = confirmPayload(list, NOW)
-    expect(templates[0]).toEqual({ title: 'Strawberries', days: 10 })
+    expect(list[0].learn).toBe(false)
+    expect(confirmPayload(list, NOW).templates).toEqual([])
+    // The timer itself is still correctly backdated to the shop.
+    expect(list[0].daysElapsed).toBe(3)
   })
 
   it('a receipt and a counter photo in one batch keep their own start dates', () => {
@@ -245,15 +272,26 @@ describe('receipt rows', () => {
 })
 
 describe('confirmPayload', () => {
-  it('one timer and one template per included row, excluded rows silent', () => {
-    const { timers, templates } = confirmPayload([
+  it('one timer per included row, excluded rows silent', () => {
+    const { timers } = confirmPayload([
       { included: true, days: 5, name: 'Milk' },
       { included: false, days: 7, name: 'Wrong Thing' }
     ], NOW)
     expect(timers).toHaveLength(1)
     expect(timers[0].title).toBe('Milk')
     expect(new Date(timers[0].expiryDate).getDate()).toBe(30)
-    expect(templates).toEqual([{ title: 'Milk', days: 5 }])
+  })
+
+  it('teaches only from a row carrying a real signal', () => {
+    // `learn` is set by buildReviewItem when something actually observed this
+    // item — a printed use-by date. A row that took the standing guess has
+    // nothing to add, and an OBSERVATION is what the store folds in, never a
+    // verdict to overwrite with.
+    const { templates } = confirmPayload([
+      { included: true, days: 5, name: 'Milk', learn: true, estimateDays: 7 },
+      { included: true, days: 9, name: 'Eggs', learn: false, estimateDays: 9 }
+    ], NOW)
+    expect(templates).toEqual([{ title: 'Milk', observed: 5, anchor: 7 }])
   })
 })
 
@@ -332,10 +370,10 @@ describe('buildReconcile', () => {
     expect(result.maybeGone).toHaveLength(0)
   })
 
-  it('a new food found in the fridge still stops for a duration', () => {
+  it('a new food found in the fridge arrives with a guess, not a question', () => {
     const result = buildReconcile([storage(['Yogurt'])], [], TEMPLATES, NOW)
-    expect(result.newItems[0].days).toBe(null)
-    expect(reconcileReady(result.newItems)).toBe(false)
+    expect(result.newItems[0].days).toBe(7) // the model's estimate
+    expect(reconcileReady(result.newItems)).toBe(true)
   })
 
   it('a fridge that matches exactly is confirmable with nothing to do', () => {
@@ -366,7 +404,7 @@ describe('isStorageScan', () => {
 describe('renameReviewItem', () => {
   it('a rename onto a known food takes that food\'s title and shelf life', () => {
     const item = buildReviewItem(scanItem({ name: 'Cheddar', knownFoodMatch: 'Cheddar Cheese' }), TEMPLATES, NOW)
-    expect(item.days).toBe(74)
+    expect(item.days).toBe(14)
     renameReviewItem(item, ' cucumbers ', TEMPLATES)
     expect(item.name).toBe('Cucumber')
     expect(item.days).toBe(5)
@@ -374,14 +412,18 @@ describe('renameReviewItem', () => {
     expect(item.readAs).toBe('')
   })
 
-  it('a rename onto an unknown food drops the old shelf life and stops for input', () => {
-    // The bug: "Cheddar" with 74 days retyped as "Mozzarella" kept the 74 days.
+  it('a rename onto an unknown food drops the old food\'s shelf life', () => {
+    // The bug this guards: "Cheddar" carrying cheddar's shelf life, retyped as
+    // "Mozzarella", kept cheddar's number. It no longer stops for input — it
+    // re-guesses for the food it is now — but it must not keep the wrong
+    // food's answer.
     const item = buildReviewItem(scanItem({ name: 'Cheddar', knownFoodMatch: 'Cheddar Cheese' }), TEMPLATES, NOW)
+    expect(item.days).toBe(14)
     renameReviewItem(item, 'Mozzarella', TEMPLATES)
     expect(item.name).toBe('Mozzarella')
-    expect(item.days).toBeNull()
+    expect(item.days).toBe(7) // the model's estimate for this scan, not cheddar's
     expect(item.fromTemplate).toBe(false)
-    expect(reviewReady([item])).toBe(false)
+    expect(reviewReady([item])).toBe(true)
   })
 
   it('a rename clears the read-as note, since the substitution is now yours', () => {
@@ -420,8 +462,6 @@ describe('buildReviewItem — pantry stores on a receipt', () => {
   });
 
   it('does NOT stop for input on a pantry store', () => {
-    // "Every new food stops for your input" was written about a printed date
-    // versus a guess. Nobody wants to type a number for a tin of beans.
     const row = buildReviewItem(line(), [], NOW);
     expect(row.days).toBe(1095);
     expect(reviewReady([row])).toBe(true);
@@ -432,11 +472,11 @@ describe('buildReviewItem — pantry stores on a receipt', () => {
     expect(row.days).toBe(730);
   });
 
-  it('still stops for input on a new PERISHABLE food', () => {
+  it('gives a new PERISHABLE food the model\'s estimate, and asks nothing', () => {
     const row = buildReviewItem(line({ name: 'Rhubarb', perishable: true, estimatedShelfLifeDays: 10 }), [], NOW);
     expect(row.shelfStable).toBe(false);
-    expect(row.days).toBeNull();
-    expect(reviewReady([row])).toBe(false);
+    expect(row.days).toBe(10);
+    expect(reviewReady([row])).toBe(true);
   });
 
   it('lets a household template overrule the model calling it shelf-stable', () => {
@@ -453,18 +493,16 @@ describe('buildReviewItem — pantry stores on a receipt', () => {
 
   it('writes the flag onto the timer and teaches NO template', () => {
     const milk = buildReviewItem(line({ name: 'Milk', perishable: true, estimatedShelfLifeDays: 7 }), [], NOW);
-    // A new perishable food still stops for input, so it carries no duration
-    // until somebody gives it one — which is what the review screen is for.
-    expect(milk.days).toBeNull();
-    milk.days = 7;
+    expect(milk.days).toBe(7);
 
     const rows = [buildReviewItem(line(), [], NOW), milk];
     const payload = confirmPayload(rows, NOW);
     expect(payload.timers.find((t) => t.title === 'Rice').shelfStable).toBe(true);
     expect(payload.timers.find((t) => t.title === 'Milk').shelfStable).toBeUndefined();
     // A pantry template would put the next hand-typed tin of beans on the wall
-    // carrying a two-year countdown.
-    expect(payload.templates.map((t) => t.title)).toEqual(['Milk']);
+    // carrying a two-year countdown. And neither row teaches anything here:
+    // a receipt carries no use-by dates, so every duration on it is a guess.
+    expect(payload.templates).toEqual([]);
   });
 
   it('a renamed pantry row stays confirmable', () => {

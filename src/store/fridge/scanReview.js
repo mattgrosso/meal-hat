@@ -12,6 +12,7 @@
 
 import { computeTimeLeft } from './timers'
 import { isPerishable, DEFAULT_PANTRY_DAYS } from './perishable'
+import { guessDays } from './shelfLife'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
@@ -110,16 +111,18 @@ export const buildReviewItem = (scanItem, templates, now, photoIndex = 0, starts
     box: scanItem.box || null,
     photoIndex,
     included: true,
-    // Template rows arrive ready; new foods arrive needing an answer — except
-    // a pantry store, which gets a long default rather than making somebody
-    // pick a number for a tin of beans.
-    days: template
-      ? template.days
-      : (perishable
-          ? null
-          : (Number.isInteger(scanItem.estimatedShelfLifeDays) && scanItem.estimatedShelfLifeDays > 0
-              ? scanItem.estimatedShelfLifeDays
-              : DEFAULT_PANTRY_DAYS)),
+    // NOBODY IS ASKED HOW LONG ANYTHING LASTS (Matt, 2026-09-20). A printed
+    // use-by date is the one genuinely authoritative source and still wins
+    // outright; everything else is a blend of what the house has seen and what
+    // the model knows, applied without a question. Pantry stores get a long
+    // default and no countdown worth speaking of.
+    days: perishable
+      ? (printedDays ?? guessDays({ estimate: estimateDays, template }))
+      : (estimateDays || DEFAULT_PANTRY_DAYS),
+    // A printed date is a real observation about this item. A blended guess is
+    // not — folding it back in would just make the belief more confident about
+    // what it already thought.
+    learn: perishable && Boolean(printedDays),
     fromTemplate: Boolean(template),
     // The options a new-food row offers. Shown, never pre-applied.
     printedDate: scanItem.printedDate || null,
@@ -143,14 +146,13 @@ export const renameReviewItem = (item, newName, templates) => {
   const typed = String(newName || '').trim()
   const template = findTemplate(typed, templates)
   item.name = template ? template.title : typed
-  // A pantry store renamed to another pantry store keeps its long default
-  // rather than blanking — otherwise correcting "Rice" to "Basmati Rice" would
-  // make the row un-confirmable until somebody typed a number for a bag of
-  // rice. A template match still wins, and still un-marks it as pantry.
-  item.days = template
-    ? template.days
-    : (item.shelfStable ? (item.days || DEFAULT_PANTRY_DAYS) : null)
   if (template) item.shelfStable = false
+  // Re-guess from scratch for the food it is NOW. A pantry store renamed to
+  // another pantry store keeps its long default; anything else asks
+  // shelfLife.js again, which is the same question this row was born asking.
+  item.days = item.shelfStable
+    ? (item.days || DEFAULT_PANTRY_DAYS)
+    : (guessDays({ estimate: item.estimateDays, template }) || item.days)
   item.fromTemplate = Boolean(template)
   item.readAs = ''
   return item
@@ -281,7 +283,7 @@ export const confirmPayload = (items, now) => {
     // Pantry stores teach NOTHING, or the next hand-typed tin of beans would
     // arrive on the wall carrying a two-year countdown.
     templates: included
-      .filter((item) => !item.shelfStable)
-      .map((item) => ({ title: item.name, days: item.days }))
+      .filter((item) => !item.shelfStable && item.learn)
+      .map((item) => ({ title: item.name, observed: item.days, anchor: item.estimateDays }))
   }
 }

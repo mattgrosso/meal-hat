@@ -61,8 +61,11 @@ describe('buildTalkItem', () => {
   it('answers in the household\'s vocabulary and arrives ready', () => {
     const row = buildTalkItem(said({ knownFoodMatch: 'Cheddar Cheese' }), templates, NOW);
     expect(row.name).toBe('Cheddar Cheese');
-    expect(row.days).toBe(74);
     expect(row.fromTemplate).toBe(true);
+    // The household's 74-day cheddar is the runaway drift; the spoken estimate
+    // is 30. Capped at twice the estimate — the house is believed, but not
+    // past the point of absurdity. See shelfLife.js.
+    expect(row.days).toBe(60);
   });
 
   it('SAYS SO when a template renamed what was heard', () => {
@@ -240,11 +243,19 @@ describe('talkPayload', () => {
     // two-year countdown, and the wall is for food that goes off.
     const review = {
       newItems: [
-        { name: 'Black Beans', included: true, days: 730, shelfStable: true, startsAt: NOW },
-        { name: 'Rhubarb', included: true, days: 12, startsAt: NOW }
+        { name: 'Black Beans', included: true, days: 730, shelfStable: true, learn: true, startsAt: NOW },
+        { name: 'Rhubarb', included: true, days: 12, learn: true, estimateDays: 14, startsAt: NOW }
       ]
     };
-    expect(talkPayload(review, NOW).templates).toEqual([{ title: 'Rhubarb', days: 12 }]);
+    // An OBSERVATION, not a verdict — the store folds it into a running mean.
+    expect(talkPayload(review, NOW).templates).toEqual([
+      { title: 'Rhubarb', observed: 12, anchor: 14 }
+    ]);
+  });
+
+  it('teaches nothing from a row with no real signal behind it', () => {
+    const review = { newItems: [{ name: 'Rhubarb', included: true, days: 12, learn: false, startsAt: NOW }] };
+    expect(talkPayload(review, NOW).templates).toEqual([]);
   });
 
   it('only removes the rows still ticked when it was confirmed', () => {

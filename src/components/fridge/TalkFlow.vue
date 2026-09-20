@@ -99,22 +99,20 @@
               read as “{{ item.readAs }}” — filed under your {{ item.name }}
             </p>
 
+            <!-- NO DURATION FIELD. Matt, 2026-09-20: "Don't confirm with me
+                 how long something should be... just make your best guess."
+                 Forty of these in one sitting is data entry, not review. The
+                 guess is stated so it can be checked, and it is corrected on
+                 the kitchen screen — which is also how the app learns. -->
             <div class="review-bottom">
-              <label class="days-label">
-                <input
-                  v-model.number="item.days"
-                  type="number"
-                  min="1"
-                  class="days-input"
-                >
-                days
-              </label>
-              <span v-if="item.fromTemplate" class="days-source">your usual</span>
-              <span v-else class="days-source estimate">estimate</span>
+              <span v-if="!item.shelfStable" class="days-chip">{{ formatDays(item.days) }}</span>
+              <span v-if="!item.shelfStable" class="days-source">
+                {{ item.fromTemplate ? 'what yours usually lasts' : 'best guess' }}
+              </span>
               <label v-if="item.quantity > 1" class="qty-label">
                 ×{{ item.quantity }}
               </label>
-              <span v-if="item.shelfStable" class="pantry-chip">pantry — off the wall</span>
+              <span v-if="item.shelfStable" class="pantry-chip">pantry — tracked, no countdown</span>
             </div>
           </div>
         </template>
@@ -199,8 +197,9 @@
 import { readTranscript, ScanError } from '@/utils/fridge/scan'
 import { ensureSession } from '@/firebase'
 import { buildTalkReview, talkReviewReady, talkPayload } from '@/store/fridge/talkReview'
+import { guessDays } from '@/store/fridge/shelfLife'
 import { findTemplate } from '@/store/fridge/scanReview'
-import { computeTimeLeft } from '@/store/fridge/timers'
+import { computeTimeLeft, formatDaySpan } from '@/store/fridge/timers'
 import { saveDraft, readDraft, clearDraft } from '@/utils/fridge/talkDraft'
 import { knownFoodNames } from '@/store/fridge/vocabulary'
 
@@ -387,9 +386,15 @@ export default {
     rename (item) {
       const template = findTemplate(item.name, this.templates)
       item.name = template ? template.title : String(item.name || '').trim()
-      item.days = template ? template.days : (item.estimateDays || item.days)
+      // Re-guess for the food it is NOW — the same question the row was born
+      // asking. Keeping the old food's number is the bug this guards.
+      item.days = guessDays({ estimate: item.estimateDays, template }) || item.days
       item.fromTemplate = Boolean(template)
       item.readAs = ''
+    },
+
+    formatDays (days) {
+      return formatDaySpan(days)
     },
 
     leftLabel (row) {
@@ -714,32 +719,17 @@ export default {
   flex-wrap: wrap;
 }
 
-.days-label {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 0.9rem;
-}
-
-.days-input {
-  width: 4.5rem;
-  background: rgba(255, 255, 255, 0.07);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 6px;
+.days-chip {
+  padding: 0.3rem 0.65rem;
+  background: rgba(76, 175, 80, 0.85);
+  border-radius: 999px;
   color: #fff;
-  padding: 0.35rem 0.5rem;
-  font-size: 1rem;
-  font-family: inherit;
+  font-size: 0.85rem;
 }
 
 .days-source {
   font-size: 0.75rem;
-  color: rgba(76, 175, 80, 0.9);
-
-  &.estimate {
-    color: rgba(255, 255, 255, 0.4);
-  }
+  color: rgba(255, 255, 255, 0.45);
 }
 
 .qty-label {

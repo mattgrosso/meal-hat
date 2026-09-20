@@ -157,10 +157,14 @@ export default {
         expiryDate: expiryDate.toISOString()
       })
 
-      // Save as template for future use
+      // A number somebody typed on purpose, about this food rather than about
+      // one item of it — so it both observes AND anchors. This is the one path
+      // where a person is deliberately stating a shelf life.
       this.$store.dispatch('fridge/saveTemplate', {
         title: title,
-        days: days
+        observed: days,
+        anchor: days,
+        source: 'hand'
       })
 
       this.form = { title: '' }

@@ -76,16 +76,13 @@
               </button>
               <input type="text" v-model="item.name" class="review-name" :disabled="!item.included" @change="rename(item)">
             </div>
-            <!-- Same chips as the haul review: a template match has to SAY it
-                 is one, or a 51-day shelf life rides along invisibly. -->
+            <!-- Shown, not offered — same as the review stage above. A
+                 template match still has to SAY it is one, or a long learned
+                 shelf life rides along invisibly. -->
             <div v-if="item.included" class="review-durations">
-              <button v-if="item.fromTemplate" class="duration-chip active">{{ formatDays(item.days) }} (your usual)</button>
+              <span class="duration-chip active">{{ formatDays(item.days) }}</span>
+              <span class="days-from">{{ daysSource(item) }}</span>
               <span v-if="item.readAs" class="review-readas">read as “{{ item.readAs }}” — using your {{ item.name }}</span>
-              <template v-else-if="!item.fromTemplate">
-                <button v-if="item.printedDays" class="duration-chip" :class="{ active: item.days === item.printedDays }" @click="item.days = item.printedDays">printed: {{ item.printedDate }}</button>
-                <button v-if="item.estimateDays" class="duration-chip" :class="{ active: item.days === item.estimateDays }" @click="item.days = item.estimateDays">typical: {{ formatDays(item.estimateDays) }}</button>
-                <button v-for="preset in presets" :key="preset" class="duration-chip" :class="{ active: item.days === preset }" @click="item.days = preset">{{ formatDays(preset) }}</button>
-              </template>
             </div>
           </div>
         </template>
@@ -124,7 +121,8 @@
       <div v-else-if="stage === 'review'" class="review-stage">
         <p v-if="receiptNote" class="receipt-note">🧾 {{ receiptNote }}</p>
         <p class="review-hint">
-          Uncheck anything that's wrong. New foods need a time picked before they can be added.
+          Uncheck anything that's wrong. The times are guesses — fix them on
+          the kitchen screen if one is off, and it'll learn.
         </p>
         <div v-for="(item, index) in reviewItems" :key="index" class="review-row" :class="{ excluded: !item.included }">
           <div class="review-top">
@@ -152,35 +150,17 @@
           <div v-if="item.included && item.shelfStable" class="review-durations">
             <span class="pantry-chip">pantry — tracked, no countdown</span>
           </div>
+          <!-- NO DURATION PICKER. Matt, 2026-09-20: "Don't confirm with me how
+               long something should be... just make your best guess." The
+               guess is shown, not offered — it says where it came from, and a
+               wrong one is corrected on the wall later, where correcting it is
+               also how the app learns. -->
           <div v-else-if="item.included" class="review-durations">
-            <button
-              v-if="item.fromTemplate"
-              class="duration-chip active"
-            >{{ formatDays(item.days) }} (your usual)</button>
+            <span class="duration-chip active">{{ formatDays(item.days) }}</span>
+            <span class="days-from">{{ daysSource(item) }}</span>
             <span v-if="item.readAs" class="review-readas">
               read as “{{ item.readAs }}” — using your {{ item.name }}
             </span>
-            <template v-else>
-              <button
-                v-if="item.printedDays"
-                class="duration-chip"
-                :class="{ active: item.days === item.printedDays }"
-                @click="item.days = item.printedDays"
-              >printed: {{ item.printedDate }} ({{ formatDays(item.printedDays) }})</button>
-              <button
-                v-if="item.estimateDays"
-                class="duration-chip"
-                :class="{ active: item.days === item.estimateDays }"
-                @click="item.days = item.estimateDays"
-              >typical: {{ formatDays(item.estimateDays) }}</button>
-              <button
-                v-for="preset in presets"
-                :key="preset"
-                class="duration-chip"
-                :class="{ active: item.days === preset }"
-                @click="item.days = preset"
-              >{{ formatDays(preset) }}</button>
-            </template>
           </div>
           <!-- Backdating is invisible arithmetic; say it out loud. Not for a
                pantry store: "104 weeks 1 day left" on a bag of rice is true,
@@ -280,7 +260,7 @@ export default {
       scans: [],
       reconcile: { stillHere: [], newItems: [], maybeGone: [] },
       zoom: { open: false, src: '', name: '', item: null, whole: false, magnified: false },
-      presets: [3, 5, 7, 10, 14]
+      // The duration presets are gone: nothing asks for a duration any more.
     }
   },
   computed: {
@@ -358,6 +338,15 @@ export default {
     },
     formatDays (days) {
       return formatDaySpan(days)
+    },
+
+    // Where this guess came from, in four words. Not a decision to make — a
+    // claim that can be checked, which is what makes a wrong one correctable
+    // instead of mysterious.
+    daysSource (item) {
+      if (item.printedDays && item.days === item.printedDays) return 'printed on the pack'
+      if (item.fromTemplate) return 'what yours usually lasts'
+      return 'best guess'
     },
     formatDate (date) {
       return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
@@ -846,6 +835,13 @@ export default {
     flex-wrap: wrap;
     gap: 0.5rem;
     margin-top: 0.75rem;
+  }
+
+  /* Where a guess came from. Not a decision — a claim that can be checked,
+     which is what makes a wrong one correctable instead of mysterious. */
+  .days-from {
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.45);
   }
 
   /* Not a chip you can press — a statement that this row needs no decision. */

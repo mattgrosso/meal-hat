@@ -178,10 +178,17 @@ export default {
           addedDays: this.pendingAdjustment
         })
 
-        // The template relearns its duration from the timer's actual new lifespan
+        // ONE OBSERVATION, not a verdict. Extending a timer says "this item
+        // lasted longer than I thought" — real evidence, and exactly the
+        // signal Matt wants the app to learn from ("that should inform future
+        // guesses mostly"). What it must NOT do is redefine the food: this
+        // used to write the new lifespan straight onto the template, so
+        // extending a nearly-dead loaf taught the app that bread keeps for
+        // months, and the next extension compounded it. shelfLife.js folds it
+        // into a running mean instead.
         await this.$store.dispatch('fridge/saveTemplate', {
           title: this.timer.title,
-          days: templateDaysAfterEdit(newExpiryIso, this.timer.createdAt),
+          observed: templateDaysAfterEdit(newExpiryIso, this.timer.createdAt),
           source: 'edit'
         })
 

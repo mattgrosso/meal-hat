@@ -758,6 +758,61 @@ Order matters because the list is capped at 200: **what is on the shopping list
 first**, then templates, then the rest of the catalog. One bad name (empty, or
 over 60 characters) is dropped rather than 400ing the whole list.
 
+### Nothing asks how long a food lasts
+
+Matt, 2026-09-20: *"Don't confirm with me how long something should be in the
+pantry or whatever the timers. Just make your best guess. If I modify a timer
+on perishable, that should inform future guesses mostly. It shouldn't be seen
+as a fact of how long something can last."*
+
+Two instructions, both load-bearing, both in `store/fridge/shelfLife.js`.
+
+**Never ask.** The old rule — "a NEW food always stops for input" — was right
+when a printed use-by date and a model's guess were both on offer and choosing
+silently would have hidden the difference. It is wrong as a standing rule: it
+turns describing a kitchen into forty small decisions. Every path now returns a
+number, and both review screens SHOW the guess with where it came from
+("printed on the pack" / "what yours usually lasts" / "best guess") rather than
+offering a picker. A wrong one is corrected on the wall — which is also how the
+app learns.
+
+**A correction is evidence, not truth.** A template holds a running `mean`, a
+`count`, and an `anchor`. `foldObservation` averages a new sighting in rather
+than overwriting; `guessDays` reads it back.
+
+Three things in that module were got wrong first and are worth not repeating:
+
+- **Clamping each observation against the current mean does not bound a
+  runaway.** The mean rises, so the next clamp is looser. Twelve extensions
+  still took 7-day bread to 57. The bound has to be fixed to something that
+  does not move — hence `anchor`, set once from the model's estimate for the
+  food and never updated.
+- **Storing only the rounded mean stalls convergence.** Fold the whole-day
+  value back in and each round throws away the sub-day progress: a 2-day belief
+  fed twenty observations of 10 climbs to 8 and sticks there forever, because
+  an increment of 0.22 rounds to nothing. `mean` is the precise value, `days`
+  its whole-day face for the catalog sync and the displays.
+- **The two directions are NOT symmetric, and blending them produces answers
+  worse than either input.** The first version averaged household and model and
+  clamped both ways: a carefully taught 240-day frozen spinach, against a model
+  guessing 900, came out at 680 — nobody's number and nobody's food. A belief
+  that is too LONG lets food rot behind a timer saying it is fine; one that is
+  too SHORT costs a glance at something still good, and every other rule here
+  errs early on purpose. So the household is simply believed, capped at
+  `MAX_DRIFT_FACTOR` x the model and uncapped downward.
+
+That cap is what makes the old drift unreachable without touching his data:
+76-day bread against a model saying a week now produces a fortnight.
+
+**Only a real signal teaches.** A printed use-by date, or a number somebody
+typed on purpose, or a timer edited on the wall. A row that merely accepted the
+standing guess carries `learn: false` — folding a guess back into the belief
+that produced it is an echo, not evidence, and it would make the app more
+confident purely by agreeing with itself. This is also why a receipt teaches
+nothing: receipts carry no use-by dates, so every duration on one is a guess.
+(It is the new form of the old "teach the full shelf life, not the shortened
+remainder" protection.)
+
 ### The receipt is the SECOND input, not a convenience
 
 Matt corrected me on this the same day, and he was right: *"The receipt
