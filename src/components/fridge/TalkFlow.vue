@@ -51,16 +51,32 @@
         <p class="reading-sub">{{ elapsedLabel }}</p>
       </div>
 
-      <!-- What it made of it -->
-      <div v-else-if="stage === 'review'" class="review-stage">
-        <!-- What it got RIGHT goes first, always. Being shown that it heard
-             twenty things correctly is what makes the removals below
-             trustworthy — Matt's own report on the photo flow said exactly
-             this ("so I can feel like it did see things"). -->
-        <template v-if="review.confirmed.length">
-          <h3 class="pile-head">Still here ({{ review.confirmed.length }})</h3>
+      <!-- What it did. NOT a confirmation — Matt, 2026-09-20: "I want my
+           stream of consciousness read-through to just be interpreted, and
+           I'm going to assume you got it right. I don't want any kind of
+           checks." So this screen has no decision on it. It is a receipt for
+           work already done, and it exists because being told what happened
+           is not the same as being asked to approve it. -->
+      <div v-else-if="stage === 'done'" class="review-stage">
+        <p class="done-line">{{ doneMessage }}</p>
+
+        <template v-if="report.added.length">
+          <h3 class="pile-head">Added ({{ report.added.length }})</h3>
           <ul class="seen-list">
-            <li v-for="row in review.confirmed" :key="row.id" class="seen-row">
+            <li v-for="(row, i) in report.added" :key="'a' + i" class="seen-row">
+              <span class="seen-tick">+</span>
+              <span class="seen-title">
+                {{ row.name }}<span v-if="row.quantity > 1"> ×{{ row.quantity }}</span>
+              </span>
+              <span class="seen-left">{{ row.shelfStable ? 'pantry' : formatDays(row.days) }}</span>
+            </li>
+          </ul>
+        </template>
+
+        <template v-if="report.confirmed.length">
+          <h3 class="pile-head">Already had ({{ report.confirmed.length }})</h3>
+          <ul class="seen-list">
+            <li v-for="row in report.confirmed" :key="row.id" class="seen-row">
               <span class="seen-tick">✓</span>
               <span class="seen-title">{{ row.title }}</span>
               <span class="seen-left">{{ leftLabel(row) }}</span>
@@ -68,113 +84,35 @@
           </ul>
         </template>
 
-        <template v-if="review.newItems.length">
-          <h3 class="pile-head">New — adding these ({{ review.newItems.length }})</h3>
-          <div
-            v-for="(item, index) in review.newItems"
-            :key="'new' + index"
-            class="review-row"
-            :class="{ excluded: !item.included }"
-          >
-            <div class="review-top">
-              <input
-                :id="'inc' + index"
-                v-model="item.included"
-                type="checkbox"
-                class="review-check"
-              >
-              <input
-                v-model="item.name"
-                class="review-name"
-                @change="rename(item)"
-              >
-            </div>
-
-            <!-- His own words. The ONLY way a misreading is catchable: a row
-                 saying "Pepper" is fine until you see it came from "half a
-                 block of pepper jack". -->
-            <p v-if="item.heard" class="review-heard">“{{ item.heard }}”</p>
-
-            <p v-if="item.readAs" class="review-renamed">
-              read as “{{ item.readAs }}” — filed under your {{ item.name }}
-            </p>
-
-            <!-- NO DURATION FIELD. Matt, 2026-09-20: "Don't confirm with me
-                 how long something should be... just make your best guess."
-                 Forty of these in one sitting is data entry, not review. The
-                 guess is stated so it can be checked, and it is corrected on
-                 the kitchen screen — which is also how the app learns. -->
-            <div class="review-bottom">
-              <span v-if="!item.shelfStable" class="days-chip">{{ formatDays(item.days) }}</span>
-              <span v-if="!item.shelfStable" class="days-source">
-                {{ item.fromTemplate ? 'what yours usually lasts' : 'best guess' }}
-              </span>
-              <label v-if="item.quantity > 1" class="qty-label">
-                ×{{ item.quantity }}
-              </label>
-              <span v-if="item.shelfStable" class="pantry-chip">pantry — tracked, no countdown</span>
-            </div>
-          </div>
-        </template>
-
-        <!-- The pile that is CHECKED, and the reason this screen exists at all.
-             Matt's call: "we should assume that if I don't list it, then it
-             isn't there." Every other screen in this app arrives unchecked. -->
-        <template v-if="review.notHeard.length">
-          <h3 class="pile-head danger">
-            Didn't hear these — removing ({{ removingCount }})
-          </h3>
+        <template v-if="report.removed.length">
+          <h3 class="pile-head danger">Removed ({{ report.removed.length }})</h3>
           <p class="pile-note">
-            You said you'd list everything, so these go. Untick anything you
-            just forgot to mention.
+            You didn't mention these, so they're gone. Say them next time and
+            they'll come straight back.
           </p>
-          <div v-for="row in review.notHeard" :key="row.id" class="gone-row">
-            <input
-              :id="'gone' + row.id"
-              v-model="row.remove"
-              type="checkbox"
-              class="review-check"
-            >
-            <label :for="'gone' + row.id" class="gone-body">
-              <span class="gone-title">{{ row.title }}</span>
-              <span class="gone-meta">
-                <template v-if="row.saidOutOf">you said you're out of it</template>
-                <template v-else>
-                  {{ leftLabel(row) }}<template v-if="row.addedDaysAgo !== null">
-                    · added {{ row.addedDaysAgo }}d ago</template>
-                </template>
-              </span>
-            </label>
-          </div>
+          <ul class="seen-list">
+            <li v-for="row in report.removed" :key="row.id" class="seen-row">
+              <span class="seen-tick gone">−</span>
+              <span class="seen-title">{{ row.title }}</span>
+              <span class="seen-left">{{ row.saidOutOf ? 'you said you\u2019re out' : '' }}</span>
+            </li>
+          </ul>
         </template>
 
-        <template v-if="review.unclear.length">
+        <template v-if="report.unclear.length">
           <h3 class="pile-head">Couldn't place these</h3>
           <ul class="unclear-list">
-            <li v-for="(row, index) in review.unclear" :key="'u' + index">
+            <li v-for="(row, index) in report.unclear" :key="'u' + index">
               “{{ row.heard }}” — {{ row.why }}
             </li>
           </ul>
         </template>
 
-        <p v-if="nothingAtAll" class="talk-error">
-          Nothing in that sounded like food. Have a look at what you said and
-          try again.
-        </p>
-
         <div class="review-actions">
-          <button class="cancel-btn" @click="backToTalk">Back</button>
-          <button class="confirm-btn" :disabled="!ready || saving" @click="confirm">
-            {{ saving ? 'Saving…' : confirmLabel }}
-          </button>
+          <button class="confirm-btn" @click="$emit('close')">Done</button>
         </div>
       </div>
 
-      <!-- Done -->
-      <div v-else-if="stage === 'done'" class="done-stage">
-        <p class="done-text">{{ doneMessage }}</p>
-        <button class="talk-btn" @click="$emit('close')">Done</button>
-      </div>
     </div>
   </div>
 </template>
@@ -196,9 +134,7 @@
 
 import { readTranscript, ScanError } from '@/utils/fridge/scan'
 import { ensureSession } from '@/firebase'
-import { buildTalkReview, talkReviewReady, talkPayload } from '@/store/fridge/talkReview'
-import { guessDays } from '@/store/fridge/shelfLife'
-import { findTemplate } from '@/store/fridge/scanReview'
+import { buildTalkReview, talkPayload } from '@/store/fridge/talkReview'
 import { computeTimeLeft, formatDaySpan } from '@/store/fridge/timers'
 import { saveDraft, readDraft, clearDraft } from '@/utils/fridge/talkDraft'
 import { knownFoodNames } from '@/store/fridge/vocabulary'
@@ -218,12 +154,11 @@ export default {
     return {
       stage: 'talk',
       transcript: '',
+      report: { added: [], confirmed: [], removed: [], unclear: [] },
       restored: false,
       restoredAt: null,
       savedAt: null,
       errorMessage: '',
-      review: { confirmed: [], newItems: [], notHeard: [], unclear: [] },
-      saving: false,
       applied: null,
       elapsed: 0,
       ticker: null,
@@ -232,8 +167,7 @@ export default {
   },
   computed: {
     title () {
-      if (this.stage === 'review') return 'What I heard'
-      if (this.stage === 'done') return 'Done'
+      if (this.stage === 'done') return 'What I heard'
       return 'Say what\'s in the house'
     },
     wordCount () {
@@ -256,28 +190,9 @@ export default {
         ? 'this takes a moment'
         : `${this.elapsed}s — still going`
     },
-    removingCount () {
-      return this.review.notHeard.filter((row) => row.remove).length
-    },
-    addingCount () {
-      return this.review.newItems.filter((item) => item.included).length
-    },
-    nothingAtAll () {
-      return !this.review.confirmed.length &&
-        !this.review.newItems.length &&
-        !this.review.notHeard.length
-    },
-    ready () {
-      return talkReviewReady(this.review.newItems) && !this.nothingAtAll
-    },
-    confirmLabel () {
-      const parts = []
-      if (this.addingCount) parts.push(`add ${this.addingCount}`)
-      if (this.removingCount) parts.push(`remove ${this.removingCount}`)
-      // The button says what it is about to do. On the one screen in this app
-      // that removes things in bulk, a bare "Confirm" is not good enough.
-      return parts.length ? parts.join(', ') : 'Nothing to change'
-    },
+    // A statement of what happened, not a question. Failures are said out
+    // loud: a partial apply reported as a clean one sends him to the shop
+    // trusting a list that is wrong.
     doneMessage () {
       if (!this.applied) return 'All set.'
       const { added, removed, failed } = this.applied
@@ -337,13 +252,8 @@ export default {
     // Closing mid-sentence must not throw the text away — it is the only copy
     // of a walk around the kitchen, and the draft outlives the sheet.
     tryClose () {
-      if (this.stage === 'reading' || this.saving) return
+      if (this.stage === 'reading') return
       this.$emit('close')
-    },
-
-    backToTalk () {
-      this.stage = 'talk'
-      this.$nextTick(() => this.$refs.box?.focus())
     },
 
     async send () {
@@ -367,8 +277,32 @@ export default {
           knownFoods: this.knownFoods
         })
 
-        this.review = buildTalkReview(result, this.timers, this.templates, new Date())
-        this.stage = 'review'
+        const now = new Date()
+        const review = buildTalkReview(result, this.timers, this.templates, now)
+
+        // NO CONFIRMATION STEP. Read it, apply it, say what happened. Matt was
+        // explicit twice: "I don't want any kind of checks." Every row is
+        // included and every unmentioned timer goes, which is exactly what the
+        // review screen defaulted to anyway — the screen was only ever a place
+        // to change one's mind, and he does not want the chance.
+        //
+        // What makes that safe is not carefulness here, it is the loop: a
+        // talk-through happens every week and rebuilds the whole picture, so a
+        // wrong removal costs one mention next time. The change log keeps the
+        // record either way.
+        const payload = talkPayload(review, now)
+        const applied = await this.$store.dispatch('fridge/applyTalk', { payload })
+
+        this.applied = applied
+        this.report = {
+          added: review.newItems,
+          confirmed: review.confirmed,
+          removed: review.notHeard,
+          unclear: review.unclear
+        }
+        clearDraft()
+        this.$emit('applied', applied)
+        this.stage = 'done'
       } catch (error) {
         this.errorMessage = error instanceof ScanError
           ? error.message
@@ -380,19 +314,6 @@ export default {
       }
     },
 
-    // A row renamed by hand is re-matched, because the shelf life came with
-    // the NAME and not with the sentence. Typing "Mozzarella" over a row that
-    // arrived as cheddar must not leave cheddar's 74 days sitting there.
-    rename (item) {
-      const template = findTemplate(item.name, this.templates)
-      item.name = template ? template.title : String(item.name || '').trim()
-      // Re-guess for the food it is NOW — the same question the row was born
-      // asking. Keeping the old food's number is the bug this guards.
-      item.days = guessDays({ estimate: item.estimateDays, template }) || item.days
-      item.fromTemplate = Boolean(template)
-      item.readAs = ''
-    },
-
     formatDays (days) {
       return formatDaySpan(days)
     },
@@ -401,25 +322,6 @@ export default {
       const left = row.timeLeft || computeTimeLeft(row.expiryDate, new Date())
       if (left.expired) return 'expired'
       return left.days > 0 ? `${left.days}d left` : `${left.hours}h left`
-    },
-
-    async confirm () {
-      this.saving = true
-      try {
-        // The plan shown IS the plan applied — one pure function builds both,
-        // so what he agreed to and what hits the database cannot drift.
-        const payload = talkPayload(this.review, new Date())
-        const applied = await this.$store.dispatch('fridge/applyTalk', { payload })
-        this.applied = applied
-        clearDraft()
-        this.$emit('applied', applied)
-        this.stage = 'done'
-      } catch (error) {
-        console.error('Failed to apply the talk-through:', error)
-        this.errorMessage = 'Could not save all of that. Have a look at the fridge.'
-      } finally {
-        this.saving = false
-      }
     }
   }
 }
@@ -618,6 +520,13 @@ export default {
   margin: 0;
 }
 
+.done-line {
+  color: #fff;
+  font-size: 1.05rem;
+  line-height: 1.5;
+  margin: 0 0 0.5rem;
+}
+
 .pile-head {
   font-size: 1rem;
   font-weight: 600;
@@ -652,6 +561,12 @@ export default {
 
 .seen-tick {
   color: #4caf50;
+  width: 1rem;
+  flex: none;
+
+  &.gone {
+    color: #ffab91;
+  }
 }
 
 .seen-title {

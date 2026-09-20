@@ -758,6 +758,36 @@ Order matters because the list is capped at 200: **what is on the shopping list
 first**, then templates, then the rest of the catalog. One bad name (empty, or
 over 60 characters) is dropped rather than 400ing the whole list.
 
+### There is no confirmation step, anywhere
+
+Matt, 2026-09-20, after a first pass that only removed the duration pickers:
+*"You're still saying that there's a confirmation screen. I don't even want a
+confirmation screen. I want the receipt to just get interpreted, and I'm just
+going to assume you got it right... I don't want any kind of checks."*
+
+So both flows are now **read it, apply it, say what happened**. Submitting a
+talk-through writes the timers and the removals in the same breath;
+photographing a receipt adds the food before the sheet has finished animating.
+Neither has a button that means "yes, go ahead".
+
+**The screen that remains is a report, not a confirmation.** It lists what was
+added, what was already there, what was removed and what could not be placed —
+and it carries no decision. Being told what happened is not the same as being
+asked to approve it, and he objected to the second, not the first.
+
+**What makes this safe is the LOOP, not carefulness at the moment of writing.**
+A talk-through happens every week and rebuilds the whole picture from scratch,
+so a wrong removal costs one mention next time and a wrong add costs one
+unmention. The change log records every write with its source. Nothing here is
+precious: timers are derived data with a seven-day half-life.
+
+Things that went with the confirmation step, and should not come back without
+him asking: the per-row include checkbox, the rename field, the duration
+pickers, the crop thumbnails and their zoom viewer, and the photo-reconcile
+stage. The receipt's printed line survived, because it is the only way a
+misexpanded abbreviation is ever catchable — but it is there to be noticed,
+not approved.
+
 ### Nothing asks how long a food lasts
 
 Matt, 2026-09-20: *"Don't confirm with me how long something should be in the

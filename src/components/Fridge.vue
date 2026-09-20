@@ -81,7 +81,6 @@
       :timers="timers"
       @close="showScan = false"
       @confirm="confirmScan"
-      @reconcile="confirmReconcile"
     />
 
     <!-- The spoken inventory. Gets ALL timers, pantry included: this is the
@@ -340,8 +339,10 @@ export default {
       if (removed) parts.push(`removed ${removed}`);
       if (parts.length) this.noteAdded(parts.join(', '));
     },
+    // The scan applies itself the moment it lands — there is no confirm step
+    // any more — so this just writes what it was handed and leaves the sheet
+    // open on its report.
     async confirmScan ({ timers, templates }) {
-      this.showScan = false;
       for (const timer of timers) {
         await this.$store.dispatch('fridge/addTimer', { ...timer, source: 'scan' });
       }
