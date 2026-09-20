@@ -51,6 +51,20 @@ export default {
 
   getters: {
     allTimers: (state) => sortTimers(state.timers),
+
+    // What the SCREENS show — the wall and the phone's on-hand strip.
+    //
+    // Matt's call, 2026-09-20: "we should try to only list things that are
+    // perishable. We don't need to list that I have a can of beans that's
+    // gonna last for years." A talk-through picks up the whole kitchen,
+    // cupboards included, and all of it is worth knowing for the shopping
+    // list — but a wall display glanced at from across the room stops working
+    // the moment it becomes ninety rows of flour and tinned tomatoes.
+    //
+    // So pantry stores are TRACKED and not DISPLAYED. Everything that decides
+    // what to buy — `onHandUntil`, the coverage math, cooking a meal — keeps
+    // reading `allTimers` and sees the whole house.
+    displayTimers: (state) => sortTimers(state.timers).filter((timer) => !timer.shelfStable),
     timerById: (state) => (id) => state.timers[id],
     templates: (state) => Object.values(state.templates),
     history: (state) => sortHistory(state.history),
@@ -377,6 +391,63 @@ export default {
           console.error(`Failed to consume ${use.name}:`, error)
         }
       }
+    },
+
+    // Apply an agreed talk-through: what he said is there, and what he didn't.
+    //
+    // THIS IS THE ONE PLACE THAT REMOVES TIMERS IN BULK, and it does so because
+    // Matt asked for exactly that — "we should assume that if I don't list it,
+    // then it isn't there" (2026-09-20). Every removal was shown, checked, and
+    // confirmed on the review screen before it reached here; nothing on this
+    // path decides anything on its own. The log says `talk` so a removal that
+    // happened because a food went unmentioned can be told apart from one
+    // somebody deliberately tapped.
+    //
+    // The write ORDER is adds first, removals second. If the tab dies halfway
+    // through, a fridge holding too much is a shopping list that is slightly
+    // over-cautious; a fridge holding too little is a meal short an ingredient.
+    async applyTalk ({ state, commit, dispatch }, { payload } = {}) {
+      if (!state.fridgeKey || !payload) return { added: 0, removed: 0, failed: 0 }
+
+      let added = 0
+      let removed = 0
+      let failed = 0
+
+      // addTimer and removeTimer SWALLOW their own failures — they catch,
+      // commit SET_ERROR and return normally — so awaiting one tells you
+      // nothing about whether the write landed. Counting a completed dispatch
+      // as a success would have this screen cheerfully report "added 12" after
+      // twelve failures, which on the one flow that also DELETES things is the
+      // worst possible lie. The store's error flag is the only signal there
+      // is: clear it first, read it after.
+      const didItLand = async (action, arg) => {
+        commit('SET_ERROR', null)
+        await dispatch(action, arg)
+        return !state.error
+      }
+
+      for (const timer of payload.timers || []) {
+        // One bad row must not abandon the rest — the same reasoning as
+        // applyConsumption. A partial apply is visible and fixable; an
+        // abandoned one leaves the fridge disagreeing with a walk that
+        // definitely happened.
+        if (await didItLand('addTimer', { ...timer, source: 'talk' })) added += 1
+        else failed += 1
+      }
+
+      for (const template of payload.templates || []) {
+        // A template is how the app gets FASTER next time, not how it is
+        // correct this time. Losing one costs a re-answer, so it is not
+        // counted as a failure and never holds anything up.
+        await dispatch('saveTemplate', { ...template, source: 'talk' })
+      }
+
+      for (const id of payload.remove || []) {
+        if (await didItLand('removeTimer', { id, source: 'talk' })) removed += 1
+        else failed += 1
+      }
+
+      return { added, removed, failed }
     },
 
     // Bring the catalog and the fridge's templates back into agreement.

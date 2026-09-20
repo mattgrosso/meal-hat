@@ -8,16 +8,22 @@
 
       <!-- Pick photos -->
       <div v-if="stage === 'pick'" class="pick-stage">
+        <!-- RECEIPTS ONLY since 2026-09-20. Photographing the food itself,
+             and photographing the fridge to work out what had been eaten, are
+             both retired: Matt did not trust either ("I don't really trust
+             that"), and talking through the kitchen replaced them. A receipt
+             is different in kind — it is printed text, which is the one thing
+             this flow was genuinely reliable at, so it stays. -->
         <p class="pick-hint">
-          Photograph the groceries, the receipt, or the inside of the fridge or
-          cupboard — it works out which for itself. A long receipt reads better
-          as two overlapping photos than one.
+          Photograph the receipt and the shopping goes on the timers, counted
+          from the day you actually shopped. A long receipt reads better as two
+          overlapping photos than one.
         </p>
         <!-- Two separate inputs on purpose: capture="environment" on iOS
              removes the photo-library option entirely (the Shelfie lesson),
              so the camera and the library each get their own. -->
         <label class="pick-btn">
-          📷 Take a photo
+          📷 Photograph a receipt
           <input type="file" accept="image/*" capture="environment" @change="onFiles" hidden>
         </label>
         <label class="pick-btn secondary">
@@ -218,7 +224,6 @@ import {
   buildReviewList,
   reviewReady,
   confirmPayload,
-  buildReconcile,
   reconcileReady,
   isStorageScan,
   renameReviewItem
@@ -271,7 +276,7 @@ export default {
     title () {
       if (this.stage === 'review') return 'Check the list'
       if (this.stage === 'reconcile') return "What's in there"
-      return 'Scan groceries'
+      return 'Scan a receipt'
     },
     obscuredCount () {
       return this.scans.reduce((total, scan) => total + (scan.obscured || 0), 0)
@@ -390,12 +395,19 @@ export default {
       this.scans = scans
       const now = new Date()
 
-      // A fridge or cupboard shot is a different question — what's still
-      // there — so it gets the reconcile screen instead of the add list.
+      // A photo of the FRIDGE is no longer a thing this flow does. Talking
+      // through the kitchen replaced it, and doing it silently by photo would
+      // be the part Matt said he didn't trust. Say what happened instead of
+      // quietly running the retired flow.
+      //
+      // (`buildReconcile` and its 15 tests stay in scanReview.js, and the
+      // reconcile stage stays in this template — re-importing it and calling
+      // it here is the whole of bringing the flow back. Delete both once the
+      // spoken inventory has a few real weeks behind it, not before it has
+      // actually replaced anything.)
       if (scans.some(isStorageScan)) {
-        this.reconcile = buildReconcile(scans, this.timers, this.templates, now)
-        this.stage = 'reconcile'
-        this.buildNewCrops() // deliberately not awaited
+        this.errorMessage = 'That looks like the inside of a fridge rather than a receipt. Use "Talk through the kitchen" for that now.'
+        this.stage = 'pick'
         return
       }
 

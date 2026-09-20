@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { submitScan, awaitScan, ScanError, POLL_TIMEOUT_MS } from '../../../src/utils/fridge/scan.js'
+import { submitScan, submitTranscript, awaitScan, ScanError, POLL_TIMEOUT_MS } from '../../../src/utils/fridge/scan.js'
 import { fitWithin, base64FromDataUrl, preparePhoto, renderAtEdge } from '../../../src/utils/fridge/photo.js'
 
 const options = (fetchImpl, extra = {}) => ({
@@ -243,5 +243,51 @@ describe('the ID token rides along with the key', () => {
 
     const [, init] = fetchImpl.mock.calls[0]
     expect(init.headers['X-Firebase-Token']).toBe('')
+  })
+})
+
+// The spoken inventory rides the same endpoint, the same auth and the same job
+// pipeline as a photo. The endpoint tells them apart by the body.
+describe('submitTranscript', () => {
+  it('sends the words, and no image', async () => {
+    const fetchImpl = vi.fn(async () => reply(202, { jobId: 'abc', status: 'pending' }))
+    const jobId = await submitTranscript(
+      'there is milk and some cheddar',
+      options(fetchImpl, { knownFoods: ['Cheddar Cheese'] })
+    )
+    expect(jobId).toBe('abc')
+
+    const [, init] = fetchImpl.mock.calls[0]
+    const body = JSON.parse(init.body)
+    expect(body.transcript).toBe('there is milk and some cheddar')
+    expect(body.image).toBeUndefined()
+    expect(body.knownFoods).toEqual(['Cheddar Cheese'])
+  })
+
+  // THE TRAP THAT STOPPED EVERY SCAN WORKING ON 2026-09-11: the endpoint
+  // verifies the key by READING the fridge, and that read needs a session.
+  // Without this header every submit 401s no matter how good the key is.
+  it('carries the Firebase ID token beside the key', async () => {
+    const fetchImpl = vi.fn(async () => reply(202, { jobId: 'abc' }))
+    await submitTranscript('milk', options(fetchImpl, { idToken: 'tok' }))
+
+    const [, init] = fetchImpl.mock.calls[0]
+    expect(init.headers.Authorization).toBe(`Bearer ${'k'.repeat(32)}`)
+    expect(init.headers['X-Firebase-Token']).toBe('tok')
+  })
+
+  it('treats a rate limit as worth retrying and a rejection as not', async () => {
+    const limited = vi.fn(async () => reply(429, { error: 'slow down' }))
+    await expect(submitTranscript('milk', options(limited)))
+      .rejects.toMatchObject({ retryable: true })
+
+    const rejected = vi.fn(async () => reply(400, { error: 'Nothing was said' }))
+    await expect(submitTranscript('', options(rejected)))
+      .rejects.toMatchObject({ retryable: false, message: 'Nothing was said' })
+  })
+
+  it('refuses a reply with no job id rather than polling forever', async () => {
+    const fetchImpl = vi.fn(async () => reply(202, {}))
+    await expect(submitTranscript('milk', options(fetchImpl))).rejects.toThrow(ScanError)
   })
 })

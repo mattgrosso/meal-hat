@@ -76,6 +76,13 @@
                         ? 'staple — not bought yet'
                         : `staple — last bought ${ingredient.daysSincePurchase} days ago` }}
                     </span>
+                    <!-- Partly covered. The row stays, because a meal short of
+                         an ingredient is the failure this whole area exists to
+                         avoid — but saying what is already here stops it
+                         reading as "buy the whole amount again". -->
+                    <span v-else-if="ingredient.partlyOnHand" class="staple-due-note">
+                      {{ `you have some — ${formatPackages(ingredient.partlyOnHand)}, not enough` }}
+                    </span>
                   </span>
                   <span>{{ ingredient.quantity }} {{ pluralizedUnits(ingredient) }}</span>
                 </div>
@@ -122,14 +129,15 @@
             </ul>
           </div>
 
-          <!-- In the cupboard: staples bought recently enough that you should
-               already have them. NOT hidden and NOT deleted — the rows are
-               intact, and each one can be pulled onto the list in a tap. They
-               also return on their own once past their interval. -->
+          <!-- Already here: food the fridge holds enough of, plus staples
+               bought recently enough that you should still have them. NOT
+               hidden and NOT deleted — the rows are intact, and each one can be
+               pulled onto the list in a tap. Staples also return on their own
+               once past their interval. -->
           <div v-if="cupboardItems.length" class="cupboard-section my-3" data-step="5">
             <button type="button" class="cupboard-toggle" @click="showCupboard = !showCupboard">
               <i :class="showCupboard ? 'bi bi-chevron-down' : 'bi bi-chevron-right'"></i>
-              In the cupboard ({{ cupboardItems.length }})
+              Already have ({{ cupboardItems.length }})
             </button>
 
             <ul v-if="showCupboard" class="list-group my-2">
@@ -141,11 +149,7 @@
                        guess from a date. Saying which lets a wrong call be
                        spotted rather than silently trusted. -->
                   <span class="cupboard-meta">
-                    {{ ingredient.onHand
-                      ? 'in the fridge'
-                      : ingredient.daysSincePurchase === null || ingredient.daysSincePurchase === undefined
-                        ? 'no purchase recorded'
-                        : `bought ${ingredient.daysSincePurchase} days ago` }}
+                    {{ cupboardReason(ingredient) }}
                   </span>
                 </span>
                 <button class="btn btn-sm btn-outline-secondary" title="Add to the list anyway" aria-label="Add to the list anyway" @click="needStapleNow(ingredient)">
@@ -478,7 +482,10 @@ export default {
         new Date(),
         // What the fridge actually holds. Empty until the hat has a fridge, in
         // which case this falls back to the date arithmetic exactly as before.
-        this.$store.getters['fridge/onHandUntil']
+        this.$store.getters['fridge/onHandUntil'],
+        // The timers themselves, so coverage can be answered in quantities
+        // rather than yes/no — see `fridge/inHouse.js`.
+        this.$store.state.fridge.timers
       );
 
       // Anything explicitly asked for this session goes back on the list.
@@ -821,8 +828,18 @@ export default {
 
       const updated = { ...item, purchased };
       delete updated.groceryItem; // a read-time join, never persisted
-      delete updated.stapleDue; // presentation only, derived on read
+      // Everything the partition attaches is DERIVED AT READ TIME from the
+      // catalog and the fridge. Persisting any of it would freeze a moment's
+      // answer into the row and have it read back as fact after the fridge had
+      // moved on — the row would go on claiming you have two blocks of cheddar
+      // long after they were eaten.
+      delete updated.stapleDue;
       delete updated.daysSincePurchase;
+      delete updated.onHand;
+      delete updated.packagesOnHand;
+      delete updated.packagesNeeded;
+      delete updated.assumedPackageSize;
+      delete updated.partlyOnHand;
 
       this.$store.dispatch('updateDBValue', {
         path: `shopping-list/${item.id}`,
@@ -1015,6 +1032,40 @@ export default {
 
       // Always pluralize based on the item's quantity
       return pluralize(ingredient.units, ingredient.quantity);
+    },
+
+    // Packages, in the only unit a person actually pictures: whole things,
+    // and halves when it really is a half. 1.5 blocks of cheddar is "1½"; a
+    // computed 0.6667 is not something to read out loud, so it rounds.
+    formatPackages (count) {
+      const n = Number(count);
+      if (!Number.isFinite(n) || n <= 0) return 'none';
+      const whole = Math.floor(n + 1e-6);
+      const rest = n - whole;
+      const half = rest > 0.25 && rest < 0.75;
+      if (whole === 0) return half ? 'half a package' : 'less than a package';
+      const label = `${whole}${half ? '½' : ''}`;
+      return `${label} package${whole > 1 || half ? 's' : ''}`;
+    },
+
+    // Which evidence is keeping this row off the list, in the order of how
+    // much it is worth trusting. "The fridge holds enough" is something
+    // somebody described; "you bought one recently" is arithmetic on a date.
+    // Saying which lets a wrong call be spotted rather than silently believed.
+    cupboardReason (ingredient) {
+      if (ingredient.onHand) {
+        const held = ingredient.packagesOnHand
+          ? `in the house — ${this.formatPackages(ingredient.packagesOnHand)}`
+          : 'in the house';
+        // A guessed package size is what decided this, and a guess that takes
+        // something off a shopping list has to be visible before the shop, not
+        // explained in the kitchen afterwards.
+        return ingredient.assumedPackageSize ? `${held} (assuming one covers it)` : held;
+      }
+      if (ingredient.daysSincePurchase === null || ingredient.daysSincePurchase === undefined) {
+        return 'no purchase recorded';
+      }
+      return `bought ${ingredient.daysSincePurchase} days ago`;
     },
     async startTour () {
       const [{ default: Shepherd }] = await Promise.all([

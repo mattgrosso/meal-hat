@@ -52,6 +52,7 @@
     <PhoneView
       v-else-if="isPhone"
       :just-added="justAdded"
+      @talk="showTalk = true"
       @scan="showScan = true"
       @add="showAddForm = true"
       @history="showHistory = true"
@@ -83,6 +84,17 @@
       @reconcile="confirmReconcile"
     />
 
+    <!-- The spoken inventory. Gets ALL timers, pantry included: this is the
+         screen that decides what stays and what goes, and a timer the wall
+         filters out must still be removable here. -->
+    <TalkFlow
+      v-if="showTalk"
+      :household-key="fridgeKey"
+      :timers="allTimers"
+      @close="showTalk = false"
+      @applied="onTalkApplied"
+    />
+
     <!-- The change log. Read-only; it answers "where did that come from?" -->
     <HistorySheet v-if="showHistory" @close="showHistory = false" />
 
@@ -102,6 +114,7 @@ import CountdownTimer from './fridge/CountdownTimer.vue';
 import AddTimerButton from './fridge/AddTimerButton.vue';
 import AddTimerModal from './fridge/AddTimerModal.vue';
 import ScanFlow from './fridge/ScanFlow.vue';
+import TalkFlow from './fridge/TalkFlow.vue';
 import PhoneView from './fridge/PhoneView.vue';
 import HistorySheet from './fridge/HistorySheet.vue';
 import { adoptFridgeKey, extractKey, storeFridgeKey, isValidKey, rememberKeyAlias } from '@/utils/fridge/fridgeKey';
@@ -116,6 +129,7 @@ export default {
     AddTimerButton,
     AddTimerModal,
     ScanFlow,
+    TalkFlow,
     PhoneView,
     HistorySheet
   },
@@ -123,6 +137,7 @@ export default {
     return {
       showAddForm: false,
       showScan: false,
+      showTalk: false,
       showHistory: false,
       missingKey: false,
       viewMode: 'wall',
@@ -146,6 +161,11 @@ export default {
       return this.$store.state.fridge.fridgeKey;
     },
     timers () {
+      // Pantry stores are tracked but not shown — see the `displayTimers`
+      // getter. The wall is for things that are about to go off.
+      return this.$store.getters['fridge/displayTimers'];
+    },
+    allTimers () {
       return this.$store.getters['fridge/allTimers'];
     },
     loading () {
@@ -311,6 +331,14 @@ export default {
     },
     removeTimer (timerId) {
       this.$store.dispatch('fridge/removeTimer', { id: timerId, source: 'hand' });
+    },
+    // The talk flow does its own writing (fridge/applyTalk), because it is one
+    // agreed plan rather than a pile of separate decisions. This only reports.
+    onTalkApplied ({ added, removed }) {
+      const parts = [];
+      if (added) parts.push(`Added ${added}`);
+      if (removed) parts.push(`removed ${removed}`);
+      if (parts.length) this.noteAdded(parts.join(', '));
     },
     async confirmScan ({ timers, templates }) {
       this.showScan = false;

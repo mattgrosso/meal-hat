@@ -329,7 +329,189 @@ Give every item a "box": where it sits in the photo, as fractions of the image w
 If you cannot tell what something is, leave it out of "items" and count it in "obscured" instead. A wrong food with a confident timer is worse than a question.`;
 };
 
-const validationError = ({ image, mediaType, knownFoods }) => {
+// Shared by both kinds of submission: the household's own vocabulary rides
+// along either way, and it is bounded so the prompt cannot be stuffed.
+const knownFoodsError = (knownFoods) => {
+  if (knownFoods === undefined) return null;
+  const ok = Array.isArray(knownFoods) &&
+    knownFoods.length <= MAX_KNOWN_FOODS &&
+    knownFoods.every((f) => typeof f === 'string' && f.length > 0 && f.length <= MAX_KNOWN_FOOD_LENGTH);
+  return ok ? null : { status: 400, error: 'knownFoods must be a short list of short names' };
+};
+
+// --- The spoken inventory ---------------------------------------------------
+//
+// Matt, 2026-09-20: he does not trust the camera, and a person opening the
+// fridge and saying what is in it beats a model squinting at a photo of it.
+// The photo flow could never solve occlusion; he can just move the milk.
+//
+// Same job as `readGroceries`, a different sense. Same pipeline too — this
+// still runs as a job, because a five-minute ramble is a lot of text and
+// API Gateway's integration timeout is a hard 30 seconds either way.
+
+const MAX_TRANSCRIPT_LENGTH = 20000;
+
+const TRANSCRIPT_SCHEMA = {
+  type: 'object',
+  properties: {
+    items: {
+      type: 'array',
+      description: 'Every distinct food the speaker says is in the house right now.',
+      items: {
+        type: 'object',
+        properties: {
+          heard: {
+            type: 'string',
+            description: 'The speaker\'s own words for this item, quoted from the transcript, trimmed to the relevant phrase. This is shown back to them so they can catch a misreading, so it must be what they actually said, never a tidied version.'
+          },
+          name: {
+            type: 'string',
+            description: 'The food, named the way a person writes a fridge list: "Cheddar Cheese", "Baby Carrots". Not a brand or a package size.'
+          },
+          knownFoodMatch: {
+            type: 'string',
+            description: 'If this is the same food as one of the known foods listed in the prompt, EXACTLY that known name, character for character. Empty string if none of them is this food.'
+          },
+          quantity: {
+            type: 'integer',
+            description: 'How many separate packages, containers or units of this food the speaker describes. 1 unless they clearly said more ("two cartons of eggs" is 2). Use 1 for a vague amount ("some carrots").'
+          },
+          perishable: {
+            type: 'boolean',
+            description: 'True if this food goes off on a timescale worth a countdown — dairy, meat, produce, bread, leftovers, opened jars, frozen food. False for shelf-stable stores: tins, dry pasta and rice, flour, sugar, spices, unopened condiments, anything that keeps for years.'
+          },
+          estimatedShelfLifeDays: {
+            type: 'integer',
+            description: 'Typical days this food stays good from today, given how the speaker describes it. If they say it is nearly off, or opened, or has been there a while, say so with a SHORT number — that is the most useful thing you can contribute.'
+          }
+        },
+        required: ['heard', 'name', 'knownFoodMatch', 'quantity', 'perishable', 'estimatedShelfLifeDays'],
+        additionalProperties: false
+      }
+    },
+    outOf: {
+      type: 'array',
+      description: 'Foods the speaker says they do NOT have, are out of, have finished, or need to buy. These are the opposite of a sighting and must never appear in "items".',
+      items: {
+        type: 'object',
+        properties: {
+          heard: { type: 'string', description: 'Their own words, quoted.' },
+          name: { type: 'string', description: 'The food, named as above.' },
+          knownFoodMatch: { type: 'string', description: 'The exact known-food name if it is one of them, else empty.' }
+        },
+        required: ['heard', 'name', 'knownFoodMatch'],
+        additionalProperties: false
+      }
+    },
+    unclear: {
+      type: 'array',
+      description: 'Phrases that sounded like they were about food but could not be turned into a specific item. Better surfaced than guessed at.',
+      items: {
+        type: 'object',
+        properties: {
+          heard: { type: 'string' },
+          why: { type: 'string' }
+        },
+        required: ['heard', 'why'],
+        additionalProperties: false
+      }
+    }
+  },
+  required: ['items', 'outOf', 'unclear'],
+  additionalProperties: false
+};
+
+const buildTranscriptPrompt = (knownFoods) => {
+  const known = (knownFoods || []).length
+    ? `\nThis household already tracks these foods, in its own words:\n${knownFoods.map((f) => `- ${f}`).join('\n')}\n\nWhen the speaker names one of these foods, put that EXACT name in "knownFoodMatch" and use it as "name" too — "cheddar" spoken and "Cheddar Cheese" on this list are the same food. Structural matches count (singular/plural, brand vs. generic, an everyday word for a formal one); genuinely different foods do not.\n`
+    : '';
+
+  return `Below is a transcript of somebody walking around their kitchen — opening the fridge, the freezer and the cupboards — and saying out loud what they see, so it can be turned into a list of what the house actually holds.
+
+It is dictated speech, not writing. Expect it to be messy: false starts, repetition, self-correction, thinking out loud, asides that are not about food at all, and transcription errors on food names. Read it the way a person would.
+${known}
+YOUR JOB IS TO SEPARATE THREE KINDS OF STATEMENT.
+
+1. "items" — food they say IS THERE. This is the main list.
+
+2. "outOf" — food they say is NOT there: "we're out of milk", "no more eggs", "the butter's gone", "I need to get more rice", "we finished the yogurt". THIS IS THE ONE THING YOU MUST NOT GET BACKWARDS. A food mentioned because it is missing, read as a sighting, creates a timer for food that is not in the house and takes it off their shopping list. Say it once more: an absence is not a sighting.
+
+3. "unclear" — they said something food-shaped that you cannot turn into a specific item: an inaudible word, "some kind of sauce in a jar, no idea what it is", a half-finished sentence. Put it here rather than guessing. A wrong food on this list costs them a real ingredient at the shop; a listed uncertainty costs them a glance.
+
+SELF-CORRECTION IS NORMAL AND THE LAST WORD WINS. "There's milk — no wait, that's gone" is an "outOf", not an item. "Two peppers, actually three" is a quantity of three.
+
+NAMING:
+
+- One entry per distinct FOOD, not per container. "Three yogurts" is one item with quantity 3.
+- Name the food, not the brand or the size: "Milk", not "Horizon Organic Whole Half Gallon".
+- Two foods that share a word are two items: a cheddar block and shredded mozzarella are not one cheese.
+- "heard" must quote THEIR words for the item. It is shown back to them as the check on your reading, so it has to be recognisably what they said. Do not tidy it, do not paraphrase it.
+
+PERISHABLE OR NOT:
+
+Set "perishable" true for anything that goes off on a timescale worth counting down: dairy, meat, fish, produce, bread, leftovers, opened jars and sauces, frozen food. Set it false for the pantry: tins, dry pasta, rice, flour, sugar, spices, unopened shelf-stable condiments, drinks that keep for years. Both kinds belong in "items" — the shelf-stable ones still matter, because they are things this household does not need to buy — but only the perishable ones get a countdown.
+
+SHELF LIFE:
+
+Give "estimatedShelfLifeDays" for everything: typical days from TODAY that this food stays good, stored the normal way for that food.
+
+Listen for what they say about condition, because it is the most valuable thing in the transcript and no photo could ever provide it. "The lettuce is starting to go" is two days, not ten. "I just bought this" is the full shelf life. "This has been open a while" is short. An opened jar is much shorter than a sealed one. When they tell you how old something is, USE IT.
+
+WHAT NOT TO DO:
+
+- Do not invent food to round out a shelf. If they did not say it, it is not there.
+- Do not include non-food: cleaning supplies, foil, bin bags, the dog's toys.
+- Do not include things they say they are GOING to buy.
+- Do not merge two foods you are unsure about. Two rows they can decline beats one row that is wrong.`;
+};
+
+const readTranscript = async ({ transcript, knownFoods }) => {
+  const message = await client.messages.parse({
+    model: MODEL,
+    max_tokens: 16000,
+    thinking: { type: 'adaptive' },
+    output_config: { format: { type: 'json_schema', schema: TRANSCRIPT_SCHEMA } },
+    messages: [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: buildTranscriptPrompt(knownFoods) },
+          { type: 'text', text: `\n\nHere is the transcript:\n\n<transcript>\n${transcript}\n</transcript>` }
+        ]
+      }
+    ]
+  });
+
+  if (message?.stop_reason === 'max_tokens') {
+    const error = new Error('That was a lot to take in at once. Try it in two goes.');
+    error.userFacing = true;
+    throw error;
+  }
+
+  const parsed = message.parsed_output;
+  if (!parsed) throw new Error(`No parsed output (stop_reason: ${message?.stop_reason})`);
+
+  return {
+    kind: 'transcript',
+    items: parsed.items ?? [],
+    outOf: parsed.outOf ?? [],
+    unclear: parsed.unclear ?? []
+  };
+};
+
+const validationError = ({ image, mediaType, knownFoods, transcript }) => {
+  // A transcript submission carries no image, and vice versa. Which one it is
+  // decides everything downstream, so it is settled once, here.
+  if (transcript !== undefined) {
+    if (typeof transcript !== 'string' || !transcript.trim()) {
+      return { status: 400, error: 'Nothing was said' };
+    }
+    if (transcript.length > MAX_TRANSCRIPT_LENGTH) {
+      return { status: 413, error: 'That is more than one go can hold. Try it in two.' };
+    }
+    return knownFoodsError(knownFoods);
+  }
+
   if (!image) return { status: 400, error: 'An image is required' };
   if (!ALLOWED_MEDIA_TYPES.includes(mediaType)) {
     return { status: 400, error: `mediaType must be one of ${ALLOWED_MEDIA_TYPES.join(', ')}` };
@@ -337,13 +519,7 @@ const validationError = ({ image, mediaType, knownFoods }) => {
   if (Math.floor(image.length * 0.75) > MAX_IMAGE_BYTES) {
     return { status: 413, error: 'That photo is too large. Try a smaller one.' };
   }
-  if (knownFoods !== undefined) {
-    const ok = Array.isArray(knownFoods) &&
-      knownFoods.length <= MAX_KNOWN_FOODS &&
-      knownFoods.every((f) => typeof f === 'string' && f.length > 0 && f.length <= MAX_KNOWN_FOOD_LENGTH);
-    if (!ok) return { status: 400, error: 'knownFoods must be a short list of short names' };
-  }
-  return null;
+  return knownFoodsError(knownFoods);
 };
 
 const readGroceries = async ({ image, mediaType, knownFoods }) => {
@@ -388,14 +564,24 @@ const readGroceries = async ({ image, mediaType, knownFoods }) => {
 // The async self-invocation. Not reachable from the API: every API Gateway
 // event carries requestContext.http, and this payload deliberately doesn't.
 const runJob = async ({ jobId }) => {
+  let input;
   try {
-    const result = await readGroceries(await getInput(jobId));
+    input = await getInput(jobId);
+    // A transcript and a photo are told apart by what was submitted, decided
+    // once in validationError and re-read the same way here.
+    const result = input.transcript !== undefined
+      ? await readTranscript(input)
+      : await readGroceries(input);
     await putJob(jobId, { status: 'done', result, finishedAt: Date.now() });
   } catch (error) {
     console.error(`Job ${jobId} failed`, error);
     await putJob(jobId, {
       status: 'failed',
-      error: error?.userFacing ? error.message : 'Could not read that photo. Try again.',
+      error: error?.userFacing
+        ? error.message
+        : (input?.transcript !== undefined
+            ? 'Could not make sense of that. Try again.'
+            : 'Could not read that photo. Try again.'),
       finishedAt: Date.now()
     });
   }

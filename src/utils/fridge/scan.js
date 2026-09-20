@@ -121,3 +121,38 @@ export const awaitScan = async (jobId, {
  */
 export const scanPhoto = async (photo, options) =>
   awaitScan(await submitScan(photo, options), options)
+
+/**
+ * The spoken inventory: a few minutes of "what's in the fridge" as text.
+ *
+ * Same endpoint, same auth, same job pipeline — the endpoint tells the two
+ * apart by whether a `transcript` came with the body. Reusing the job shape
+ * for text is not ceremony: a five-minute ramble is a lot to read, and API
+ * Gateway's integration timeout is a hard 30 seconds whatever the input is.
+ */
+export const submitTranscript = async (transcript, { url = SCAN_URL, householdKey, idToken, knownFoods = [], fetchImpl = fetch } = {}) => {
+  const response = await fetchImpl(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${householdKey}`,
+      // The same pair the photo path needs, for the same reason — the key is
+      // verified by a READ of the fridge, and that read requires a session.
+      'X-Firebase-Token': idToken || ''
+    },
+    body: JSON.stringify({ transcript, knownFoods })
+  })
+
+  const body = await readBody(response)
+  if (!response.ok) {
+    throw new ScanError(
+      body.error || 'Could not send that.',
+      { retryable: response.status === 429 || response.status >= 500 }
+    )
+  }
+  if (!body.jobId) throw new ScanError('That did not start properly.')
+  return body.jobId
+}
+
+export const readTranscript = async (transcript, options) =>
+  awaitScan(await submitTranscript(transcript, options), options)

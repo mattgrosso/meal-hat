@@ -19,7 +19,11 @@ const ACTION_VERBS = {
   added: 'Added',
   removed: 'Removed',
   extended: 'Extended',
-  relearned: 'Re-learned'
+  relearned: 'Re-learned',
+  // Cooking a meal has always written these two, and neither had a verb — so
+  // every line the "Made it" sheet produced read "Changed the mozzarella".
+  'used up': 'Used up',
+  'used some': 'Used some'
 }
 
 // Where the change came from. Worth saying out loud: "removed by hand" and
@@ -29,7 +33,12 @@ const SOURCE_LABELS = {
   hand: 'by hand',
   scan: 'from a photo',
   fridge: 'from a fridge check',
-  edit: 'from the wall'
+  edit: 'from the wall',
+  meal: 'from cooking',
+  // A spoken walk around the kitchen. Worth its own label: a removal from a
+  // talk-through is the only kind that happens because a food was NOT
+  // mentioned, which is a different thing to have decided.
+  talk: 'from a talk-through'
 }
 
 // Firebase object -> array, NEWEST FIRST. Push keys already sort

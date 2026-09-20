@@ -212,3 +212,103 @@ describe('the fridge answering for staples', () => {
     expect(cupboard[0].onHand).toBe(false);
   });
 });
+
+// The 2026-09-20 widening: the fridge speaks for EVERY food, not just staples.
+//
+// Before this, exactly 2 of the 126 groceries were flagged `staple`, so the
+// fridge could only ever suppress those two. A real week's list carried seven
+// foods with live timers sitting in the fridge and asked for all seven.
+describe('partitionStaples — anything the house already holds', () => {
+  const inDays = (n) => new Date(NOW.getTime() + n * 24 * 60 * 60 * 1000).toISOString();
+  const timers = (...entries) => Object.fromEntries(
+    entries.map(([title, days, quantity], i) => [`t${i}`, { title, expiryDate: inDays(days), quantity }])
+  );
+
+  it('moves an ORDINARY food off the list when the fridge holds enough', () => {
+    const catalog = { g1: { id: 'g1', name: 'Sandwich Bread', packageSize: 20 } };
+    const rows = [row('g1', { quantity: 10 })];
+
+    // Same call without timers: it stays on the list, as it always did.
+    expect(partitionStaples(rows, catalog, NOW).list.length).toBe(1);
+
+    const { list, cupboard } = partitionStaples(
+      rows, catalog, NOW, {}, timers(['Sandwich Bread', 60])
+    );
+    expect(list).toEqual([]);
+    expect(cupboard[0].onHand).toBe(true);
+    expect(cupboard[0].packagesOnHand).toBe(1);
+  });
+
+  it('LEAVES a partly-covered row on the list, and says what is already here', () => {
+    // Three cups of cheddar, a two-cup block, one block in the fridge. This is
+    // the case that makes the difference between a helpful list and a meal
+    // short an ingredient.
+    const catalog = { g1: { id: 'g1', name: 'Cheddar Cheese', packageSize: 2 } };
+    const { list, cupboard } = partitionStaples(
+      [row('g1', { quantity: 3 })], catalog, NOW, {}, timers(['Cheddar Cheese', 60])
+    );
+    expect(cupboard).toEqual([]);
+    expect(list[0].partlyOnHand).toBe(1);
+  });
+
+  it('does not let an EXPIRED timer take anything off the list', () => {
+    const catalog = { g1: { id: 'g1', name: 'Lettuce', packageSize: 1 } };
+    const { list, cupboard } = partitionStaples(
+      [row('g1')], catalog, NOW, {}, timers(['Lettuce', -1])
+    );
+    expect(cupboard).toEqual([]);
+    expect(list.length).toBe(1);
+  });
+
+  it('a food the fridge has never heard of stays on the list', () => {
+    const catalog = { g1: { id: 'g1', name: 'Quince', packageSize: 1 } };
+    const { list } = partitionStaples([row('g1')], catalog, NOW, {}, timers(['Eggs', 30]));
+    expect(list.length).toBe(1);
+  });
+
+  it('still cannot lose a row once the fridge is involved', () => {
+    const catalog = {
+      g1: { id: 'g1', name: 'Sandwich Bread', packageSize: 20 },
+      g2: { id: 'g2', name: 'Cheddar Cheese', packageSize: 2 },
+      g3: { id: 'g3', name: 'Quince' }
+    };
+    const rows = [
+      row('g1', { id: 'r1', quantity: 10 }),
+      row('g2', { id: 'r2', quantity: 3 }),
+      row('g3', { id: 'r3', quantity: 1 }),
+      { id: 'r4', groceryId: 'gone' }
+    ];
+    const { list, cupboard } = partitionStaples(
+      rows, catalog, NOW, {}, timers(['Sandwich Bread', 60], ['Cheddar Cheese', 60])
+    );
+    expect(list.length + cupboard.length).toBe(4);
+    expect(new Set([...list, ...cupboard].map((r) => r.id)).size).toBe(4);
+  });
+
+  it('a staple the fridge holds is reported as evidence, not as a date guess', () => {
+    const catalog = {
+      g1: { id: 'g1', name: 'Olive Oil', staple: true, packageSize: 1, lastPurchased: '2020-01-01' }
+    };
+    const { cupboard } = partitionStaples(
+      [row('g1')], catalog, NOW, {}, timers(['Olive Oil', 200])
+    );
+    // Long overdue by the date arithmetic, and yet: it is in the house.
+    expect(cupboard[0].onHand).toBe(true);
+    expect(cupboard[0].packagesOnHand).toBe(1);
+  });
+
+  it('flags a suppression that rested on a guessed package size', () => {
+    const catalog = { g1: { id: 'g1', name: 'Cucumber' } }; // no packageSize
+    const { cupboard } = partitionStaples(
+      [row('g1', { quantity: 4 })], catalog, NOW, {}, timers(['Cucumber', 5])
+    );
+    expect(cupboard[0].assumedPackageSize).toBe(true);
+  });
+
+  it('behaves exactly as before when the hat has no fridge', () => {
+    const catalog = { g1: { id: 'g1', name: 'Sandwich Bread', packageSize: 20 } };
+    const { list, cupboard } = partitionStaples([row('g1', { quantity: 10 })], catalog, NOW, {}, {});
+    expect(list.length).toBe(1);
+    expect(cupboard).toEqual([]);
+  });
+});

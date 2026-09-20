@@ -2,12 +2,23 @@
   <div class="phone-view">
     <header class="phone-header">
       <h1>Fridge</h1>
-      <p class="phone-sub">Groceries, a receipt, or the fridge.</p>
+      <p class="phone-sub">Talk it through, scan a receipt, or add one by hand.</p>
     </header>
 
-    <button class="scan-cta" @click="$emit('scan')">
-      <span class="scan-icon">📷</span>
-      <span class="scan-label">Scan groceries</span>
+    <!-- The hero, since 2026-09-20. Matt on the camera: "I don't really trust
+         that." A person opening the fridge and saying what is in it beats a
+         model squinting at a photo of it, and it answers the question the
+         camera never could — what is BEHIND the milk. -->
+    <button class="scan-cta" @click="$emit('talk')">
+      <span class="scan-icon">🎤</span>
+      <span class="scan-label">Talk through the kitchen</span>
+    </button>
+
+    <!-- Receipts survived the camera's retirement because a receipt is printed
+         text, which is the one thing the photo flow was genuinely reliable at:
+         it reads lines rather than guessing at food. -->
+    <button class="manual-cta" @click="$emit('scan')">
+      📷 Scan a receipt
     </button>
 
     <button class="manual-cta" @click="$emit('add')">
@@ -81,7 +92,7 @@ export default {
   props: {
     justAdded: { type: String, default: '' }
   },
-  emits: ['scan', 'add', 'history'],
+  emits: ['talk', 'scan', 'add', 'history'],
   data () {
     return {
       // Collapsed by default. The camera is why this screen exists; a list
@@ -101,8 +112,9 @@ export default {
       return Boolean(normalizePairingCode(this.pairCode))
     },
     onHand () {
-      // Already sorted soonest-expiring first by the allTimers getter.
-      return this.$store.getters['fridge/allTimers'].map((timer) => {
+      // Already sorted soonest-expiring first, and pantry stores filtered
+      // out, by the displayTimers getter.
+      return this.$store.getters['fridge/displayTimers'].map((timer) => {
         const left = computeTimeLeft(timer.expiryDate, new Date())
         return {
           id: timer.id,

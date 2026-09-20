@@ -1,4 +1,5 @@
 import { toISODate, fromISODate, todayISO } from './schedule';
+import { rowCoverage } from './fridge/inHouse';
 
 // Pantry staples — things you reliably already have, so they should not clutter
 // the shopping list every time a meal happens to need them.
@@ -100,13 +101,26 @@ export function stapleIsDue (catalogEntry, now = new Date(), onHandUntil = {}) {
 }
 
 /**
- * Split shopping-list rows into what to buy and what is merely in the cupboard.
+ * Split shopping-list rows into what to buy and what you already have.
  *
- * Anything not marked a staple, and any staple that is due, stays in `list`.
- * Only a staple you have bought recently moves to `cupboard`, and it keeps its
- * row — nothing is discarded here.
+ * TWO REASONS a row can move, and they are not equally strong:
+ *
+ *   1. The house holds enough of it. A live timer is positive evidence that
+ *      the food is physically here, and `timers` carries the quantities so
+ *      "enough" can be answered properly — 10 slices of bread against a
+ *      20-slice loaf is covered; 3 cups of cheddar against one 2-cup block is
+ *      not, and that row stays on the list. This applies to EVERY food, which
+ *      is the 2026-09-20 change: it used to apply only to staples, so a list
+ *      with seven foods sitting in the fridge asked you to buy all seven.
+ *
+ *   2. It is a staple bought recently enough. Date arithmetic, and a much
+ *      weaker claim — it is a guess about a cupboard nobody has looked in.
+ *
+ * Nothing is discarded either way. A moved row keeps its quantity and can be
+ * pulled back onto the list in one tap, so the worst case here is a row in the
+ * wrong section, never a missing one.
  */
-export function partitionStaples (rows, catalog = {}, now = new Date(), onHandUntil = {}) {
+export function partitionStaples (rows, catalog = {}, now = new Date(), onHandUntil = {}, timers = {}) {
   const list = [];
   const cupboard = [];
 
@@ -115,8 +129,27 @@ export function partitionStaples (rows, catalog = {}, now = new Date(), onHandUn
 
     const entry = catalog[row.groceryId];
 
+    // The house has enough of this, whatever kind of food it is. Checked
+    // before the staple rules, because it is the stronger evidence: somebody
+    // described this food as being here, rather than a date implying it.
+    const coverage = entry ? rowCoverage(row, entry, timers, now) : null;
+    if (coverage?.covered) {
+      cupboard.push({
+        ...row,
+        onHand: true,
+        packagesOnHand: coverage.onHand,
+        packagesNeeded: coverage.needed,
+        assumedPackageSize: coverage.assumedPackageSize,
+        daysSincePurchase: daysSincePurchase(entry, now)
+      });
+      return;
+    }
+
     if (!entry || !entry.staple) {
-      list.push(row);
+      // Partly covered: it stays on the list, and carries what the house holds
+      // so the row can say "you have 1 of the 2 you need" instead of silently
+      // asking for the whole amount again.
+      list.push(coverage && coverage.onHand > 0 ? { ...row, partlyOnHand: coverage.onHand } : row);
       return;
     }
 

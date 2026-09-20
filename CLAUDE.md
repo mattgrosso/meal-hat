@@ -639,6 +639,138 @@ All four scripts here are dry by default, take `--apply`, and write a
 timestamped backup into `backups/` (gitignored) BEFORE they delete anything.
 `reset-fridge` prints the `firebase database:set` line that puts it all back.
 
+### Saying what's in the house, instead of photographing it
+
+Matt, 2026-09-20: *"What we built for that previously was a thing where I take
+a photo and then you interpret the photo. I don't really trust that."* So the
+way food gets into the fridge is now a **talk-through**: he opens the fridge,
+the freezer and the cupboards and says what he sees, into a text box, and the
+whole dump is read at once.
+
+`TalkFlow.vue` → `store/fridge/talkReview.js` (pure) → `fridge/applyTalk`.
+
+**It is typing, not recording, and that was the call.** The obvious build is a
+record button and a transcription service. The mic on the iOS keyboard is
+Apple's own dictation: more accurate on food names than anything we would send
+audio to, free per use, and no new infrastructure. The cost is that iOS stops
+dictating after a pause, so a long ramble means tapping the mic again — which
+is why the box is a real editable textarea and why **the draft is saved on
+every keystroke** (`utils/fridge/talkDraft.js`). Losing four minutes of talking
+to a backgrounded tab would end the feature.
+
+**The absence rule INVERTS here, and only here.** Everywhere else in this app a
+thing missing from a photo is a suggestion, and those rows arrive unchecked,
+because a camera cannot see behind the milk. A spoken inventory is a deliberate
+enumeration by the one person who can open the drawer, so Matt's call was:
+*"We should assume that if I don't list it, then it isn't there."* Unmentioned
+timers arrive **checked for removal**. They are all still shown, with how long
+is left and how recently they were added, and it is one confirm — the plan
+shown is the plan applied — but the default is flipped on purpose.
+
+**"We're out of milk" must never become a milk timer.** A stream-of-
+consciousness dump is full of absences and self-corrections ("there's milk — no
+wait, that's gone"). The schema has a separate `outOf` array, the prompt says
+in as many words that getting this backwards is the one unacceptable error, and
+`buildTalkReview` lets `outOf` beat a passing mention of the same food. Tested
+both directions.
+
+**A match does NOT restart the timer.** Seeing food again says nothing about how
+fresh it is; restarting on every talk-through would keep a dying carton of milk
+alive forever.
+
+**A new food arrives with the estimate filled in** rather than stopping for
+input, which is a deliberate departure from the scan flow's "every new food
+stops for your input". That rule was written where a printed date and a guess
+were both on offer and choosing silently would have hidden the difference. Here
+there is only ever an estimate, and forty of them in one sitting is data entry,
+not review. The number is shown, labelled `estimate`, and editable on the row.
+
+**The condition he describes is the most valuable thing in the transcript and
+no photo could ever provide it.** "The lettuce is starting to go" comes back as
+2 days, not 10. The prompt asks for it explicitly.
+
+### Pantry stores are tracked, and kept off the wall
+
+*"We don't need to list that I have a can of beans that's gonna last for years
+— it should just list the things that actually are going to go bad."*
+
+A talk-through picks up the whole kitchen, and all of it matters to the
+shopping list: saying "we've got rice" is exactly the kind of thing that should
+stop rice being bought. But a wall display glanced at from across the room
+stops working the moment it is ninety rows of flour and tinned tomatoes.
+
+So a timer can carry **`shelfStable: true`**, and the screens read
+`fridge/displayTimers` (which filters it out) while everything that decides
+what to buy — `onHandUntil`, the coverage math, cooking a meal — keeps reading
+`allTimers` and sees the whole house.
+
+The line is a **year** (`PANTRY_THRESHOLD_DAYS`), not the six months that first
+suggested itself: his own wall already carries frozen spinach, frozen mixed
+vegetables and mustard at four to eight months and he wants them there. **A
+household template always wins** — a template exists because somebody taught
+this app that this food goes off and how fast, which beats any general
+knowledge about the food.
+
+Pantry rows deliberately teach **no template**, or the next hand-typed tin of
+beans would arrive on the wall with a two-year countdown.
+
+### The fridge speaks for every food now, not just staples
+
+`store/fridge/inHouse.js`, and it closed a gap worth knowing about.
+
+The fridge could already take a row off the shopping list — but only for a food
+flagged `staple`, and exactly **2 of the 126 groceries were**. On the real list
+of 2026-09-20, seven rows (Cheddar, American Cheese Slices, Hamburger Buns,
+Garlic, Sandwich Bread, Tortellini, Lettuce) sat there asking to be bought
+while live timers for all seven sat in the fridge. The inventory existed and the
+list ignored it. A staple was never the right gate: "do I already have this?"
+is the same question for olive oil and for lettuce.
+
+`rowCoverage` answers it in **quantities**, via the same `packageSize` bridge
+`consume.js` uses — a timer holds packages, a row asks in recipe units. 10
+slices of bread against a 20-slice loaf is covered. **3 cups of cheddar against
+one 2-cup block is NOT**, and that row stays on the list carrying
+`partlyOnHand` so it can say "you have some — 1 package, not enough". Suppressing
+a partly-covered row is the one mistake that leaves a meal short.
+
+The direction rule is unchanged: the fridge may only ever say YOU HAVE IT. No
+timer means nobody has described that food, not that you are out of it, and an
+**expired timer does not suppress** — it argues for buying more.
+
+Everything the partition attaches to a row (`onHand`, `packagesOnHand`,
+`partlyOnHand`, `stapleDue`…) is derived at read time and **stripped before any
+write**. Persisting it would freeze one moment's answer into the row.
+
+### Names are the join TWICE, so send both vocabularies
+
+`store/fridge/vocabulary.js`. The scan flow only ever sent the fridge's
+templates as `knownFoods`, which is right for shelf lives and wrong for
+shopping: a template match decides a *duration*, a CATALOG match decides whether
+a shopping row can come *off the list*.
+
+The first real transcript proved it. A spoken "box of rotini" came back as
+"Rotini Pasta" — a perfectly good name matching nothing, while the catalog calls
+it "Rotini or Farfalle" and had it on that week's list. Pantry stores are worse:
+they have no templates at all. Sending the catalog names too fixed it in one
+run.
+
+Order matters because the list is capped at 200: **what is on the shopping list
+first**, then templates, then the rest of the catalog. One bad name (empty, or
+over 60 characters) is dropped rather than 400ing the whole list.
+
+### Retiring the camera, carefully
+
+Matt kept **receipts** and retired the other two photo modes. A receipt is
+printed text, which is the one thing that flow was genuinely reliable at; the
+haul pile and the fridge reconcile were the guessing.
+
+`ScanFlow` is receipt-facing now, and a photo that comes back as `storage` says
+so and points at the talk-through instead of quietly running the retired flow.
+**`buildReconcile` and its 15 tests are still in `scanReview.js`**, and the
+reconcile stage is still in ScanFlow's template — re-importing it is the whole
+of bringing the flow back. Delete both once the talk-through has real weeks
+behind it, not before it has actually replaced anything.
+
 ### The scan endpoint
 
 `aws-lambda/perishable-vision.js` (the file name is the Lambda's configured
