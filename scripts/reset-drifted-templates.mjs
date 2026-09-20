@@ -51,7 +51,24 @@ const RESET = ['Sandwich Bread', 'Cheddar Cheese', 'Veggie Dogs']
 
 // Foods to keep, but with one spelling. The value is what the household has
 // learned and is NOT in question here — only the duplication is.
-const MERGE_ONLY = ['Veggie patties']
+const MERGE_ONLY = ['Veggie patties', 'Cherry Tomatoes', 'Parmesan Cheese', 'Refried Beans']
+
+// Foods where the two spellings DISAGREED and Matt picked a number.
+//
+// "Hot Dogs" said 21 days and "Hot dogs" said 5 — one food, two beliefs, and
+// merging cannot avoid choosing. He took the short one: a spoilage tracker
+// errs early everywhere else, 5 days matches an opened pack, and if a sealed
+// pack really keeps three weeks the app learns that back the first time he
+// extends one. Which is the whole point of beliefs being nudged rather than
+// set.
+const SET_DAYS = { 'Hot Dogs': 5 }
+
+// Timers already on the wall carrying a drifted date. These do NOT fix
+// themselves: a talk-through CONFIRMS a tracked food rather than restarting
+// its clock — deliberately, so a weekly walk cannot keep a dying carton of
+// milk alive forever — so a wrong expiry survives every future read-through.
+// Deleting them means the next talk-through re-adds them with sane dates.
+const DROP_TIMERS_FOR = ['Sandwich Bread', 'Cheddar Cheese']
 
 const norm = (name) => String(name || '').trim().toLowerCase()
 
@@ -66,12 +83,13 @@ const remove = async (path) => {
   await run('firebase', ['database:remove', path, '--project', PROJECT, '--force'])
 }
 
-let fridgeKey, templates, catalog
+let fridgeKey, templates, catalog, timers
 try {
   fridgeKey = await get(`/${HAT}/fridgeKey`)
   if (!fridgeKey) throw new Error('this hat has no fridge')
   templates = (await get(`/fridge/${fridgeKey}/templates`)) || {}
   catalog = (await get(`/${HAT}/grocery-catalog`)) || {}
+  timers = (await get(`/fridge/${fridgeKey}/timers`)) || {}
 } catch (error) {
   console.error('Could not read. Is `firebase login` still valid?')
   console.error(error.stderr || error.message)
@@ -80,6 +98,7 @@ try {
 
 const plan = []
 const deletes = []
+const writes = []
 
 const templatesNamed = (name) =>
   Object.entries(templates).filter(([key, t]) => norm(t?.title || key) === norm(name))
@@ -121,6 +140,42 @@ for (const name of MERGE_ONLY) {
   }
 }
 
+// A number Matt chose, written to BOTH copies plus the sync base, so the
+// two-way reconcile sees no change and neither side undoes it.
+for (const [name, days] of Object.entries(SET_DAYS)) {
+  for (const [key, template] of templatesNamed(name)) {
+    const survivor = catalogNamed(name)[0]?.name
+    if ((template?.title || key) !== survivor) {
+      plan.push(`DROP duplicate spelling "${key}" (${template.days} days)`)
+      deletes.push(`/fridge/${fridgeKey}/templates/${key}`)
+      continue
+    }
+    if (template.days !== days) {
+      plan.push(`SET template "${key}" — ${template.days} -> ${days} days`)
+      writes.push([`/fridge/${fridgeKey}/templates/${key}/days`, days])
+      writes.push([`/fridge/${fridgeKey}/templates/${key}/mean`, days])
+      // The anchor moves too: it is the general claim about the food, and
+      // this IS a general claim about the food, deliberately made.
+      writes.push([`/fridge/${fridgeKey}/templates/${key}/anchor`, days])
+    }
+  }
+  for (const entry of catalogNamed(name)) {
+    for (const field of ['shelfLifeDays', 'shelfLifeSyncedDays']) {
+      if (entry[field] === days) continue
+      plan.push(`SET ${entry.name}.${field} — ${entry[field] ?? 'unset'} -> ${days}`)
+      writes.push([`/${HAT}/grocery-catalog/${entry.id}/${field}`, days])
+    }
+  }
+}
+
+for (const name of DROP_TIMERS_FOR) {
+  for (const [id, timer] of Object.entries(timers)) {
+    if (norm(timer?.title) !== norm(name)) continue
+    plan.push(`DROP timer ${id} — "${timer.title}" expiring ${String(timer.expiryDate).slice(0, 10)}`)
+    deletes.push(`/fridge/${fridgeKey}/timers/${id}`)
+  }
+}
+
 console.log(plan.length ? plan.join('\n') : 'Nothing to do — already done.')
 if (!plan.length) process.exit(0)
 
@@ -132,8 +187,19 @@ if (!apply) {
 mkdirSync(BACKUP_DIR, { recursive: true })
 const stamp = new Date().toISOString().replace(/[:.]/g, '-')
 const backup = join(BACKUP_DIR, `drifted-templates-${stamp}.json`)
-writeFileSync(backup, JSON.stringify({ fridgeKey, templates, catalog }, null, 2))
+writeFileSync(backup, JSON.stringify({ fridgeKey, templates, catalog, timers }, null, 2))
 console.log(`\nBacked up to ${backup}`)
+
+// Writes before deletes: a half-applied run that has corrected a survivor but
+// not yet dropped its duplicate is cosmetic; the other order loses the good
+// record.
+const set = async (path, value) => {
+  await run('firebase', ['database:set', path, '--project', PROJECT, '--force', '--data', JSON.stringify(value)])
+}
+for (const [path, value] of writes) {
+  await set(path, value)
+  console.log(`  wrote ${path}`)
+}
 
 for (const path of deletes) {
   await remove(path)
