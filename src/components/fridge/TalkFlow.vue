@@ -407,7 +407,7 @@ export default {
   left: 0;
   width: 100vw;
   height: 100vh;
-  background: rgba(0, 0, 0, 0.8);
+  background: var(--fr-scrim);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -415,14 +415,14 @@ export default {
 }
 
 .modal-content {
-  background: #1a1a1a;
+  background: var(--fr-surface);
   border-radius: 16px;
   padding: 2rem;
   width: 90vw;
   max-width: 440px;
   max-height: 85vh;
   overflow-y: auto;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid var(--fr-line);
 }
 
 .modal-header {
@@ -434,13 +434,13 @@ export default {
   h2 {
     font-size: 1.5rem;
     font-weight: 600;
-    color: #fff;
+    color: var(--fr-text);
   }
 
   .close-btn {
     background: none;
     border: 0;
-    color: #fff;
+    color: var(--fr-text);
     font-size: 2rem;
     cursor: pointer;
     width: 32px;
@@ -451,7 +451,7 @@ export default {
     border-radius: 50%;
 
     &:hover {
-      background: rgba(255, 255, 255, 0.1);
+      background: var(--fr-field);
     }
   }
 }
@@ -463,22 +463,22 @@ export default {
 }
 
 .talk-hint {
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--fr-muted);
   line-height: 1.45;
 }
 
 .talk-mic {
-  color: rgba(255, 255, 255, 0.55);
+  color: var(--fr-muted);
   font-size: 0.9rem;
   margin: 0;
 }
 
 .talk-box {
   width: 100%;
-  background: rgba(255, 255, 255, 0.07);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: var(--fr-field);
+  border: 1px solid var(--fr-line);
   border-radius: 10px;
-  color: #fff;
+  color: var(--fr-text);
   padding: 0.85rem;
   font-family: inherit;
   /* 16px or more, or iOS zooms the whole page on focus and the sheet jumps. */
@@ -487,12 +487,12 @@ export default {
   resize: vertical;
 
   &::placeholder {
-    color: rgba(255, 255, 255, 0.35);
+    color: var(--fr-faint);
   }
 
   &:focus {
     outline: none;
-    border-color: rgba(76, 175, 80, 0.7);
+    border-color: var(--fr-accent);
   }
 }
 
@@ -500,23 +500,23 @@ export default {
   display: flex;
   justify-content: space-between;
   font-size: 0.8rem;
-  color: rgba(255, 255, 255, 0.4);
+  color: var(--fr-faint);
 }
 
 .talk-saved {
-  color: rgba(76, 175, 80, 0.8);
+  color: var(--fr-accent);
 }
 
 .talk-restored {
   font-size: 0.85rem;
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--fr-muted);
   margin: 0;
 }
 
 .link-btn {
   background: none;
   border: 0;
-  color: rgba(76, 175, 80, 0.9);
+  color: var(--fr-accent);
   text-decoration: underline;
   cursor: pointer;
   padding: 0;
@@ -525,8 +525,8 @@ export default {
 
 .talk-btn {
   padding: 1.1rem;
-  background: #4caf50;
-  color: #fff;
+  background: var(--fr-accent);
+  color: var(--fr-text);
   border: 0;
   border-radius: 8px;
   font-size: 1.05rem;
@@ -534,14 +534,17 @@ export default {
   cursor: pointer;
 
   &:disabled {
-    background: rgba(255, 255, 255, 0.12);
-    color: rgba(255, 255, 255, 0.4);
+    background: var(--fr-field);
+    color: var(--fr-faint);
+    /* An outline, or on the phone's white sheet a disabled button is a pale
+       word floating in nothing rather than a control waiting to be usable. */
+    box-shadow: inset 0 0 0 1px var(--fr-line);
     cursor: default;
   }
 }
 
 .talk-error {
-  color: #ff8a80;
+  color: var(--fr-danger);
   margin: 0;
 }
 
@@ -557,8 +560,8 @@ export default {
 .talk-spinner {
   width: 40px;
   height: 40px;
-  border: 3px solid rgba(255, 255, 255, 0.15);
-  border-top-color: #4caf50;
+  border: 3px solid var(--fr-line);
+  border-top-color: var(--fr-accent);
   border-radius: 50%;
   animation: talk-spin 1s linear infinite;
 }
@@ -570,12 +573,12 @@ export default {
 }
 
 .reading-text {
-  color: #fff;
+  color: var(--fr-text);
   margin: 0;
 }
 
 .reading-sub {
-  color: rgba(255, 255, 255, 0.45);
+  color: var(--fr-faint);
   font-size: 0.85rem;
   margin: 0;
 }
@@ -589,14 +592,14 @@ export default {
   gap: 0.75rem;
   /* The sheet scrolls under this, so it needs its own background or the list
      shows through the gap between rows. */
-  background: #1a1a1a;
+  background: var(--fr-surface);
   padding: 0 0 0.75rem;
   margin-bottom: 0.25rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid var(--fr-line);
 
   .done-line {
     flex: 1;
-    color: #fff;
+    color: var(--fr-text);
     font-size: 1rem;
     line-height: 1.4;
     margin: 0;
@@ -605,8 +608,8 @@ export default {
   .done-btn {
     flex: none;
     padding: 0.7rem 1.4rem;
-    background: #4caf50;
-    color: #fff;
+    background: var(--fr-accent);
+    color: var(--fr-text);
     border: 0;
     border-radius: 8px;
     font-size: 1rem;
@@ -617,17 +620,17 @@ export default {
 .pile-head {
   font-size: 1rem;
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.85);
+  color: var(--fr-text);
   margin: 1.25rem 0 0.5rem;
 
   &.danger {
-    color: #ffab91;
+    color: var(--fr-danger);
   }
 }
 
 .pile-note {
   font-size: 0.85rem;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--fr-faint);
   margin: 0 0 0.75rem;
   line-height: 1.4;
 }
@@ -643,32 +646,32 @@ export default {
   align-items: baseline;
   gap: 0.5rem;
   padding: 0.35rem 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  border-bottom: 1px solid var(--fr-line);
 }
 
 .seen-tick {
-  color: #4caf50;
+  color: var(--fr-accent);
   width: 1rem;
   flex: none;
 
   &.gone {
-    color: #ffab91;
+    color: var(--fr-danger);
   }
 }
 
 .seen-title {
   flex: 1;
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--fr-text);
 }
 
 .seen-left {
   font-size: 0.8rem;
-  color: rgba(255, 255, 255, 0.45);
+  color: var(--fr-faint);
 }
 
 .review-row {
   padding: 0.75rem 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  border-bottom: 1px solid var(--fr-line);
 
   &.excluded {
     opacity: 0.45;
@@ -685,15 +688,15 @@ export default {
   width: 22px;
   height: 22px;
   flex: none;
-  accent-color: #4caf50;
+  accent-color: var(--fr-accent);
 }
 
 .review-name {
   flex: 1;
-  background: rgba(255, 255, 255, 0.07);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: var(--fr-field);
+  border: 1px solid var(--fr-line);
   border-radius: 6px;
-  color: #fff;
+  color: var(--fr-text);
   padding: 0.45rem 0.6rem;
   font-size: 1rem;
   font-family: inherit;
@@ -703,14 +706,14 @@ export default {
   margin: 0.4rem 0 0 2.2rem;
   font-size: 0.85rem;
   font-style: italic;
-  color: rgba(255, 255, 255, 0.45);
+  color: var(--fr-faint);
   line-height: 1.35;
 }
 
 .review-renamed {
   margin: 0.3rem 0 0 2.2rem;
   font-size: 0.8rem;
-  color: #ffcc80;
+  color: var(--fr-warn);
 }
 
 .review-bottom {
@@ -723,26 +726,26 @@ export default {
 
 .days-chip {
   padding: 0.3rem 0.65rem;
-  background: rgba(76, 175, 80, 0.85);
+  background: var(--fr-accent);
   border-radius: 999px;
-  color: #fff;
+  color: var(--fr-text);
   font-size: 0.85rem;
 }
 
 .days-source {
   font-size: 0.75rem;
-  color: rgba(255, 255, 255, 0.45);
+  color: var(--fr-faint);
 }
 
 .qty-label {
   font-size: 0.85rem;
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--fr-muted);
 }
 
 .pantry-chip {
   font-size: 0.72rem;
-  color: rgba(255, 255, 255, 0.5);
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: var(--fr-faint);
+  border: 1px solid var(--fr-line);
   border-radius: 999px;
   padding: 0.1rem 0.5rem;
 }
@@ -752,7 +755,7 @@ export default {
   align-items: flex-start;
   gap: 0.6rem;
   padding: 0.5rem 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  border-bottom: 1px solid var(--fr-line);
 }
 
 .gone-body {
@@ -763,18 +766,18 @@ export default {
 }
 
 .gone-title {
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--fr-text);
 }
 
 .gone-meta {
   font-size: 0.78rem;
-  color: rgba(255, 255, 255, 0.45);
+  color: var(--fr-faint);
 }
 
 .unclear-list {
   margin: 0;
   padding-left: 1.1rem;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--fr-faint);
   font-size: 0.85rem;
   line-height: 1.5;
 }
@@ -796,17 +799,20 @@ export default {
 }
 
 .cancel-btn {
-  background: rgba(255, 255, 255, 0.12);
-  color: #fff;
+  background: var(--fr-line);
+  color: var(--fr-text);
 }
 
 .confirm-btn {
-  background: #4caf50;
-  color: #fff;
+  background: var(--fr-accent);
+  color: var(--fr-text);
 
   &:disabled {
-    background: rgba(255, 255, 255, 0.12);
-    color: rgba(255, 255, 255, 0.4);
+    background: var(--fr-field);
+    color: var(--fr-faint);
+    /* An outline, or on the phone's white sheet a disabled button is a pale
+       word floating in nothing rather than a control waiting to be usable. */
+    box-shadow: inset 0 0 0 1px var(--fr-line);
     cursor: default;
   }
 }
@@ -820,7 +826,7 @@ export default {
 }
 
 .done-text {
-  color: rgba(255, 255, 255, 0.85);
+  color: var(--fr-text);
   margin: 0;
   line-height: 1.5;
 }

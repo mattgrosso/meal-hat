@@ -322,7 +322,7 @@ export default {
   left: 0;
   width: 100vw;
   height: 100vh;
-  background: rgba(0, 0, 0, 0.8);
+  background: var(--fr-scrim);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -330,14 +330,14 @@ export default {
 }
 
 .modal-content {
-  background: #1a1a1a;
+  background: var(--fr-surface);
   border-radius: 16px;
   padding: 2rem;
   width: 90vw;
   max-width: 440px;
   max-height: 85vh;
   overflow-y: auto;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid var(--fr-line);
 }
 
 .modal-header {
@@ -349,13 +349,13 @@ export default {
   h2 {
     font-size: 1.5rem;
     font-weight: 600;
-    color: #fff;
+    color: var(--fr-text);
   }
 
   .close-btn {
     background: none;
     border: none;
-    color: #fff;
+    color: var(--fr-text);
     font-size: 2rem;
     cursor: pointer;
     width: 32px;
@@ -366,7 +366,7 @@ export default {
     border-radius: 50%;
 
     &:hover {
-      background: rgba(255, 255, 255, 0.1);
+      background: var(--fr-field);
     }
   }
 }
@@ -377,7 +377,7 @@ export default {
   gap: 1rem;
 
   .pick-hint {
-    color: rgba(255, 255, 255, 0.7);
+    color: var(--fr-muted);
     margin-bottom: 0.5rem;
   }
 
@@ -385,16 +385,16 @@ export default {
     display: block;
     text-align: center;
     padding: 1.25rem;
-    background: #4CAF50;
-    color: white;
+    background: var(--fr-accent);
+    color: var(--fr-text);
     border-radius: 8px;
     font-size: 1.1rem;
     font-weight: 500;
     cursor: pointer;
 
     &.secondary {
-      background: rgba(255, 255, 255, 0.1);
-      border: 1px solid rgba(255, 255, 255, 0.3);
+      background: var(--fr-field);
+      border: 1px solid var(--fr-line);
     }
   }
 }
@@ -407,20 +407,20 @@ export default {
     width: 48px;
     height: 48px;
     margin: 0 auto 1.5rem;
-    border: 4px solid rgba(255, 255, 255, 0.15);
-    border-top-color: #4CAF50;
+    border: 4px solid var(--fr-line);
+    border-top-color: var(--fr-accent);
     border-radius: 50%;
     animation: scan-spin 0.9s linear infinite;
   }
 
   .scanning-text {
-    color: #fff;
+    color: var(--fr-text);
     font-size: 1.2rem;
     margin-bottom: 0.5rem;
   }
 
   .scanning-sub {
-    color: rgba(255, 255, 255, 0.6);
+    color: var(--fr-muted);
     font-size: 0.9rem;
   }
 }
@@ -439,14 +439,14 @@ export default {
     gap: 0.75rem;
     /* The sheet scrolls under this, so it needs its own background or the list
        shows through the gap between rows. */
-    background: #1a1a1a;
+    background: var(--fr-surface);
     padding: 0 0 0.75rem;
     margin-bottom: 0.25rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid var(--fr-line);
 
     .done-line {
       flex: 1;
-      color: #fff;
+      color: var(--fr-text);
       font-size: 1rem;
       line-height: 1.4;
       margin: 0;
@@ -455,8 +455,8 @@ export default {
     .done-btn {
       flex: none;
       padding: 0.7rem 1.4rem;
-      background: #4caf50;
-      color: #fff;
+      background: var(--fr-accent);
+      color: var(--fr-text);
       border: 0;
       border-radius: 8px;
       font-size: 1rem;
@@ -477,13 +477,13 @@ export default {
   .seen-printed {
     font-family: "IBM Plex Mono", monospace;
     font-size: 0.7rem;
-    color: rgba(255, 255, 255, 0.4);
+    color: var(--fr-faint);
   }
 
   .unclear-list {
     margin: 0;
     padding-left: 1.1rem;
-    color: rgba(255, 255, 255, 0.5);
+    color: var(--fr-faint);
     font-size: 0.85rem;
     line-height: 1.5;
   }
@@ -492,12 +492,12 @@ export default {
     font-size: 1.05rem;
     font-weight: 600;
     margin: 1.25rem 0 0.4rem;
-    color: #fff;
+    color: var(--fr-text);
   }
 
   .pile-note {
     font-size: 0.82rem;
-    color: rgba(255, 255, 255, 0.55);
+    color: var(--fr-muted);
     margin-bottom: 0.75rem;
   }
 
@@ -507,7 +507,7 @@ export default {
     gap: 0.7rem;
     padding: 0.65rem 0.75rem;
     margin-bottom: 0.5rem;
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    border: 1px solid var(--fr-line);
     border-radius: 10px;
     cursor: pointer;
 
@@ -518,13 +518,13 @@ export default {
 
     .gone-title {
       font-size: 1rem;
-      color: #fff;
+      color: var(--fr-text);
     }
 
     .gone-context {
       margin-left: auto;
       font-size: 0.78rem;
-      color: rgba(255, 255, 255, 0.5);
+      color: var(--fr-faint);
       text-align: right;
     }
   }
@@ -532,7 +532,7 @@ export default {
   .still-here {
     margin-top: 1rem;
     font-size: 0.85rem;
-    color: rgba(255, 255, 255, 0.5);
+    color: var(--fr-faint);
   }
 
   // Deliberately tighter than the piles below it — nothing here needs doing,
@@ -548,7 +548,7 @@ export default {
     align-items: baseline;
     gap: 0.5rem;
     padding: 0.28rem 0.2rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    border-bottom: 1px solid var(--fr-line);
 
     .seen-tick {
       color: rgba(72, 187, 120, 0.9);
@@ -557,35 +557,35 @@ export default {
 
     .seen-title {
       font-size: 0.92rem;
-      color: rgba(255, 255, 255, 0.9);
+      color: var(--fr-text);
     }
 
     .seen-left {
       margin-left: auto;
       font-size: 0.75rem;
-      color: rgba(255, 255, 255, 0.45);
+      color: var(--fr-faint);
       white-space: nowrap;
     }
   }
 
   .receipt-note {
-    background: rgba(76, 175, 80, 0.12);
-    border: 1px solid rgba(76, 175, 80, 0.4);
+    background: var(--fr-accent);
+    border: 1px solid var(--fr-accent);
     border-radius: 8px;
     padding: 0.7rem 0.85rem;
     margin-bottom: 0.85rem;
     font-size: 0.9rem;
-    color: rgba(255, 255, 255, 0.9);
+    color: var(--fr-text);
   }
 
   .review-hint {
-    color: rgba(255, 255, 255, 0.7);
+    color: var(--fr-muted);
     font-size: 0.9rem;
     margin-bottom: 1rem;
   }
 
   .review-row {
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    border: 1px solid var(--fr-line);
     border-radius: 10px;
     padding: 0.75rem;
     margin-bottom: 0.75rem;
@@ -604,20 +604,20 @@ export default {
   .review-check {
     width: 20px;
     height: 20px;
-    accent-color: #4CAF50;
+    accent-color: var(--fr-accent);
     flex-shrink: 0;
   }
 
   .review-crop-btn {
     padding: 0;
-    border: 1px solid rgba(255, 255, 255, 0.25);
+    border: 1px solid var(--fr-line);
     border-radius: 7px;
     background: none;
     line-height: 0;
     flex-shrink: 0;
 
     &:hover, &:focus-visible {
-      border-color: rgba(255, 255, 255, 0.7);
+      border-color: var(--fr-muted);
     }
   }
 
@@ -627,17 +627,17 @@ export default {
     object-fit: cover;
     border-radius: 6px;
     display: block;
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--fr-field);
   }
 
   .review-name {
     flex: 1;
     min-width: 0;
     padding: 0.5rem;
-    background: rgba(255, 255, 255, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.25);
+    background: var(--fr-field);
+    border: 1px solid var(--fr-line);
     border-radius: 6px;
-    color: #fff;
+    color: var(--fr-text);
     font-size: 1rem;
   }
 
@@ -647,7 +647,7 @@ export default {
     font-family: "IBM Plex Mono", monospace;
     font-size: 0.78rem;
     letter-spacing: 0.02em;
-    color: rgba(255, 255, 255, 0.45);
+    color: var(--fr-faint);
   }
 
   .review-readas {
@@ -659,7 +659,7 @@ export default {
   .review-elapsed {
     margin-top: 0.5rem;
     font-size: 0.8rem;
-    color: rgba(255, 255, 255, 0.6);
+    color: var(--fr-muted);
   }
 
   .review-durations {
@@ -673,30 +673,30 @@ export default {
      which is what makes a wrong one correctable instead of mysterious. */
   .days-from {
     font-size: 0.75rem;
-    color: rgba(255, 255, 255, 0.45);
+    color: var(--fr-faint);
   }
 
   /* Not a chip you can press — a statement that this row needs no decision. */
   .pantry-chip {
     padding: 0.45rem 0.7rem;
-    border: 1px solid rgba(255, 255, 255, 0.18);
+    border: 1px solid var(--fr-line);
     border-radius: 999px;
-    color: rgba(255, 255, 255, 0.55);
+    color: var(--fr-muted);
     font-size: 0.8rem;
   }
 
   .duration-chip {
     padding: 0.45rem 0.7rem;
-    background: rgba(255, 255, 255, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.3);
+    background: var(--fr-field);
+    border: 1px solid var(--fr-line);
     border-radius: 999px;
-    color: #fff;
+    color: var(--fr-text);
     font-size: 0.85rem;
     cursor: pointer;
 
     &.active {
-      background: #4CAF50;
-      border-color: #4CAF50;
+      background: var(--fr-accent);
+      border-color: var(--fr-accent);
     }
   }
 
@@ -716,14 +716,14 @@ export default {
     }
 
     .cancel-btn {
-      background: rgba(255, 255, 255, 0.1);
-      color: #fff;
-      border: 1px solid rgba(255, 255, 255, 0.3);
+      background: var(--fr-field);
+      color: var(--fr-text);
+      border: 1px solid var(--fr-line);
     }
 
     .confirm-btn {
-      background: #4CAF50;
-      color: white;
+      background: var(--fr-accent);
+      color: var(--fr-text);
 
       &:disabled {
         opacity: 0.5;

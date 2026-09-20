@@ -206,7 +206,7 @@ export default {
   left: 0;
   width: 100vw;
   height: 100vh;
-  background: rgba(0, 0, 0, 0.8);
+  background: var(--fr-scrim);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -214,7 +214,7 @@ export default {
 }
 
 .modal-content {
-  background: #1a1a1a;
+  background: var(--fr-surface);
   border-radius: 16px;
   padding: 2rem;
   width: 90vw;
@@ -226,7 +226,7 @@ export default {
   max-height: 90vh;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid var(--fr-line);
 }
 
 .modal-header {
@@ -238,13 +238,13 @@ export default {
   h2 {
     font-size: 1.5rem;
     font-weight: 600;
-    color: #fff;
+    color: var(--fr-text);
   }
 
   .close-btn {
     background: none;
     border: none;
-    color: #fff;
+    color: var(--fr-text);
     font-size: 2rem;
     cursor: pointer;
     padding: 0;
@@ -257,7 +257,7 @@ export default {
     transition: background 0.2s;
 
     &:hover {
-      background: rgba(255, 255, 255, 0.1);
+      background: var(--fr-field);
     }
   }
 }
@@ -270,26 +270,26 @@ export default {
       display: block;
       margin-bottom: 0.5rem;
       font-weight: 500;
-      color: #fff;
+      color: var(--fr-text);
     }
 
     input {
       width: 100%;
       padding: 1rem;
-      background: rgba(255, 255, 255, 0.1);
-      border: 1px solid rgba(255, 255, 255, 0.3);
+      background: var(--fr-field);
+      border: 1px solid var(--fr-line);
       border-radius: 8px;
-      color: #fff;
+      color: var(--fr-text);
       font-size: 1rem;
 
       &::placeholder {
-        color: rgba(255, 255, 255, 0.5);
+        color: var(--fr-faint);
       }
 
       &:focus {
         outline: none;
-        border-color: rgba(255, 255, 255, 0.6);
-        background: rgba(255, 255, 255, 0.15);
+        border-color: var(--fr-muted);
+        background: var(--fr-line);
       }
     }
   }
@@ -302,24 +302,24 @@ export default {
 
     .expiry-btn {
       padding: 1rem;
-      background: rgba(255, 255, 255, 0.1);
-      border: 2px solid rgba(255, 255, 255, 0.3);
+      background: var(--fr-field);
+      border: 2px solid var(--fr-line);
       border-radius: 8px;
-      color: #fff;
+      color: var(--fr-text);
       cursor: pointer;
       font-size: 1rem;
       font-weight: 500;
       transition: all 0.2s;
 
       &:hover {
-        background: rgba(255, 255, 255, 0.2);
-        border-color: rgba(255, 255, 255, 0.5);
+        background: var(--fr-line);
+        border-color: var(--fr-faint);
       }
 
       &.active {
-        background: #4CAF50;
-        border-color: #4CAF50;
-        color: white;
+        background: var(--fr-accent);
+        border-color: var(--fr-accent);
+        color: var(--fr-text);
       }
     }
   }
@@ -340,18 +340,18 @@ export default {
     }
 
     .cancel-btn {
-      background: rgba(255, 255, 255, 0.1);
-      color: #fff;
-      border: 1px solid rgba(255, 255, 255, 0.3);
+      background: var(--fr-field);
+      color: var(--fr-text);
+      border: 1px solid var(--fr-line);
 
       &:hover {
-        background: rgba(255, 255, 255, 0.2);
+        background: var(--fr-line);
       }
     }
 
     .add-btn {
-      background: #4CAF50;
-      color: white;
+      background: var(--fr-accent);
+      color: var(--fr-text);
 
       &:hover:not(:disabled) {
         background: #45a049;
@@ -375,17 +375,17 @@ export default {
     margin-bottom: 1rem;
 
     h3 {
-      color: #fff;
+      color: var(--fr-text);
       font-size: 1.2rem;
       font-weight: 600;
       margin: 0;
     }
 
     .edit-btn {
-      background: rgba(255, 255, 255, 0.1);
-      border: 1px solid rgba(255, 255, 255, 0.3);
+      background: var(--fr-field);
+      border: 1px solid var(--fr-line);
       border-radius: 6px;
-      color: #fff;
+      color: var(--fr-text);
       cursor: pointer;
       padding: 0.5rem;
       font-size: 1rem;
@@ -397,13 +397,13 @@ export default {
       height: 32px;
 
       &:hover {
-        background: rgba(255, 255, 255, 0.2);
-        border-color: rgba(255, 255, 255, 0.5);
+        background: var(--fr-line);
+        border-color: var(--fr-faint);
       }
 
       &.active {
-        background: rgba(255, 255, 255, 0.9);
-        border-color: rgba(255, 255, 255, 0.9);
+        background: var(--fr-text);
+        border-color: var(--fr-text);
         color: #333;
       }
     }
@@ -424,16 +424,16 @@ export default {
     }
 
     &::-webkit-scrollbar-track {
-      background: rgba(255, 255, 255, 0.05);
+      background: var(--fr-field);
       border-radius: 3px;
     }
 
     &::-webkit-scrollbar-thumb {
-      background: rgba(255, 255, 255, 0.2);
+      background: var(--fr-line);
       border-radius: 3px;
 
       &:hover {
-        background: rgba(255, 255, 255, 0.3);
+        background: var(--fr-line);
       }
     }
 
@@ -443,11 +443,11 @@ export default {
       flex-direction: column;
 
       .template-btn {
-        background: rgba(76, 175, 80, 0.1);
-        border: 2px solid rgba(76, 175, 80, 0.3);
+        background: var(--fr-accent);
+        border: 2px solid var(--fr-accent);
         border-radius: 8px;
         padding: 0.75rem;
-        color: #fff;
+        color: var(--fr-text);
         cursor: pointer;
         transition: all 0.2s;
         display: flex;
@@ -456,8 +456,8 @@ export default {
         width: 100%;
 
         &:hover:not(.disabled) {
-          background: rgba(76, 175, 80, 0.2);
-          border-color: rgba(76, 175, 80, 0.5);
+          background: var(--fr-accent);
+          border-color: var(--fr-accent);
           transform: translateY(-2px);
         }
 
@@ -486,8 +486,8 @@ export default {
         position: absolute;
         top: -8px;
         right: -8px;
-        background: rgba(255, 255, 255, 0.9);
-        border: 1px solid rgba(255, 255, 255, 0.3);
+        background: var(--fr-text);
+        border: 1px solid var(--fr-line);
         border-radius: 50%;
         color: #333;
         cursor: pointer;
@@ -500,7 +500,7 @@ export default {
         z-index: 10;
 
         &:hover {
-          background: rgba(255, 255, 255, 1);
+          background: var(--fr-text);
           transform: scale(1.1);
         }
       }
@@ -509,14 +509,14 @@ export default {
 
   .divider {
     height: 1px;
-    background: rgba(255, 255, 255, 0.2);
+    background: var(--fr-line);
     margin: 0;
   }
 }
 
 .custom-form-header {
   h3 {
-    color: #fff;
+    color: var(--fr-text);
     margin-bottom: 1.5rem;
     font-size: 1.2rem;
     font-weight: 600;

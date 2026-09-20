@@ -197,3 +197,56 @@ describe('levenshtein', () => {
     expect(levenshtein('mozzerella', 'mozarella')).toBe(2);
   });
 });
+
+// THE THIRD TIME THIS TRAP HAS BEEN PAID FOR IN THIS REPO.
+//
+// `new Date('2026-09-20')` on a bare YYYY-MM-DD parses as UTC midnight, which
+// is 8pm on the 19th in Matt's timezone — so it sorts BEFORE local midnight
+// and `>= today` dropped today's own meal from the shopping list. Every day,
+// all year, silently.
+//
+// He found it by noticing an absence: "I didn't say that we have sausage but
+// it isn't on the shopping list." Sausage Pasta was drawn for that very day.
+describe('aggregateMealIngredients — today counts as upcoming', () => {
+  const catalog = {
+    g1: { id: 'g1', name: 'Sausage' },
+    g2: { id: 'g2', name: 'Tomato Sauce' },
+    g3: { id: 'g3', name: 'Tortellini' }
+  };
+  const meals = {
+    m1: { id: 'm1', name: 'Sausage Pasta', ingredients: [{ groceryItemId: 'g1', quantity: 1 }, { groceryItemId: 'g2', quantity: 1 }] },
+    m2: { id: 'm2', name: 'Tortellini Soup', ingredients: [{ groceryItemId: 'g3', quantity: 1 }] }
+  };
+  const getMeal = (id) => meals[id];
+
+  // Deliberately mid-afternoon LOCAL time. The bug needs a `now` whose local
+  // midnight is later than the date's UTC midnight, which is every moment of
+  // every day in a negative-offset timezone.
+  const NOW = new Date('2026-09-20T15:30:00');
+
+  it("includes the meal drawn for TODAY", () => {
+    const drawnMeals = [
+      { mealId: 'm1', assignedDate: '2026-09-20' },
+      { mealId: 'm2', assignedDate: '2026-09-21' }
+    ];
+    const out = aggregateMealIngredients({ drawnMeals, getMeal, catalog, now: NOW });
+    expect(Object.keys(out).sort()).toEqual(['g1', 'g2', 'g3']);
+  });
+
+  it('still excludes yesterday', () => {
+    const drawnMeals = [{ mealId: 'm1', assignedDate: '2026-09-19' }];
+    expect(aggregateMealIngredients({ drawnMeals, getMeal, catalog, now: NOW })).toEqual({});
+  });
+
+  it('survives a row with an unusable date rather than counting it', () => {
+    const drawnMeals = [{ mealId: 'm1', assignedDate: 'whenever' }];
+    expect(aggregateMealIngredients({ drawnMeals, getMeal, catalog, now: NOW })).toEqual({});
+  });
+
+  it('reads the older stored date shapes too', () => {
+    // Pre-migration hats stored a timestamp rather than an ISO string.
+    const drawnMeals = [{ mealId: 'm1', assignedDate: new Date('2026-09-20T12:00:00').getTime() }];
+    const out = aggregateMealIngredients({ drawnMeals, getMeal, catalog, now: NOW });
+    expect(Object.keys(out).sort()).toEqual(['g1', 'g2']);
+  });
+});

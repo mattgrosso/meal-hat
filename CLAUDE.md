@@ -758,6 +758,62 @@ Order matters because the list is capped at 200: **what is on the shopping list
 first**, then templates, then the rest of the catalog. One bad name (empty, or
 over 60 characters) is dropped rather than 400ing the whole list.
 
+### The fridge looks like meal-hat on a phone, and like Perishable on the wall
+
+Matt, 2026-09-20: *"Bring the fridge into meal hat, incorporate it into the
+design of the main site."*
+
+The black full-bleed page was going on for BOTH surfaces — a hangover from
+Perishable owning the whole screen — which is exactly why the fridge "felt like
+a separate thing". `body.fridge-active` is now added only in wall mode, and the
+root carries `.wall` or `.phone`.
+
+On a phone it is an ordinary meal-hat screen: the house `Header`, Mulish,
+white, Bootstrap buttons in the app's palette. That header is also the answer
+to "no easy way to get back" — tapping the icon goes home. **It renders only
+when signed in**, and that condition is load-bearing: this same component is
+what the wall tablet shows if it ever reports under 900px, and the tablet is a
+member of no hat.
+
+**The sheets are shared, so they are themed by TOKEN, not forked.** The wall
+opens add-by-hand and the change log; the phone opens all four. They used to
+hard-code Perishable's palette, so bringing the phone into meal-hat's design
+would have meant maintaining two copies of every sheet. Instead `.fridge-app`
+declares `--fr-surface`, `--fr-text`, `--fr-muted`, `--fr-line`, `--fr-accent`
+and the rest, and redefines them under `&.phone`. A sheet says
+`var(--fr-surface)` and comes out black on the wall and white on the phone
+knowing nothing about which it is in. The wall's values reproduce exactly what
+it looked like before — writing them down is what makes the standing "don't
+change the wall" rule cheap to keep.
+
+`CountdownTimer` and `AddTimerButton` are wall-only and keep the dark palette
+outright.
+
+### Today's meal belongs on today's shopping list
+
+`aggregateMealIngredients` filtered `new Date(assignedDate) >= today`, and a
+bare `YYYY-MM-DD` parses as **UTC midnight** — 8pm the previous day in Matt's
+timezone. So a meal drawn for TODAY sorted before local midnight and its
+ingredients silently never reached the shopping list. Every day, all year.
+
+He found it by noticing an absence, which is the hardest kind: *"I didn't say
+that we have sausage but it isn't on the shopping list."* Sausage Pasta was
+drawn for that very day; sausage, penne and tomato sauce were missing.
+
+**This is the third time this exact trap has been paid for in this repo.**
+`formatDate` carried a comment warning about it, `nextMeal` didn't and shipped
+a bug, the fix landed in `schedule.js` as `nextMealId` — and this function,
+in a different file, never got it. Dates are compared as ISO strings here now:
+they sort chronologically and involve no parsing at all. **Anything that
+compares an `assignedDate` should do the same; reach for `toISODate`.**
+
+Worth knowing separately: the shopping list is a STORED node, regenerated only
+on a draw or a schedule edit. Fixing a derivation bug does not repair a list
+already written — `scripts/add-missing-meal-rows.mjs` did that, and its own
+lesson is in its header (a PURCHASED row still counts as covering a grocery;
+skipping them would have sent him back round the shop for six things already
+in the trolley).
+
 ### Leaving the app mid-scan is safe
 
 Matt, 2026-09-20, after his first real read-through: *"Is it safe for me to

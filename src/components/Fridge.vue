@@ -1,5 +1,5 @@
 <template>
-  <div class="fridge-app">
+  <div class="fridge-app" :class="viewMode">
     <!-- Not connected: no fridge key, or the database refused ours. On a wall
          display this must be LOUD — a quiet failure is an invisible one, and
          nobody notices a blank kitchen screen for a week. -->
@@ -98,8 +98,11 @@
     <HistorySheet v-if="showHistory" @close="showHistory = false" />
 
     <!-- The wall display's look is deliberately untouched, so the way in to
-         the log there is the build stamp that was already in the corner. -->
+         the log THERE is the build stamp that was already in the corner.
+         The phone has a "What's changed" button and the house header carries
+         its own stamp, so showing this one too put two stamps on one screen. -->
     <button
+      v-if="!isPhone"
       class="build-stamp"
       :disabled="notConnected"
       title="What's changed"
@@ -244,14 +247,23 @@ export default {
     }
   },
   mounted () {
-    // The dark full-bleed look belongs to this screen only. Perishable set it
-    // on `body` from an unscoped stylesheet, which is fine when the app is the
-    // whole page and ruinous here — it would repaint every meal-hat screen and
-    // fight Bootstrap's reboot. A class on body, added and removed with the
-    // route, keeps the wall display looking exactly as it did.
-    document.body.classList.add('fridge-active');
-
     this.viewMode = resolveViewMode();
+
+    // THE BLACK PAGE IS THE WALL'S, AND ONLY THE WALL'S (2026-09-20).
+    //
+    // It used to go on for both. Perishable owned the whole screen and set it
+    // on `body`; the merge kept that behind a class so it could be taken off
+    // again, but left it applying to the phone too — which is why Matt said
+    // the fridge "feels like it's a separate thing" from meal-hat. On a phone
+    // it now looks like every other page in the app: Mulish, white, the
+    // house header, Bootstrap buttons.
+    //
+    // The wall keeps its Roboto Serif on black exactly as it was. That is a
+    // standing rule, and this is the change that makes the rule cheap to keep:
+    // the two surfaces are now styled apart on purpose rather than by
+    // accident.
+    if (this.viewMode === 'wall') document.body.classList.add('fridge-active');
+
     this.connect();
   },
   beforeUnmount () {
@@ -410,14 +422,63 @@ body.fridge-active {
   box-sizing: border-box;
 }
 
+/* ONE SET OF TOKENS, TWO SURFACES.
+ *
+ * The sheets (add by hand, the talk-through, the receipt scan, the change log)
+ * are shared: the wall opens the first two and the phone opens all four. They
+ * used to hard-code Perishable's dark palette, which is why bringing the phone
+ * into meal-hat's design would otherwise have meant forking every one of them.
+ *
+ * So the colours are named here and redefined per surface. A sheet says
+ * `var(--fr-surface)` and comes out black on the wall and white on the phone
+ * with no knowledge of which it is in. The wall's values reproduce exactly
+ * what it looked like before — that is the point of writing them down. */
 .fridge-app {
+  --fr-bg: #000;
+  --fr-surface: #1a1a1a;
+  --fr-text: #fff;
+  --fr-muted: rgba(255, 255, 255, 0.6);
+  --fr-faint: rgba(255, 255, 255, 0.4);
+  --fr-line: rgba(255, 255, 255, 0.12);
+  --fr-field: rgba(255, 255, 255, 0.07);
+  --fr-accent: #4caf50;
+  --fr-danger: #ffab91;
+  --fr-warn: #ffcc80;
+  /* Behind a sheet. Dark over the wall's black; lighter over a white page, or
+     the sheet has no edge at all. */
+  --fr-scrim: rgba(0, 0, 0, 0.8);
+  --fr-font: "Roboto Serif", serif;
+  --fr-mono: "IBM Plex Mono", monospace;
+
   min-height: 100vh;
   width: 100%;
   padding: 16px;
   /* Set here and not only on body: meal-hat's #app puts Mulish on everything
    * beneath it, and inheritance walks through #app before it reaches the
    * fridge. Perishable's wall is Roboto Serif and stays that way. */
-  font-family: "Roboto Serif", serif;
+  font-family: var(--fr-font);
+
+  /* The phone is a meal-hat page. Same palette as every other screen: Mulish,
+     the house green, Bootstrap's body colour on white. */
+  &.phone {
+    --fr-bg: #fff;
+    --fr-surface: #fff;
+    --fr-text: #212529;
+    --fr-muted: #6c757d;
+    --fr-faint: #adb5bd;
+    --fr-line: #dee2e6;
+    --fr-field: #f8f9fa;
+    --fr-accent: #408558;
+    --fr-danger: #f8333c;
+    --fr-warn: #b06a00;
+    --fr-scrim: rgba(33, 37, 41, 0.5);
+    --fr-font: "Mulish", sans-serif;
+
+    min-height: auto;
+    padding: 0;
+    background: #fff;
+    color: var(--fr-text);
+  }
 
   .timers-grid {
     display: grid;

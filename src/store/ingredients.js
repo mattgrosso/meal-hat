@@ -1,3 +1,5 @@
+import { toISODate, todayISO } from './schedule';
+
 // Pure ingredient/grocery logic — no Firebase, Vuex, or DOM dependencies, so it
 // can be unit-tested directly. The store and AddMeal delegate to these helpers;
 // the store keeps only the thin wiring (reading state, persisting to Firebase).
@@ -27,10 +29,26 @@ export function aggregateMealIngredients ({ drawnMeals, getMeal, catalog = {}, n
     return mealIngredients;
   }
 
-  const today = new Date(now);
-  today.setHours(0, 0, 0, 0);
-
-  const upcomingMeals = drawnMeals.filter((drawnMeal) => new Date(drawnMeal.assignedDate) >= today);
+  // COMPARED AS ISO STRINGS, NOT AS DATES, and this is the third time this
+  // exact trap has been paid for in this repo.
+  //
+  // `new Date('2026-09-20')` on a bare YYYY-MM-DD parses as UTC MIDNIGHT,
+  // which is 8pm on the 19th in Matt's timezone — so it sorts BEFORE local
+  // midnight, and `>= today` quietly dropped TODAY'S OWN MEAL from the
+  // shopping list. Every day, all year. He found it on 2026-09-20: "I didn't
+  // say that we have sausage but it isn't on the shopping list" — Sausage
+  // Pasta was drawn for that very day, and its sausage, penne and tomato
+  // sauce were the three things missing.
+  //
+  // `formatDate` and `nextMealId` both carry a comment about this; the fix
+  // landed in schedule.js and this function never got it. ISO date strings
+  // sort chronologically and involve no parsing at all, so there is nothing
+  // to get wrong.
+  const today = todayISO(now);
+  const upcomingMeals = drawnMeals.filter((drawnMeal) => {
+    const date = toISODate(drawnMeal.assignedDate);
+    return date ? date >= today : false;
+  });
 
   upcomingMeals.forEach((drawnMeal) => {
     const meal = getMeal(drawnMeal.mealId);
