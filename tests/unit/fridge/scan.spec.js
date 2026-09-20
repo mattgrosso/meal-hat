@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { submitScan, submitTranscript, awaitScan, ScanError, POLL_TIMEOUT_MS } from '../../../src/utils/fridge/scan.js'
+import { submitScan, submitTranscript, awaitScan, ScanError, MAX_POLLS } from '../../../src/utils/fridge/scan.js'
 import { fitWithin, base64FromDataUrl, preparePhoto, renderAtEdge } from '../../../src/utils/fridge/photo.js'
 
 const options = (fetchImpl, extra = {}) => ({
@@ -95,13 +95,32 @@ describe('awaitScan', () => {
   })
 
   it('gives up rather than spinning forever', async () => {
-    let clock = 0
-    const result = await awaitScan('abc', options(
-      async () => reply(200, { status: 'pending' }),
-      { now: () => { clock += 30_000; return clock }, timeout: POLL_TIMEOUT_MS }
-    )).catch((error) => error)
+    const fetchImpl = vi.fn(async () => reply(200, { status: 'pending' }))
+    const result = await awaitScan('abc', options(fetchImpl, { maxPolls: 5 }))
+      .catch((error) => error)
     expect(result).toBeInstanceOf(ScanError)
     expect(result.message).toMatch(/longer than it should/)
+    expect(fetchImpl).toHaveBeenCalledTimes(5)
+  })
+
+  // THE "IS IT SAFE TO LEAVE THE APP?" BUG (Matt, 2026-09-20). Giving up after
+  // four minutes of WALL CLOCK is wrong on a phone: lock the screen for five
+  // minutes and the first check after unlocking fails a deadline that expired
+  // while nothing was running, reporting a job that finished twenty seconds in
+  // as broken. A frozen tab isn't polling, so it must not run down a clock.
+  it('does not give up because the phone was asleep', async () => {
+    const replies = [reply(200, { status: 'pending' }), reply(200, { status: 'done', items: [] })]
+    // An hour passes between the two polls — the tab was frozen.
+    let clock = 0
+    const result = await awaitScan('abc', options(
+      async () => replies.shift(),
+      { now: () => { clock += 60 * 60_000; return clock } }
+    ))
+    expect(result.status).toBe('done')
+  })
+
+  it('counts polls, not minutes', () => {
+    expect(MAX_POLLS).toBeGreaterThan(1)
   })
 
   it('reports how long it has been waiting', async () => {

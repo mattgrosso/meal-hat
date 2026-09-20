@@ -205,22 +205,30 @@ export const talkPayload = (review, now) => {
     (item) => item.included && Number.isInteger(item.days) && item.days > 0
   )
 
-  const timers = []
-  included.forEach((item) => {
+  // ONE TIMER PER FOOD, carrying how many. This was written the other way
+  // first — a timer per package, on the theory that the record had always
+  // meant one physical thing — and Matt's first real read-through showed why
+  // that is wrong: "I'm looking at the screen on the wall and I'm seeing lots
+  // of duplicates. I see four entries for hot dogs... five for hot dog buns."
+  // 41 extra cards on a wall whose whole job is to be glanced at.
+  //
+  // The data model already wanted this: `consume.js` decrements `timer
+  // .quantity` and `packagesOnHand` sums it, so a single timer holding six is
+  // understood everywhere. Six identical cards were never buying anything.
+  const timers = included.map((item) => {
     const expiry = new Date((item.startsAt || now).getTime())
     expiry.setDate(expiry.getDate() + item.days)
-    // Two of a thing are two timers, not one timer holding two — that is what
-    // the record has always meant, and it is what lets half of it be eaten.
     const count = Math.max(1, Math.round(item.quantity ?? 1))
-    for (let i = 0; i < count; i += 1) {
-      timers.push({
-        title: item.name,
-        expiryDate: expiry.toISOString(),
-        // Off the wall, on the shopping list. The flag rather than a date
-        // threshold, so the decision is made once, here, and every reader
-        // agrees about it afterwards.
-        ...(item.shelfStable ? { shelfStable: true } : {})
-      })
+    return {
+      title: item.name,
+      expiryDate: expiry.toISOString(),
+      // Left off entirely at one, because that is what a bare timer has always
+      // meant and writing `quantity: 1` on every record would say nothing.
+      ...(count > 1 ? { quantity: count } : {}),
+      // Off the wall, on the shopping list. The flag rather than a date
+      // threshold, so the decision is made once, here, and every reader
+      // agrees about it afterwards.
+      ...(item.shelfStable ? { shelfStable: true } : {})
     }
   })
 

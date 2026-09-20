@@ -212,9 +212,23 @@ describe('buildTalkReview', () => {
 });
 
 describe('talkPayload', () => {
-  it('writes one timer per package, so half of it can be eaten later', () => {
+  // Matt's first real read-through put 41 extra cards on the wall: "I see four
+  // entries for hot dogs... five for hot dog buns." A wall you glance at
+  // cannot show the same food six times.
+  it('writes ONE timer per food, carrying how many', () => {
     const review = { newItems: [{ name: 'Peppers', included: true, days: 10, quantity: 3, startsAt: NOW }] };
-    expect(talkPayload(review, NOW).timers.length).toBe(3);
+    const { timers } = talkPayload(review, NOW);
+    expect(timers.length).toBe(1);
+    expect(timers[0].quantity).toBe(3);
+  });
+
+  it('leaves quantity off entirely at one', () => {
+    // A bare timer has always meant one, so writing quantity: 1 everywhere
+    // would say nothing and would make every old record look different.
+    const review = { newItems: [{ name: 'Milk', included: true, days: 7, quantity: 1, startsAt: NOW }] };
+    expect(talkPayload(review, NOW).timers[0].quantity).toBeUndefined();
+    const noQty = { newItems: [{ name: 'Milk', included: true, days: 7, startsAt: NOW }] };
+    expect(talkPayload(noQty, NOW).timers[0].quantity).toBeUndefined();
   });
 
   it('counts the days from today, landing on the right date', () => {

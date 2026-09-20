@@ -48,6 +48,7 @@
       <div v-else-if="stage === 'reading'" class="reading-stage">
         <div class="talk-spinner"></div>
         <p class="reading-text">Working through what you said…</p>
+        <p class="reading-safe">You can leave the app — it'll finish either way.</p>
         <p class="reading-sub">{{ elapsedLabel }}</p>
       </div>
 
@@ -58,7 +59,15 @@
            work already done, and it exists because being told what happened
            is not the same as being asked to approve it. -->
       <div v-else-if="stage === 'done'" class="review-stage">
-        <p class="done-line">{{ doneMessage }}</p>
+        <!-- The Done button sits at the TOP. Matt, 2026-09-20: "the done
+             button should be at the top so I don't have to scroll through it
+             all if I don't want to." The list below is there to be read if he
+             wants it, not waded through to get out. Sticky, so it stays
+             reachable once he does start scrolling. -->
+        <div class="done-bar">
+          <p class="done-line">{{ doneMessage }}</p>
+          <button class="done-btn" @click="$emit('close')">Done</button>
+        </div>
 
         <template v-if="report.added.length">
           <h3 class="pile-head">Added ({{ report.added.length }})</h3>
@@ -108,9 +117,6 @@
           </ul>
         </template>
 
-        <div class="review-actions">
-          <button class="confirm-btn" @click="$emit('close')">Done</button>
-        </div>
       </div>
 
     </div>
@@ -132,11 +138,13 @@
 //
 // The endpoint, the auth and the job pipeline are the scan flow's, unchanged.
 
-import { readTranscript, ScanError } from '@/utils/fridge/scan'
+import { submitTranscript, awaitScan, ScanError } from '@/utils/fridge/scan'
 import { ensureSession } from '@/firebase'
 import { buildTalkReview, talkPayload } from '@/store/fridge/talkReview'
 import { computeTimeLeft, formatDaySpan } from '@/store/fridge/timers'
 import { saveDraft, readDraft, clearDraft } from '@/utils/fridge/talkDraft'
+import { rememberJob, readPendingJob, clearPendingJob } from '@/utils/fridge/pendingJob'
+import { requestNotifyPermission, notifyDone } from '@/utils/fridge/notify'
 import { knownFoodNames } from '@/store/fridge/vocabulary'
 
 export default {
@@ -153,6 +161,7 @@ export default {
   data () {
     return {
       stage: 'talk',
+      resuming: false,
       transcript: '',
       report: { added: [], confirmed: [], removed: [], unclear: [] },
       restored: false,
@@ -186,6 +195,7 @@ export default {
       return `${hours}h ago`
     },
     elapsedLabel () {
+      if (this.resuming) return 'picking up where it left off'
       return this.elapsed < 10
         ? 'this takes a moment'
         : `${this.elapsed}s — still going`
@@ -224,6 +234,16 @@ export default {
     }
   },
   mounted () {
+    // A read-through that was still being worked on when the app went away.
+    // Collecting it is the whole reason leaving is safe: the model has already
+    // finished and the answer is sitting in S3, so this usually resolves in
+    // one poll. See pendingJob.js.
+    const pending = readPendingJob()
+    if (pending?.kind === 'talk') {
+      this.resume(pending)
+      return
+    }
+
     const draft = readDraft()
     if (draft) {
       this.transcript = draft.text
@@ -256,8 +276,37 @@ export default {
       this.$emit('close')
     },
 
+    // Pick up a job submitted before the app was closed, and apply it.
+    async resume (pending) {
+      this.stage = 'reading'
+      this.resuming = true
+      try {
+        const user = await ensureSession()
+        const idToken = user ? await user.getIdToken() : ''
+        const result = await awaitScan(pending.id, { householdKey: this.householdKey, idToken })
+        await this.applyResult(result)
+      } catch (error) {
+        // A job that has expired or failed is not recoverable, and the draft
+        // is still here — so drop the pointer and put him back in the box with
+        // his words rather than on an error he can do nothing about.
+        clearPendingJob()
+        this.errorMessage = error instanceof ScanError
+          ? `${error.message} Your words are still here.`
+          : 'That read-through did not finish. Your words are still here.'
+        const draft = readDraft()
+        if (draft) { this.transcript = draft.text; this.restored = true; this.restoredAt = draft.at }
+        this.stage = 'talk'
+      } finally {
+        this.resuming = false
+      }
+    },
+
     async send () {
       this.errorMessage = ''
+      // Asked here, with the spinner about to appear, rather than on a cold
+      // screen — a permission prompt with no context in front of it is the one
+      // that gets denied forever.
+      requestNotifyPermission()
       this.stage = 'reading'
       this.elapsed = 0
       this.ticker = setInterval(() => { this.elapsed += 1 }, 1000)
@@ -269,40 +318,18 @@ export default {
         // been established yet and a missing token reads as a rejected key.
         const user = await ensureSession()
         const idToken = user ? await user.getIdToken() : ''
-        const result = await readTranscript(this.transcript, {
-          householdKey: this.householdKey,
-          idToken,
-          // His own vocabulary, so the answer comes back in it — and in the
-          // names the SHOPPING LIST joins on, not only the fridge's.
-          knownFoods: this.knownFoods
-        })
+        const auth = { householdKey: this.householdKey, idToken }
 
-        const now = new Date()
-        const review = buildTalkReview(result, this.timers, this.templates, now)
+        // Submit and REMEMBER, in that order, before waiting on anything. The
+        // answer lands in S3 whether or not this page is still alive to
+        // collect it — so the id is the receipt, and it is written down before
+        // there is any chance of the page going away. See pendingJob.js.
+        const jobId = await submitTranscript(this.transcript, { ...auth, knownFoods: this.knownFoods })
+        rememberJob({ id: jobId, kind: 'talk' })
 
-        // NO CONFIRMATION STEP. Read it, apply it, say what happened. Matt was
-        // explicit twice: "I don't want any kind of checks." Every row is
-        // included and every unmentioned timer goes, which is exactly what the
-        // review screen defaulted to anyway — the screen was only ever a place
-        // to change one's mind, and he does not want the chance.
-        //
-        // What makes that safe is not carefulness here, it is the loop: a
-        // talk-through happens every week and rebuilds the whole picture, so a
-        // wrong removal costs one mention next time. The change log keeps the
-        // record either way.
-        const payload = talkPayload(review, now)
-        const applied = await this.$store.dispatch('fridge/applyTalk', { payload })
+        const result = await awaitScan(jobId, auth)
 
-        this.applied = applied
-        this.report = {
-          added: review.newItems,
-          confirmed: review.confirmed,
-          removed: review.notHeard,
-          unclear: review.unclear
-        }
-        clearDraft()
-        this.$emit('applied', applied)
-        this.stage = 'done'
+        await this.applyResult(result)
       } catch (error) {
         this.errorMessage = error instanceof ScanError
           ? error.message
@@ -312,6 +339,39 @@ export default {
         clearInterval(this.ticker)
         this.ticker = null
       }
+    },
+
+    // NO CONFIRMATION STEP. Read it, apply it, say what happened. Matt was
+    // explicit twice: "I don't want any kind of checks." Every row is included
+    // and every unmentioned timer goes, which is what the review screen
+    // defaulted to anyway — it was only ever a place to change one's mind.
+    //
+    // What makes that safe is not carefulness here, it is the loop: a
+    // talk-through rebuilds the whole picture every week, so a wrong removal
+    // costs one mention next time. The change log keeps the record either way.
+    //
+    // Shared by a fresh submit and by a job resumed after the app was closed,
+    // so both land in exactly the same place.
+    async applyResult (result) {
+      const now = new Date()
+      const review = buildTalkReview(result, this.timers, this.templates, now)
+      const applied = await this.$store.dispatch('fridge/applyTalk', {
+        payload: talkPayload(review, now)
+      })
+
+      this.applied = applied
+      this.report = {
+        added: review.newItems,
+        confirmed: review.confirmed,
+        removed: review.notHeard,
+        unclear: review.unclear
+      }
+      clearDraft()
+      clearPendingJob()
+      this.$emit('applied', applied)
+      this.stage = 'done'
+      // Only fires if he is looking elsewhere — see notify.js.
+      notifyDone('Fridge updated', this.doneMessage)
     },
 
     formatDays (days) {
@@ -520,11 +580,38 @@ export default {
   margin: 0;
 }
 
-.done-line {
-  color: #fff;
-  font-size: 1.05rem;
-  line-height: 1.5;
-  margin: 0 0 0.5rem;
+.done-bar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  /* The sheet scrolls under this, so it needs its own background or the list
+     shows through the gap between rows. */
+  background: #1a1a1a;
+  padding: 0 0 0.75rem;
+  margin-bottom: 0.25rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+
+  .done-line {
+    flex: 1;
+    color: #fff;
+    font-size: 1rem;
+    line-height: 1.4;
+    margin: 0;
+  }
+
+  .done-btn {
+    flex: none;
+    padding: 0.7rem 1.4rem;
+    background: #4caf50;
+    color: #fff;
+    border: 0;
+    border-radius: 8px;
+    font-size: 1rem;
+    cursor: pointer;
+  }
 }
 
 .pile-head {

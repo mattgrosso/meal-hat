@@ -11,10 +11,19 @@
 export const SCAN_URL = 'https://ifnzds1okb.execute-api.us-east-1.amazonaws.com/scan'
 
 export const POLL_EVERY_MS = 4000
+
 // Comfortably past the slowest real scan plus a cold start. A job that hasn't
 // finished by now isn't slow, it's broken, and saying so beats a spinner that
 // never stops.
+//
+// COUNTED IN POLLS, NOT IN WALL CLOCK, and that distinction is the whole of
+// Matt's "is it safe to leave the app?" (2026-09-20). Elapsed time was the
+// obvious measure and it is wrong on a phone: lock the screen for five minutes
+// and the very first check after unlocking fails a four-minute deadline,
+// reporting a job that finished twenty seconds in as broken. A frozen tab
+// isn't polling, so a frozen tab shouldn't be running down a clock.
 export const POLL_TIMEOUT_MS = 4 * 60 * 1000
+export const MAX_POLLS = Math.ceil(POLL_TIMEOUT_MS / POLL_EVERY_MS)
 
 export class ScanError extends Error {
   constructor (message, { retryable = false } = {}) {
@@ -79,16 +88,18 @@ export const awaitScan = async (jobId, {
   sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms) }),
   now = () => Date.now(),
   every = POLL_EVERY_MS,
-  timeout = POLL_TIMEOUT_MS,
+  maxPolls = MAX_POLLS,
   onTick = () => {}
 } = {}) => {
   const startedAt = now()
+  let polls = 0
 
   for (;;) {
-    if (now() - startedAt > timeout) {
+    if (polls >= maxPolls) {
       throw new ScanError('That scan is taking longer than it should. Try again.')
     }
     await sleep(every)
+    polls += 1
     onTick(now() - startedAt)
 
     let body

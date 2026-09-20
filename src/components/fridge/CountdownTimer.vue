@@ -1,7 +1,13 @@
 <template>
   <div class="timer-card" :class="timerStatus" @dblclick="handleDoubleClick" @touchstart="handleTouchStart" @touchend="handleTouchEnd">
     <div class="timer-header" :class="{'edit-mode-header': editMode}">
-      <h2 class="timer-title">{{ timer.title }}</h2>
+      <h2 class="timer-title">
+        {{ timer.title }}<!--
+        A count rides ON the card rather than making another card. Six
+        identical cards on a wall you glance at is not information, it is
+        noise — Matt's first read-through put 41 of them up.
+     --><span v-if="timer.quantity > 1" class="timer-count">×{{ timer.quantity }}</span>
+      </h2>
       <button class="remove-btn" @click="$emit('remove', timer.id)">×</button>
     </div>
 
@@ -258,6 +264,12 @@ export default {
     flex: 1;
     margin-right: 1rem;
     transition: font-size 0.2s ease;
+  }
+
+  .timer-count {
+    margin-left: 0.5rem;
+    opacity: 0.55;
+    font-size: 0.75em;
   }
 
   .remove-btn {

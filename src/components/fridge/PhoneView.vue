@@ -1,5 +1,16 @@
 <template>
   <div class="phone-view">
+    <!-- The way back. Matt, 2026-09-20: "there's no easy way for me to get back
+         from the fridge dialog to the main meal-hat site."
+         Signed-in only, and that condition is not a detail: this same screen
+         is what the WALL TABLET shows if it ever reports under 900px, and the
+         tablet is a member of no hat and has nowhere to go back to. It would
+         be a link to a login page nobody can complete in a kiosk. -->
+    <nav v-if="signedIn" class="phone-nav">
+      <button class="nav-back" @click="$router.push('/')">‹ Meal Hat</button>
+      <button class="nav-link" @click="$router.push('/shopping-list')">Shopping list</button>
+    </nav>
+
     <header class="phone-header">
       <h1>Fridge</h1>
       <p class="phone-sub">Talk it through, scan a receipt, or add one by hand.</p>
@@ -108,6 +119,9 @@ export default {
     canPair () {
       return Boolean(this.$store.state.fridgeKeyForHat)
     },
+    signedIn () {
+      return Boolean(this.$store.state.userEmail)
+    },
     pairCodeValid () {
       return Boolean(normalizePairingCode(this.pairCode))
     },
@@ -165,6 +179,33 @@ export default {
   // bottom-left corner and sat on top of the last rows of the on-hand list.
   padding: 1.5rem 1.5rem calc(5rem + env(safe-area-inset-bottom));
   text-align: center;
+}
+
+.phone-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+
+  .nav-back,
+  .nav-link {
+    background: none;
+    border: 0;
+    color: rgba(255, 255, 255, 0.6);
+    font-family: inherit;
+    font-size: 1rem;
+    padding: 0.5rem 0;
+    cursor: pointer;
+  }
+
+  .nav-back {
+    color: rgba(255, 255, 255, 0.85);
+  }
+
+  .nav-link {
+    margin-left: auto;
+    text-decoration: underline;
+  }
 }
 
 .phone-header {

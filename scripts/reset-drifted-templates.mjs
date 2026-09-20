@@ -47,7 +47,21 @@ const BACKUP_DIR = join(REPO, 'backups')
 
 // Foods to forget entirely: every template spelling goes, and the catalog's
 // shelf life with it.
-const RESET = ['Sandwich Bread', 'Cheddar Cheese', 'Veggie Dogs']
+//
+// EMPTY ON PURPOSE, AND THIS IS THE INTERESTING PART OF THIS SCRIPT.
+//
+// It held ['Sandwich Bread', 'Cheddar Cheese', 'Veggie Dogs'] and did its job
+// on 2026-09-20. Hours later Matt's read-through re-created all three from
+// real sightings — Cheddar at 7 days, Veggie Dogs at 21 — which is exactly
+// what forgetting them was FOR. Re-running the script at that point would have
+// deleted the good new values and started the cycle again.
+//
+// A "forget this" instruction is not idempotent the way a merge is. A merge
+// describes a state the data should be in and can be reapplied forever; a
+// reset describes a moment. So the list is emptied once it has run, and the
+// record of what it did lives in git rather than in a constant that will fire
+// again the next time somebody runs this for an unrelated reason.
+const RESET = []
 
 // Foods to keep, but with one spelling. The value is what the household has
 // learned and is NOT in question here — only the duplication is.
@@ -63,12 +77,32 @@ const MERGE_ONLY = ['Veggie patties', 'Cherry Tomatoes', 'Parmesan Cheese', 'Ref
 // set.
 const SET_DAYS = { 'Hot Dogs': 5 }
 
-// Timers already on the wall carrying a drifted date. These do NOT fix
-// themselves: a talk-through CONFIRMS a tracked food rather than restarting
-// its clock — deliberately, so a weekly walk cannot keep a dying carton of
-// milk alive forever — so a wrong expiry survives every future read-through.
-// Deleting them means the next talk-through re-adds them with sane dates.
-const DROP_TIMERS_FOR = ['Sandwich Bread', 'Cheddar Cheese']
+// Timers on the wall carrying a drifted date. These do NOT fix themselves: a
+// talk-through CONFIRMS a tracked food rather than restarting its clock —
+// deliberately, so a weekly walk cannot keep a dying carton of milk alive
+// forever — so a wrong expiry survives every future read-through. Deleting
+// them means the next talk-through re-adds them with sane dates.
+//
+// Emptied for the same reason as RESET, and more urgently: it held
+// ['Sandwich Bread', 'Cheddar Cheese'], and by the time this ran again those
+// names matched BRAND NEW timers from Matt's read-through. Naming a food here
+// deletes whatever currently carries that name, which is only ever safe in
+// the same breath as putting it there.
+const DROP_TIMERS_FOR = []
+
+// One food the catalog holds twice, found by Matt: "I said we had frozen
+// veggie patties and you've interpreted that, but then still made it seem like
+// we needed to buy veggie patties for the meal."
+//
+// The catalog had `Veggie patties` (packageSize 4, used by real meals) AND
+// `Frozen Veggie Patties` (invented by the old migration, used by nothing).
+// His read-through matched the second, so the shopping row joining on the
+// first never saw it and went on asking him to buy what was in the freezer.
+// The same severed join as the hamburger buns and `Hamburger bund`.
+//
+// The dying name is retitled on any live TIMER rather than deleted — the food
+// is in the freezer, it just had the wrong label on it.
+const RENAME_INTO = [{ from: 'Frozen Veggie Patties', to: 'Veggie patties' }]
 
 const norm = (name) => String(name || '').trim().toLowerCase()
 
@@ -83,13 +117,14 @@ const remove = async (path) => {
   await run('firebase', ['database:remove', path, '--project', PROJECT, '--force'])
 }
 
-let fridgeKey, templates, catalog, timers
+let fridgeKey, templates, catalog, timers, meals
 try {
   fridgeKey = await get(`/${HAT}/fridgeKey`)
   if (!fridgeKey) throw new Error('this hat has no fridge')
   templates = (await get(`/fridge/${fridgeKey}/templates`)) || {}
   catalog = (await get(`/${HAT}/grocery-catalog`)) || {}
   timers = (await get(`/fridge/${fridgeKey}/timers`)) || {}
+  meals = (await get(`/${HAT}/meals`)) || {}
 } catch (error) {
   console.error('Could not read. Is `firebase login` still valid?')
   console.error(error.stderr || error.message)
@@ -165,6 +200,32 @@ for (const [name, days] of Object.entries(SET_DAYS)) {
       plan.push(`SET ${entry.name}.${field} — ${entry[field] ?? 'unset'} -> ${days}`)
       writes.push([`/${HAT}/grocery-catalog/${entry.id}/${field}`, days])
     }
+  }
+}
+
+for (const { from, to } of RENAME_INTO) {
+  const survivor = catalogNamed(to)[0]
+  if (!survivor) {
+    console.error(`No catalog entry named "${to}" to merge into.`)
+    process.exit(1)
+  }
+  for (const [id, timer] of Object.entries(timers)) {
+    if (norm(timer?.title) !== norm(from)) continue
+    plan.push(`RETITLE timer ${id} — "${timer.title}" -> "${survivor.name}"`)
+    writes.push([`/fridge/${fridgeKey}/timers/${id}/title`, survivor.name])
+  }
+  for (const [key, template] of templatesNamed(from)) {
+    plan.push(`DROP template "${key}" (${template.days} days) — folded into ${survivor.name}`)
+    deletes.push(`/fridge/${fridgeKey}/templates/${key}`)
+  }
+  for (const entry of catalogNamed(from)) {
+    const used = Object.values(meals).some((m) => (m.ingredients || []).some((i) => i.groceryItemId === entry.id))
+    if (used) {
+      console.error(`${entry.id} is used by a meal — not a safe merge, resolve by hand.`)
+      process.exit(1)
+    }
+    plan.push(`DROP catalog entry ${entry.id} ("${entry.name}", used by no meal)`)
+    deletes.push(`/${HAT}/grocery-catalog/${entry.id}`)
   }
 }
 

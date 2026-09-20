@@ -758,6 +758,63 @@ Order matters because the list is capped at 200: **what is on the shopping list
 first**, then templates, then the rest of the catalog. One bad name (empty, or
 over 60 characters) is dropped rather than 400ing the whole list.
 
+### Leaving the app mid-scan is safe
+
+Matt, 2026-09-20, after his first real read-through: *"Is it safe for me to
+leave the app and do other things while it's thinking?"* It was not, and two
+separate things were wrong.
+
+**The answer was only ever collected by the page that asked for it.** A scan's
+result lands in S3; close the tab — or let iOS discard a backgrounded web
+view, which it does freely — and the model has done the work, been paid for,
+and nobody picks the answer up. Nothing applied, nothing said so. Fixed by
+`utils/fridge/pendingJob.js`: the job id is written to storage the instant it
+is submitted, and both flows look for one on mount. **Coming back to the app IS
+the recovery**, and it usually resolves in one poll because the answer has been
+waiting.
+
+**And the poll gave up after four minutes of WALL CLOCK.** Lock a phone for
+five minutes and the first check after unlocking fails a deadline that expired
+while nothing was running — reporting a job that finished in twenty seconds as
+broken. It counts POLLS now (`MAX_POLLS`). A frozen tab is not polling, so a
+frozen tab must not run down a clock.
+
+`utils/fridge/notify.js` fires a local notification when a run finishes while
+the page is hidden. That is all it is: a page that is still alive telling him
+it is done. It is not web push and cannot cover a discarded page — what covers
+that is the resume above, which is why the two shipped together.
+
+### One timer per food, carrying a count
+
+His first read-through put **41 duplicate cards** on the wall: *"I see four
+entries for hot dogs. I see five entries for hot dog buns. I see three entries
+for pesto."* 120 timers for 79 foods.
+
+My bug, and one I had written a confident comment defending: `talkPayload`
+emitted one timer PER PACKAGE, reasoning that a timer had always meant one
+physical thing. The data model never wanted that — `consume.js` decrements
+`timer.quantity` and `packagesOnHand` sums it, so a single timer holding six is
+understood everywhere it matters. Six identical cards bought nothing and cost
+the wall the one thing it is for.
+
+`quantity` is left OFF at one, because a bare timer has always meant one and
+writing `quantity: 1` everywhere would say nothing while making every older
+record look different. `scripts/collapse-duplicate-timers.mjs` repaired the
+data.
+
+### A "forget this" script is not idempotent, and must be emptied after it runs
+
+`scripts/reset-drifted-templates.mjs` held a list of templates to delete. It
+ran, and hours later Matt's read-through re-created all three from real
+sightings — Cheddar at 7 days instead of 74, which is exactly what forgetting
+them was for. Running the script again at that point would have deleted the
+good new values and restarted the cycle; its `DROP_TIMERS_FOR` list would have
+deleted brand-new timers that merely shared a name.
+
+A merge describes a state the data should be in and can be reapplied forever.
+A reset describes a moment. So those lists are emptied once they have run, and
+the record of what they did lives in git.
+
 ### There is no confirmation step, anywhere
 
 Matt, 2026-09-20, after a first pass that only removed the duration pickers:

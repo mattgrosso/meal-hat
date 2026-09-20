@@ -53,7 +53,15 @@
            to notice, not something to approve. -->
       <div v-else-if="stage === 'done'" class="review-stage">
         <p v-if="receiptNote" class="receipt-note">🧾 {{ receiptNote }}</p>
-        <p class="done-line">{{ doneMessage }}</p>
+        <!-- The Done button sits at the TOP. Matt, 2026-09-20: "the done
+             button should be at the top so I don't have to scroll through it
+             all if I don't want to." The list below is there to be read if he
+             wants it, not waded through to get out. Sticky, so it stays
+             reachable once he does start scrolling. -->
+        <div class="done-bar">
+          <p class="done-line">{{ doneMessage }}</p>
+          <button class="done-btn" @click="$emit('close')">Done</button>
+        </div>
 
         <ul v-if="reviewItems.length" class="seen-list">
           <li v-for="(item, index) in reviewItems" :key="index" class="seen-row">
@@ -79,9 +87,6 @@
           </ul>
         </template>
 
-        <div class="review-actions">
-          <button class="confirm-btn" @click="$emit('close')">Done</button>
-        </div>
       </div>
     </div>
   </div>
@@ -425,11 +430,38 @@ export default {
 }
 
 .review-stage {
-  .done-line {
-    color: #fff;
-    font-size: 1.05rem;
-    line-height: 1.5;
-    margin: 0 0 0.75rem;
+  .done-bar {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    /* The sheet scrolls under this, so it needs its own background or the list
+       shows through the gap between rows. */
+    background: #1a1a1a;
+    padding: 0 0 0.75rem;
+    margin-bottom: 0.25rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+
+    .done-line {
+      flex: 1;
+      color: #fff;
+      font-size: 1rem;
+      line-height: 1.4;
+      margin: 0;
+    }
+
+    .done-btn {
+      flex: none;
+      padding: 0.7rem 1.4rem;
+      background: #4caf50;
+      color: #fff;
+      border: 0;
+      border-radius: 8px;
+      font-size: 1rem;
+      cursor: pointer;
+    }
   }
 
   .seen-body {
