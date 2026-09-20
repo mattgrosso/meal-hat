@@ -229,6 +229,7 @@ import {
   renameReviewItem
 } from '@/store/fridge/scanReview'
 import { formatDaySpan } from '@/store/fridge/timers'
+import { knownFoodNames } from '@/store/fridge/vocabulary'
 import { markBusy, clearBusy } from '@/utils/appUpdate'
 
 // The reason string this sheet registers with the auto-update machinery.
@@ -369,7 +370,16 @@ export default {
       this.photosTotal = files.length
       this.photosDone = 0
 
-      const knownFoods = this.templates.map((t) => t.title)
+      // BOTH vocabularies, same as the talk-through — see vocabulary.js. A
+      // receipt line expanded to a name the CATALOG doesn't know creates a
+      // timer that joins to nothing, so the shopping list goes on asking for
+      // food that is in the bag you just carried in. Templates alone was the
+      // old behaviour and it is what let "box of rotini" become "Rotini Pasta".
+      const knownFoods = knownFoodNames({
+        templates: this.templates,
+        catalog: this.$store.state.groceryCatalog || {},
+        shoppingList: this.$store.state.shoppingList || {}
+      })
       const scans = []
       try {
         for (const file of files) {
