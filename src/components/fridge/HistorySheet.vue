@@ -66,8 +66,16 @@ export default {
   position: fixed;
   top: 0;
   left: 0;
+  /* iOS: `100vh` is the LARGE viewport — the height the page would have if
+     the browser toolbars were hidden — so a bottom-aligned sheet is measured
+     against a box taller than what you can actually see, and its last rows sit
+     underneath the toolbar. Matt, 2026-09-20: "the bottom edge is getting cut
+     off... we need to figure out how to make sure that doesn't happen across
+     all these screens." `dvh` tracks the visible area. The `vh` line stays as
+     the fallback for anything that doesn't know `dvh`. */
   width: 100vw;
   height: 100vh;
+  height: 100dvh;
   background: var(--fr-scrim);
   display: flex;
   align-items: center;

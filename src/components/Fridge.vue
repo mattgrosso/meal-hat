@@ -103,7 +103,7 @@
          its own stamp, so showing this one too put two stamps on one screen. -->
     <button
       v-if="!isPhone"
-      class="build-stamp"
+      class="wall-stamp"
       :disabled="notConnected"
       title="What's changed"
       @click="showHistory = true"
@@ -451,6 +451,7 @@ body.fridge-active {
   --fr-mono: "IBM Plex Mono", monospace;
 
   min-height: 100vh;
+  min-height: 100dvh;
   width: 100%;
   padding: 16px;
   /* Set here and not only on body: meal-hat's #app puts Mulish on everything
@@ -492,7 +493,9 @@ body.fridge-active {
     flex-direction: column;
     align-items: center;
     justify-content: center;
+    /* See the dvh note on the sheets: 100vh is the large viewport on iOS. */
     height: 100vh;
+    height: 100dvh;
     text-align: center;
   }
 
@@ -508,6 +511,7 @@ body.fridge-active {
     align-items: center;
     justify-content: center;
     height: 100vh;
+    height: 100dvh;
     text-align: center;
     padding: 2rem;
 
@@ -670,7 +674,23 @@ body.fridge-active {
   // Also the way into the change log. The padding-and-offset dance keeps the
   // glyphs at exactly the 4px/8px they always sat at while giving a finger on a
   // wall tablet something bigger than 10px type to hit.
-  .build-stamp {
+  //
+  // CALLED `wall-stamp`, NOT `build-stamp`, and that rename is a bug fix.
+  //
+  // These styles are deliberately unscoped and nested under `.fridge-app`. The
+  // moment the house `Header` moved INSIDE the fridge (2026-09-20), this rule
+  // started capturing the header's OWN `.build-stamp` — and the two together
+  // set all four offsets on a fixed element: `top: 1px` from the header,
+  // `bottom: -4px` from here, `left: 0` from here, `right: 3px` from there. A
+  // fixed box with all four offsets STRETCHES, so the header's stamp became an
+  // invisible full-viewport overlay that swallowed every tap on the page. What
+  // Matt saw was the logo refusing to go home: his tap was landing on a stamp
+  // covering the whole screen, and tapping the stamp reloads the app.
+  //
+  // The lesson is bigger than the fix: an unscoped rule nested under a layout
+  // class captures anything that layout ever comes to contain. Class names
+  // used here must not be ones the rest of the app uses.
+  .wall-stamp {
     position: fixed;
     bottom: -4px;
     left: 0;

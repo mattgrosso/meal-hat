@@ -758,6 +758,46 @@ Order matters because the list is capped at 200: **what is on the shopping list
 first**, then templates, then the rest of the catalog. One bad name (empty, or
 over 60 characters) is dropped rather than 400ing the whole list.
 
+### An unscoped rule captures whatever its layout comes to contain
+
+`Fridge.vue`'s styles are deliberately unscoped and nested under `.fridge-app`
+(a lazy chunk, so nothing else pays for them). The moment the house `Header`
+moved INSIDE the fridge, that rule set started capturing the header's own
+elements — and `.build-stamp` exists in both.
+
+The result was worse than a cosmetic clash. The two rules between them set ALL
+FOUR offsets on a `position: fixed` element — `top: 1px` and `right: 3px` from
+the header, `bottom: -4px` and `left: 0` from the fridge — and **a fixed box
+with all four offsets stretches**. The header's build stamp became an invisible
+497x848 overlay across the whole page, swallowing every tap. What Matt saw was
+one symptom of it: *"tapping the logo in the top right... here it seems to just
+reload the page"* — his tap was landing on a screen-sized build stamp, and
+tapping a build stamp reloads the app.
+
+The fridge's own stamp is `.wall-stamp` now (it is wall-only anyway).
+`tests/unit/fridge/styles-do-not-leak.spec.js` fails if the unscoped block ever
+shares a class name with `Header.vue` again, and checks every other fridge
+stylesheet is still `scoped`.
+
+### 100vh is the wrong height on iOS
+
+`100vh` is the LARGE viewport — the height the page would have if the browser
+toolbars were hidden. A bottom-aligned sheet measured against it hangs below
+what can actually be seen, and its last rows are unreachable even by scrolling.
+On Matt's 402x633 Safari viewport that was about 100px of sheet below the fold:
+*"the bottom edge is getting cut off... we need to figure out how to make sure
+that doesn't happen across all these screens."*
+
+Every full-height rule in the fridge now reads
+
+    height: 100vh;
+    height: 100dvh;
+
+and the same spec fails if a `100vh` is ever added without the `dvh` line under
+it. Note this is invisible in desktop Chrome, where the two are equal — it can
+only be reproduced on a phone with browser chrome showing, which is why the
+guard is a source scan rather than a rendering test.
+
 ### The fridge looks like meal-hat on a phone, and like Perishable on the wall
 
 Matt, 2026-09-20: *"Bring the fridge into meal hat, incorporate it into the
