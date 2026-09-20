@@ -391,3 +391,94 @@ describe('renameReviewItem', () => {
     expect(item.readAs).toBe('')
   })
 })
+
+// Receipts carry the pantry too, since 2026-09-20.
+//
+// A receipt used to DISCARD tinned and dry food, which quietly broke the weekly
+// loop Matt settled that day: he buys rice, the receipt ignores it, and next
+// week's shopping list asks for rice again. As he put it, the receipt "adds
+// more things to our pantry that weren't on the fridge list because we didn't
+// have them then".
+describe('buildReviewItem — pantry stores on a receipt', () => {
+  const NOW = new Date('2026-09-20T12:00:00Z');
+
+  const line = (over = {}) => ({
+    name: 'Rice',
+    printedText: 'GV LNG GRN RICE 5LB',
+    knownFoodMatch: '',
+    printedDate: '',
+    perishable: false,
+    estimatedShelfLifeDays: 1095,
+    box: null,
+    ...over
+  });
+
+  it('records a tin rather than dropping it, and keeps it off the wall', () => {
+    const row = buildReviewItem(line(), [], NOW);
+    expect(row.name).toBe('Rice');
+    expect(row.shelfStable).toBe(true);
+  });
+
+  it('does NOT stop for input on a pantry store', () => {
+    // "Every new food stops for your input" was written about a printed date
+    // versus a guess. Nobody wants to type a number for a tin of beans.
+    const row = buildReviewItem(line(), [], NOW);
+    expect(row.days).toBe(1095);
+    expect(reviewReady([row])).toBe(true);
+  });
+
+  it('falls back to a long default when the receipt gave no number', () => {
+    const row = buildReviewItem(line({ estimatedShelfLifeDays: 0 }), [], NOW);
+    expect(row.days).toBe(730);
+  });
+
+  it('still stops for input on a new PERISHABLE food', () => {
+    const row = buildReviewItem(line({ name: 'Rhubarb', perishable: true, estimatedShelfLifeDays: 10 }), [], NOW);
+    expect(row.shelfStable).toBe(false);
+    expect(row.days).toBeNull();
+    expect(reviewReady([row])).toBe(false);
+  });
+
+  it('lets a household template overrule the model calling it shelf-stable', () => {
+    // Frozen Spinach at 240 days is pantry by any threshold, and it is on
+    // Matt's wall because he put it there.
+    const row = buildReviewItem(
+      line({ name: 'Frozen Spinach', perishable: false, estimatedShelfLifeDays: 900 }),
+      [{ title: 'Frozen Spinach', days: 240 }],
+      NOW
+    );
+    expect(row.shelfStable).toBe(false);
+    expect(row.days).toBe(240);
+  });
+
+  it('writes the flag onto the timer and teaches NO template', () => {
+    const milk = buildReviewItem(line({ name: 'Milk', perishable: true, estimatedShelfLifeDays: 7 }), [], NOW);
+    // A new perishable food still stops for input, so it carries no duration
+    // until somebody gives it one — which is what the review screen is for.
+    expect(milk.days).toBeNull();
+    milk.days = 7;
+
+    const rows = [buildReviewItem(line(), [], NOW), milk];
+    const payload = confirmPayload(rows, NOW);
+    expect(payload.timers.find((t) => t.title === 'Rice').shelfStable).toBe(true);
+    expect(payload.timers.find((t) => t.title === 'Milk').shelfStable).toBeUndefined();
+    // A pantry template would put the next hand-typed tin of beans on the wall
+    // carrying a two-year countdown.
+    expect(payload.templates.map((t) => t.title)).toEqual(['Milk']);
+  });
+
+  it('a renamed pantry row stays confirmable', () => {
+    const row = buildReviewItem(line(), [], NOW);
+    renameReviewItem(row, 'Basmati Rice', []);
+    expect(row.name).toBe('Basmati Rice');
+    expect(row.days).toBe(1095);
+    expect(reviewReady([row])).toBe(true);
+  });
+
+  it('a pantry row renamed ONTO a template stops being pantry', () => {
+    const row = buildReviewItem(line(), [], NOW);
+    renameReviewItem(row, 'Frozen Spinach', [{ title: 'Frozen Spinach', days: 240 }]);
+    expect(row.shelfStable).toBe(false);
+    expect(row.days).toBe(240);
+  });
+});

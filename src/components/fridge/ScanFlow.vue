@@ -144,7 +144,15 @@
           </div>
           <!-- The receipt line as printed, so a bad expansion is catchable. -->
           <p v-if="item.printedText" class="review-printed">{{ item.printedText }}</p>
-          <div v-if="item.included" class="review-durations">
+          <!-- A pantry store gets no duration ladder. Offering "3 days / 5
+               days / 2 weeks" for a 5lb bag of rice is noise, and the honest
+               reading of its 730 days — "104 weeks 2 days" — is worse than
+               saying nothing. It is tracked so the shopping list knows it is
+               here; the countdown is beside the point. -->
+          <div v-if="item.included && item.shelfStable" class="review-durations">
+            <span class="pantry-chip">pantry — tracked, no countdown</span>
+          </div>
+          <div v-else-if="item.included" class="review-durations">
             <button
               v-if="item.fromTemplate"
               class="duration-chip active"
@@ -174,8 +182,10 @@
               >{{ formatDays(preset) }}</button>
             </template>
           </div>
-          <!-- Backdating is invisible arithmetic; say it out loud. -->
-          <p v-if="item.included && item.daysElapsed > 0 && item.days" class="review-elapsed">
+          <!-- Backdating is invisible arithmetic; say it out loud. Not for a
+               pantry store: "104 weeks 1 day left" on a bag of rice is true,
+               useless, and alarming. -->
+          <p v-if="item.included && !item.shelfStable && item.daysElapsed > 0 && item.days" class="review-elapsed">
             {{ remainingLabel(item) }}
           </p>
         </div>
@@ -836,6 +846,15 @@ export default {
     flex-wrap: wrap;
     gap: 0.5rem;
     margin-top: 0.75rem;
+  }
+
+  /* Not a chip you can press — a statement that this row needs no decision. */
+  .pantry-chip {
+    padding: 0.45rem 0.7rem;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 999px;
+    color: rgba(255, 255, 255, 0.55);
+    font-size: 0.8rem;
   }
 
   .duration-chip {

@@ -758,6 +758,44 @@ Order matters because the list is capped at 200: **what is on the shopping list
 first**, then templates, then the rest of the catalog. One bad name (empty, or
 over 60 characters) is dropped rather than 400ing the whole list.
 
+### The receipt is the SECOND input, not a convenience
+
+Matt corrected me on this the same day, and he was right: *"The receipt
+essentially adds more things to our pantry that weren't on the fridge list
+because we didn't have them then. And it stops me from having to read through
+everything I got from the grocery store."*
+
+Both halves matter. The talk-through describes the house **before** the shop;
+the receipt describes what came in **after** it, which by definition the
+talk-through could not have seen. Two inputs, one inventory — and it saves a
+second brain-dump at the kitchen counter.
+
+**Which exposed a leak: the receipt used to DISCARD tinned and dry food.** The
+prompt said to skip "canned goods, dry pasta and rice, unopened shelf-stable
+items" along with the non-food. Fine when the fridge only tracked perishables;
+a hole in the loop the moment the talk-through started tracking the pantry. He
+buys rice, the receipt ignores it, next week's list asks for rice again.
+
+Receipts now record **all food**, flagged `perishable` or not, and skip only
+NON-food — paper goods, cleaning supplies, totals. Measured on a synthetic
+receipt: 10 foods kept (5 of them pantry, correctly flagged), paper towels,
+detergent and the totals correctly skipped.
+
+`isPerishable` lives in `store/fridge/perishable.js` and is imported by BOTH
+flows on purpose. If they disagreed, a bag of rice would be pantry when spoken
+and perishable when bought, and the wall would fill up with whichever one was
+wrong.
+
+**Two presentation rules for a pantry row**, both learned by looking at one:
+it gets no duration ladder (offering "3 days / 5 days / 2 weeks" for a 5lb bag
+of rice is noise) and no backdating line ("104 weeks 1 day left" is true,
+useless and alarming). It shows `pantry — tracked, no countdown` instead. Note
+`formatDaySpan` only knows weeks and days, which is why any long duration reads
+absurdly — don't route one through it.
+
+A new PERISHABLE food still stops for input. A pantry store does not: nobody
+wants to type a number for a tin of beans.
+
 ### Retiring the camera, carefully
 
 Matt kept **receipts** and retired the other two photo modes. A receipt is

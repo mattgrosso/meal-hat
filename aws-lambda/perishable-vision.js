@@ -235,6 +235,10 @@ const GROCERY_SCHEMA = {
             type: 'string',
             description: 'A use-by / best-by / sell-by date printed on the packaging and actually legible in the photo, as YYYY-MM-DD. Empty string if no date is legible. Never guess a date.'
           },
+          perishable: {
+            type: 'boolean',
+            description: 'True if this food goes off on a timescale worth a countdown — dairy, meat, produce, bread, leftovers, opened jars, frozen food. False for shelf-stable stores: tins, dry pasta and rice, flour, sugar, spices, unopened condiments, anything that keeps for years.'
+          },
           estimatedShelfLifeDays: {
             type: 'integer',
             description: 'Typical days this food stays good at home, stored the normal way for that food (fridge for dairy and produce that needs it, counter or pantry otherwise), starting from today.'
@@ -297,12 +301,17 @@ Name items the way a person writes a fridge list: the food, not the brand or the
 
 One entry per distinct FOOD, not per package — three yogurt cups of the same yogurt are one item, and "2 @ 3.49" on a receipt is still one item. Two clearly different foods that happen to share a word (cheddar block vs. shredded mozzarella) are two items.
 
-Include only food that goes off on a timescale worth tracking: dairy, meat, produce, bread, leftovers, opened jars, fresh anything. Skip, and say so in "skipped": canned goods, dry pasta and rice, unopened shelf-stable items, drinks that keep for months, and anything that is not food.
+Include ALL food, and mark each one "perishable" or not.
+
+- "perishable" true: it goes off on a timescale worth counting down — dairy, meat, fish, produce, bread, leftovers, opened jars and sauces, frozen food.
+- "perishable" false: the pantry — tins, dry pasta, rice, flour, sugar, spices, unopened shelf-stable condiments, drinks that keep for years.
+
+BOTH BELONG IN "items". The shelf-stable ones matter because they are things this household does not need to buy again; they simply do not get a countdown. Only NON-FOOD is skipped — put that in "skipped".
 
 IF THIS IS A RECEIPT, these extra rules apply:
 
 - Receipts abbreviate brutally. Expand each line to the real food: "GV MLK 2% GAL" is Milk, "BNLS CHKN BRST" is Chicken Breast, "ORG BABY SPNCH" is Baby Spinach. Put the line EXACTLY as printed in "printedText" so a person can check your expansion — this is the only way they can catch a misread.
-- A receipt lists plenty that does not belong here: paper goods, cleaning supplies, toiletries, tinned and dry food, bags, deposits, coupons, subtotals and tax. Leave them out of "items" and note the notable ones in "skipped".
+- A receipt lists plenty that does not belong here: paper goods, cleaning supplies, toiletries, bags, deposits, coupons, subtotals and tax. Leave them out of "items" and note the notable ones in "skipped". TINNED AND DRY FOOD IS NOT IN THAT LIST — rice, pasta, tinned tomatoes and flour are food, they go in "items" with "perishable" false, and leaving them out is how a household ends up buying rice it already has.
 - Read the transaction date into "purchaseDate" as YYYY-MM-DD. It matters: the shop may have been days ago, and the timers count from then, not from now. Leave it empty rather than guessing — an invented purchase date silently shifts every timer.
 - If a line is too faint or too cryptic to expand confidently, leave it out and count it in "obscured". Do not invent a food to explain a line you cannot read.
 - "printedDate" stays empty on a receipt; receipts do not carry use-by dates.

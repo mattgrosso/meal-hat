@@ -1,14 +1,17 @@
 // Turning a scan result into the review list, and the review list into
 // timers. All pure — the decisions Matt cares about live here, tested.
 
-import { computeTimeLeft } from './timers'
-//
 // The duration rules (Matt's calls, 2026-08-25):
 //   - A template match fills the duration in and the row is ready as-is —
 //     the household's own history is trusted.
-//   - A NEW food always stops for input. The printed date and the model's
-//     shelf-life estimate are shown as tappable OPTIONS, never pre-applied:
-//     "Never prefill from either source; every new food stops for your input."
+//   - A NEW PERISHABLE food always stops for input. The printed date and the
+//     model's shelf-life estimate are shown as tappable OPTIONS, never
+//     pre-applied: "Never prefill from either source; every new food stops for
+//     your input." A pantry store is the one exception, added 2026-09-20 —
+//     nobody wants to pick a number for a tin of beans.
+
+import { computeTimeLeft } from './timers'
+import { isPerishable, DEFAULT_PANTRY_DAYS } from './perishable'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
@@ -83,8 +86,17 @@ export const buildReviewItem = (scanItem, templates, now, photoIndex = 0, starts
 
   const readAsRaw = String(scanItem.name || '').trim()
 
+  // Pantry stores ride the receipt too, since 2026-09-20. A receipt used to
+  // DISCARD tinned and dry food, which quietly broke the weekly loop: Matt
+  // buys rice, the receipt ignores it, and next week's shopping list asks for
+  // rice again. A receipt is the second of the two ways food enters the house
+  // and it has to record the same things the first one does — flagged, so the
+  // wall still only shows what is about to go off.
+  const perishable = isPerishable(scanItem, template)
+
   return {
     name,
+    shelfStable: !perishable,
     // What the scan actually read, when a template renamed it. Real case from
     // testing: "SRDGH BREAD LOAF" matched the "Sandwich bread" template, which
     // would have handed a sourdough loaf that template's 76 days without a
@@ -98,8 +110,16 @@ export const buildReviewItem = (scanItem, templates, now, photoIndex = 0, starts
     box: scanItem.box || null,
     photoIndex,
     included: true,
-    // Template rows arrive ready; new foods arrive needing an answer.
-    days: template ? template.days : null,
+    // Template rows arrive ready; new foods arrive needing an answer — except
+    // a pantry store, which gets a long default rather than making somebody
+    // pick a number for a tin of beans.
+    days: template
+      ? template.days
+      : (perishable
+          ? null
+          : (Number.isInteger(scanItem.estimatedShelfLifeDays) && scanItem.estimatedShelfLifeDays > 0
+              ? scanItem.estimatedShelfLifeDays
+              : DEFAULT_PANTRY_DAYS)),
     fromTemplate: Boolean(template),
     // The options a new-food row offers. Shown, never pre-applied.
     printedDate: scanItem.printedDate || null,
@@ -123,7 +143,14 @@ export const renameReviewItem = (item, newName, templates) => {
   const typed = String(newName || '').trim()
   const template = findTemplate(typed, templates)
   item.name = template ? template.title : typed
-  item.days = template ? template.days : null
+  // A pantry store renamed to another pantry store keeps its long default
+  // rather than blanking — otherwise correcting "Rice" to "Basmati Rice" would
+  // make the row un-confirmable until somebody typed a number for a bag of
+  // rice. A template match still wins, and still un-marks it as pantry.
+  item.days = template
+    ? template.days
+    : (item.shelfStable ? (item.days || DEFAULT_PANTRY_DAYS) : null)
+  if (template) item.shelfStable = false
   item.fromTemplate = Boolean(template)
   item.readAs = ''
   return item
@@ -238,11 +265,23 @@ export const confirmPayload = (items, now) => {
       // which is the shop's date on a receipt, and now for everything else.
       const expiry = new Date((item.startsAt || now).getTime())
       expiry.setDate(expiry.getDate() + item.days)
-      return { title: item.name, expiryDate: expiry.toISOString() }
+      return {
+        title: item.name,
+        expiryDate: expiry.toISOString(),
+        // Tracked, so the shopping list knows the rice is in the cupboard;
+        // flagged, so the wall never shows a two-year countdown. Same flag the
+        // talk-through writes — one meaning, whichever door the food came in.
+        ...(item.shelfStable ? { shelfStable: true } : {})
+      }
     }),
     // The template learns the shelf life itself, never the shortened remainder
     // — otherwise photographing an old receipt would permanently teach the app
     // that milk lasts two days.
-    templates: included.map((item) => ({ title: item.name, days: item.days }))
+    //
+    // Pantry stores teach NOTHING, or the next hand-typed tin of beans would
+    // arrive on the wall carrying a two-year countdown.
+    templates: included
+      .filter((item) => !item.shelfStable)
+      .map((item) => ({ title: item.name, days: item.days }))
   }
 }

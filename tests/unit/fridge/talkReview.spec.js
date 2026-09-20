@@ -1,12 +1,10 @@
 import { describe, it, expect } from 'vitest';
+import { isPerishable, PANTRY_THRESHOLD_DAYS, DEFAULT_PANTRY_DAYS } from '../../../src/store/fridge/perishable';
 import {
-  isPerishable,
   buildTalkItem,
   buildTalkReview,
   talkReviewReady,
-  talkPayload,
-  PANTRY_THRESHOLD_DAYS,
-  DEFAULT_PANTRY_DAYS
+  talkPayload
 } from '../../../src/store/fridge/talkReview';
 
 const NOW = new Date('2026-09-20T12:00:00Z');

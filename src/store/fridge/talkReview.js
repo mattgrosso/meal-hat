@@ -24,40 +24,11 @@
 
 import { computeTimeLeft } from './timers'
 import { normalizeFoodName, findTemplate, daysSince } from './scanReview'
+// Shared with the receipt flow — both ways food enters the house have to
+// answer "does this go off?" identically. See perishable.js.
+import { isPerishable, DEFAULT_PANTRY_DAYS } from './perishable'
 
-// Beyond this, a food is not a spoilage problem, it is furniture. Matt's call:
-// "we don't need to list that I have a can of beans that's gonna last for
-// years — it should just list the things that actually are going to go bad at
-// some point in a reasonable time frame."
-//
-// A YEAR, not the six months that first suggested itself, because his own wall
-// already carries frozen spinach, frozen mixed vegetables and mustard at four
-// to eight months and he wants them there. The line is between "will go off
-// while I still own it" and "will outlive my interest in it".
-export const PANTRY_THRESHOLD_DAYS = 365
-
-// A fallback for a shelf-stable mention the model gave no number for. Long
-// enough to stay out of the way, finite so nothing lives in the fridge record
-// forever unexamined.
-export const DEFAULT_PANTRY_DAYS = 730
-
-/**
- * Is this food worth a countdown, or is it pantry furniture?
- *
- * The household's own templates win outright. A template exists because
- * somebody taught this app that this food goes off and how fast — that is a
- * stronger signal than any general knowledge about the food, and it is how
- * "Frozen Spinach" stays on the wall while a can of beans never arrives there.
- */
-export const isPerishable = (item, template) => {
-  if (template) return true
-  if (item?.perishable === false) return false
-  const days = Number(item?.estimatedShelfLifeDays)
-  if (Number.isFinite(days) && days > 0) return days <= PANTRY_THRESHOLD_DAYS
-  // Nothing said either way: treat it as perishable. A countdown on a tin is
-  // a row on a screen; no countdown on a chicken is a bad dinner.
-  return true
-}
+export { isPerishable, PANTRY_THRESHOLD_DAYS, DEFAULT_PANTRY_DAYS } from './perishable'
 
 /**
  * One thing he said -> one row to review.
