@@ -48,6 +48,23 @@
       ".write": "auth != null"
     },
 
+    // The reply to a bug report (2026-09-21, ported from Cinema Roll):
+    // `yarn resolve-bug-report` writes a plain-language notice here under the
+    // reporter's email key (reports carry emails, not uids), and
+    // BugResolutionNotice shows it on their next launch. Only the reporter
+    // can read their own; the only client write is flipping `seen`. Named,
+    // like bugReports above, so the $hat wildcard never sees it.
+    "bugReportResolutions": {
+      "$memberKey": {
+        ".read": "auth != null && auth.token.email != null && $memberKey === auth.token.email.toLowerCase().replace('.', '-').replace('$', '-').replace('#', '-').replace('[', '-').replace(']', '-').replace('/', '-')",
+        "$reportId": {
+          "seen": {
+            ".write": "auth != null && auth.token.email != null && $memberKey === auth.token.email.toLowerCase().replace('.', '-').replace('$', '-').replace('#', '-').replace('[', '-').replace(']', '-').replace('/', '-') && newData.isBoolean()"
+          }
+        }
+      }
+    },
+
     // Magic Mirror feed. Matt's hallway display has no keyboard and no login,
     // so it cannot authenticate; it used to read a whole hat over
     // unauthenticated REST, which is exactly what the rules above closed.

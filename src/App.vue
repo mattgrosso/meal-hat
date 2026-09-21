@@ -2,6 +2,7 @@
   <div class="meal-hat">
     <router-view @showToast="showToast"></router-view>
     <BugReportButton/>
+    <BugResolutionNotice/>
     <div class="toast" role="alert" aria-live="assertive" aria-atomic="true" id="myToast">
       <div class="toast-body">
         {{toastMessage}}
@@ -13,6 +14,7 @@
 <script>
 import { Toast } from 'bootstrap';
 import BugReportButton from '@/components/BugReportButton.vue';
+import BugResolutionNotice from '@/components/BugResolutionNotice.vue';
 import { flushStashedBugReports } from '@/utils/bugReports.js';
 import {
   entryBundleFromHtml,
@@ -40,7 +42,8 @@ const PERIODIC_CHECK_MS = 30 * 60 * 1000;
 export default {
   name: 'MealHat',
   components: {
-    BugReportButton
+    BugReportButton,
+    BugResolutionNotice
   },
   data () {
     return {

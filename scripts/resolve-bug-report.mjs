@@ -1,55 +1,89 @@
-#!/usr/bin/env node
+// Marks a bug report resolved AND tells the reporter, in plain language,
+// what was wrong and what changed. The notice lands at
+// `bugReportResolutions/<reporterUid>/<reportId>`, where the app shows it on
+// the reporter's next launch (src/utils/bugResolutions.js). Pattern ported from
+// Cinema Roll (Matt, 2026-09-21).
 //
-// Mark one or more bug reports resolved.
+//   yarn resolve-bug-report <reportId> --understood "..." --fixed "..."
+//   yarn resolve-bug-report <id> [id...] --silent      # no notice
 //
-//   yarn resolve-bug-report <id> [<id>…]
+// Write the two texts for a smart 12-year-old: no jargon, no file names.
+// The reporter sees exactly these words. --silent is for duplicates, QA
+// noise and self-filed reports; resolving without choosing is refused.
 //
-// Ids come from `yarn fetch-bug-reports`. Resolved reports are hidden from that
-// listing unless you pass --all; nothing is deleted.
-//
-// Writes through the Firebase CLI for the same reason the fetch script reads
-// through it — see the note there.
+// Uses the Firebase CLI (`firebase login`), like fetch-bug-reports.
+
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
 const run = promisify(execFile);
-
 const PROJECT = 'meal-hat';
-// Filter on '--', NOT '-'. Every Firebase push key starts with a hyphen
-// ("-P-Rh_RSEksCgkxaNZdr"), so treating a single leading dash as a flag threw
-// away every real id and left the script permanently unusable.
-const ids = process.argv.slice(2).filter((arg) => !arg.startsWith('--'));
+const APP = 'meal-hat';
+const REPORTS = '/bugReports';
+const RESOLUTIONS = '/bugReportResolutions';
 
-if (!ids.length) {
-  console.error('Usage: yarn resolve-bug-report <id> [<id>…]');
-  console.error('Get ids from `yarn fetch-bug-reports`.');
+const args = process.argv.slice(2);
+const ids = [];
+let understood = null;
+let fixed = null;
+let silent = false;
+for (let i = 0; i < args.length; i += 1) {
+  if (args[i] === '--understood') understood = args[++i] ?? null;
+  else if (args[i] === '--fixed') fixed = args[++i] ?? null;
+  else if (args[i] === '--silent') silent = true;
+  else if (args[i].startsWith('--')) { console.error(`Unknown flag ${args[i]}`); process.exit(1); }
+  else ids.push(args[i]);
+}
+const usage = () => {
+  console.error('Usage: yarn resolve-bug-report <reportId> --understood "..." --fixed "..."');
+  console.error('       yarn resolve-bug-report <reportId> [reportId...] --silent');
+  process.exit(1);
+};
+if (!ids.length) usage();
+if (!silent && (!understood?.trim() || !fixed?.trim())) {
+  console.error('Refusing to resolve without telling the reporter what happened.');
+  usage();
+}
+if (!silent && ids.length > 1) {
+  console.error('A notice describes ONE report - resolve them one at a time, or pass --silent.');
   process.exit(1);
 }
 
-let failed = 0;
+const fb = (...a) => run('firebase', [...a, '--project', PROJECT]);
+const emailToMemberKey = (email) => (typeof email === 'string' && email
+  ? ['.', '$', '#', '[', ']', '/'].reduce((key, c) => key.split(c).join('-'), email.trim().toLowerCase())
+  : null);
+const snippetOf = (text, limit = 280) => {
+  const t = (text || '').trim();
+  return t.length <= limit ? t : `${t.slice(0, limit - 1).trimEnd()}…`;
+};
 
 for (const id of ids) {
-  // Reject anything that isn't a plain push key rather than interpolating it
-  // into a database path. These come off a terminal, and a stray "/" or ".."
-  // would write somewhere else entirely.
-  if (!/^[A-Za-z0-9_-]+$/.test(id)) {
-    console.error(`skipped ${id} — not a valid report id`);
-    failed += 1;
-    continue;
-  }
-
+  if (!/^[A-Za-z0-9_-]+$/.test(id)) { console.error(`skipped ${id} - not a valid report id`); continue; }
   try {
-    // `database:update` merges, so this sets `resolved` without disturbing the
-    // transcript or the snapshot. -f skips the confirmation prompt, which would
-    // otherwise hang a non-interactive run.
-    await run('firebase', [
-      'database:update', `/bugReports/${id}`, '-d', JSON.stringify({ resolved: true }), '--project', PROJECT, '-f'
-    ]);
-    console.log(`resolved ${id}`);
+    const { stdout } = await fb('database:get', `${REPORTS}/${id}`);
+    const report = JSON.parse(stdout || 'null');
+    if (!report) { console.error(`No report found with id ${id} - skipping.`); continue; }
+    const resolvedAt = Date.now();
+    const change = { resolved: true, resolvedAt };
+    if (!silent) change.resolution = { understood, fixed };
+    await fb('database:update', `${REPORTS}/${id}`, '--data', JSON.stringify(change), '--force');
+    console.log(`Marked ${id} resolved.`);
+    if (silent) continue;
+    // Reports carry the reporter's email, not a uid; the notice is keyed by
+    // the same email transform the rules apply to auth.token.email.
+    const memberKey = emailToMemberKey(report.reporterEmail);
+    if (!memberKey) {
+      console.warn(`  ! ${id} has no reporter email - resolved, but there is nobody to notify.`);
+      continue;
+    }
+    const notice = {
+      app: APP, understood, fixed, reportSnippet: snippetOf(report.transcript), reportedAt: report.createdAt || null, resolvedAt, seen: false,
+    };
+    await fb('database:set', `${RESOLUTIONS}/${memberKey}/${id}`, '--data', JSON.stringify(notice), '--force');
+    console.log("  Notice queued - they'll see it on their next launch.");
   } catch (error) {
-    console.error(`could not resolve ${id}: ${String(error.stderr || error.message).trim()}`);
-    failed += 1;
+    console.error(`Failed to resolve ${id}: ${String(error.stderr || error.message).trim()}`);
   }
 }
-
-process.exit(failed ? 1 : 0);
+process.exit(0);
