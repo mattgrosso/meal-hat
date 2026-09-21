@@ -1,5 +1,10 @@
-import { describe, it, expect } from 'vitest';
-import { unseenResolutions, emailToMemberKey } from '@/utils/bugResolutions.js';
+import { describe, it, expect, vi } from 'vitest';
+
+// src/firebase initialises the SDK on import; the pure helpers under test
+// never touch it.
+vi.mock('../../src/firebase', () => ({ db: {}, auth: {}, authReady: Promise.resolve(null) }));
+
+const { unseenResolutions, emailToMemberKey } = await import('../../src/utils/bugResolutions.js');
 
 // The reply half of the bug button (2026-09-21).
 describe('unseenResolutions', () => {

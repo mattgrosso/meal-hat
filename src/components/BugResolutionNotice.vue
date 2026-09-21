@@ -26,7 +26,7 @@
 </template>
 
 <script>
-import { fetchUnseenResolutions, markResolutionsSeen } from '@/utils/bugResolutions.js';
+import { fetchUnseenResolutions, markResolutionsSeen } from '../utils/bugResolutions.js';
 
 export default {
   name: 'BugResolutionNotice',

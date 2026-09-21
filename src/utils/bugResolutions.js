@@ -1,5 +1,5 @@
 import { ref as dbRef, get, update } from 'firebase/database';
-import { db, auth, authReady } from '@/firebase';
+import { db, auth, authReady } from '../firebase';
 
 // The reply half of the bug button (2026-09-21, ported from Cinema Roll):
 // `yarn resolve-bug-report <id> --understood ... --fixed ...` writes a
