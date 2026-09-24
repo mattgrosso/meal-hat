@@ -19,6 +19,9 @@ import { promisify } from 'node:util';
 const run = promisify(execFile);
 const PROJECT = 'meal-hat';
 const APP = 'meal-hat';
+const appOf = (report) => {
+  try { return JSON.parse(report.appState || '{}').app || APP; } catch { return APP; }
+};
 const REPORTS = '/bugReports';
 const RESOLUTIONS = '/bugReportResolutions';
 
@@ -77,8 +80,12 @@ for (const id of ids) {
       console.warn(`  ! ${id} has no reporter email - resolved, but there is nobody to notify.`);
       continue;
     }
+    // Enjoy Cooking (meal-hat-cook.web.app) files into this same node and
+    // marks its reports with `app` in their appState; the notice carries the
+    // same tag so each app shows only its own. An untagged notice would show
+    // in BOTH — see unseenResolutions in either app's bugResolutions.js.
     const notice = {
-      app: APP, understood, fixed, reportSnippet: snippetOf(report.transcript), reportedAt: report.createdAt || null, resolvedAt, seen: false,
+      app: appOf(report), understood, fixed, reportSnippet: snippetOf(report.transcript), reportedAt: report.createdAt || null, resolvedAt, seen: false,
     };
     await fb('database:set', `${RESOLUTIONS}/${memberKey}/${id}`, '--data', JSON.stringify(notice), '--force');
     console.log("  Notice queued - they'll see it on their next launch.");

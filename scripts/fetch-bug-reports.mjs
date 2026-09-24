@@ -76,6 +76,7 @@ for (const [id, report] of entries) {
   if (report.appState) {
     try {
       const state = JSON.parse(report.appState);
+      if (state.app === 'enjoy-cooking') console.log('\n  >> from ENJOY COOKING (meal-hat-cook.web.app) — fix it in ~/code/enjoy-cooking');
       console.log('');
       console.log(Object.entries(state).map(([k, v]) => `  ${k}: ${v}`).join('\n'));
     } catch {
