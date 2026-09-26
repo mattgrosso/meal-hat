@@ -28,13 +28,11 @@
       <!-- The fridge button appears only for a hat that HAS a fridge.
            `fridgeKeyForHat` is null for the other twelve accounts, and a button
            that lands them on the NOT-CONNECTED screen would turn an opt-in
-           feature into a broken one. Shopping List takes the full width on its
-           own when there is no fridge, exactly as before. -->
+           feature into a broken one. -->
       <div class="btn-group mt-2" role="group">
         <router-link
           to="/shopping-list"
           class="btn btn-success"
-          :class="{ 'w-100': !hasFridge }"
           data-step="4"
         >
           Shopping List
@@ -47,6 +45,16 @@
         >
           Fridge
         </router-link>
+        <!-- The cooking course (cook.mealhat.com, the enjoy-cooking repo) is
+             its own app on the same Firebase project and follows the same
+             hat, so any member can use it — no gate like the fridge's. A
+             plain link, not a router-link: it's another origin. -->
+        <a
+          href="https://cook.mealhat.com"
+          class="btn btn-primary"
+        >
+          Learn to Cook
+        </a>
       </div>
       <DrawnMealSchedule />
     </div>
