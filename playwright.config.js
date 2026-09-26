@@ -60,14 +60,17 @@ module.exports = defineConfig({
     {
       /* The database emulator runs on Java. The machine's /usr/bin/java is
        * only Apple's "install a runtime" stub; the real one is brew's
-       * keg-only openjdk, which never goes on PATH by itself. */
+       * keg-only openjdk, which never goes on PATH by itself. The arm64 keg
+       * (/opt/homebrew) comes first: the x86 one in /usr/local dies with
+       * "Bad CPU type" on this Mac, which Playwright reports only as
+       * "webServer was not able to start". */
       /* The pre-kill matters: Playwright tears down what it STARTED, but the
        * database emulator is a java child the firebase CLI spawns, and it
        * sometimes outlives its parent. A survivor on 9000 makes the next
        * emulators:start fail, which Playwright reports only as "webServer was
        * not able to start". Killing our own stragglers first makes every run
        * start clean. */
-      command: 'for port in 9000 9099; do pid=$(lsof -nP -iTCP:$port -sTCP:LISTEN -t | head -1); if [ -n "$pid" ] && ps -p $pid -o command= | grep -qi "firebase\\|emulator"; then kill $pid; fi; done; sleep 1; PATH="/usr/local/opt/openjdk/bin:$PATH" exec firebase emulators:start --only auth,database --project meal-hat',
+      command: 'for port in 9000 9099; do pid=$(lsof -nP -iTCP:$port -sTCP:LISTEN -t | head -1); if [ -n "$pid" ] && ps -p $pid -o command= | grep -qi "firebase\\|emulator"; then kill $pid; fi; done; sleep 1; PATH="/opt/homebrew/opt/openjdk/bin:/usr/local/opt/openjdk/bin:$PATH" exec firebase emulators:start --only auth,database --project meal-hat',
       url: 'http://localhost:9099',
       reuseExistingServer: true,
       timeout: 120 * 1000,

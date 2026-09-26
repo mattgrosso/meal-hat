@@ -367,9 +367,17 @@ export default {
     text-align: center;
     margin: 0 auto;
 
+    // minmax(0, …), not bare fr, on both grids. A bare 1fr column never
+    // shrinks below its content's min-content width, and a meal name is
+    // nowrap — so one long name ("Lesson 1: Pork chops with a mustard pan
+    // sauce", placed by Enjoy Cooking) widened the meals column, squeezed the
+    // dates column until "Fri, 10/2" wrapped onto two lines, and
+    // grid-auto-rows: 1fr then made EVERY row that tall, while the page ran
+    // off the right edge. Bug report 2026-09-26: "the panels each got much
+    // taller and they don't fit on my phone anymore."
     .schedule {
       display: grid;
-      grid-template-columns: 1fr 2fr;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
       gap: 0;
       box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
 
@@ -378,6 +386,7 @@ export default {
         border: 1px solid #ccc;
         display: grid;
         grid-auto-rows: 1fr;
+        grid-template-columns: minmax(0, 1fr);
         list-style: none;
         margin: 0;
         padding: 0;
