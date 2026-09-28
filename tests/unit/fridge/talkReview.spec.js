@@ -198,7 +198,7 @@ describe('buildTalkReview', () => {
 
   it('survives an empty result and an empty fridge', () => {
     const review = buildTalkReview({}, [], [], NOW);
-    expect(review).toEqual({ confirmed: [], newItems: [], notHeard: [], unclear: [] });
+    expect(review).toEqual({ confirmed: [], newItems: [], notHeard: [], counts: {}, unclear: [] });
   });
 
   it('never loses a tracked timer — every one is confirmed or going', () => {

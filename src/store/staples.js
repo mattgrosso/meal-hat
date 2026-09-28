@@ -129,6 +129,14 @@ export function partitionStaples (rows, catalog = {}, now = new Date(), onHandUn
 
     const entry = catalog[row.groceryId];
 
+    // Added because it is about to run out (store/usage.js). The fridge
+    // holding SOME of it is exactly why it was added — a few cans left — so
+    // coverage must not move it back off the list. Add-only, by design.
+    if (row.runningLow) {
+      list.push(row);
+      return;
+    }
+
     // The house has enough of this, whatever kind of food it is. Checked
     // before the staple rules, because it is the stronger evidence: somebody
     // described this food as being here, rather than a date implying it.

@@ -108,6 +108,20 @@
           </ul>
         </template>
 
+        <!-- Predicted to run out within a week, from how fast the house has
+             gone through it before (store/usage.js). Added, never hidden. -->
+        <template v-if="report.runningLow.length">
+          <h3 class="pile-head">Added to the shopping list ({{ report.runningLow.length }})</h3>
+          <p class="pile-note">Going by how fast you use them, these run out this week.</p>
+          <ul class="seen-list">
+            <li v-for="row in report.runningLow" :key="row.groceryId" class="seen-row">
+              <span class="seen-tick">+</span>
+              <span class="seen-title">{{ row.name }}</span>
+              <span class="seen-left">{{ runningLowNote(row).replace('running low — ', '') }}</span>
+            </li>
+          </ul>
+        </template>
+
         <template v-if="report.unclear.length">
           <h3 class="pile-head">Couldn't place these</h3>
           <ul class="unclear-list">
@@ -146,6 +160,7 @@ import { saveDraft, readDraft, clearDraft } from '@/utils/fridge/talkDraft'
 import { rememberJob, readPendingJob, clearPendingJob } from '@/utils/fridge/pendingJob'
 import { requestNotifyPermission, notifyDone } from '@/utils/fridge/notify'
 import { knownFoodNames } from '@/store/fridge/vocabulary'
+import { runningLowNote } from '@/store/usage'
 
 export default {
   name: 'TalkFlow',
@@ -163,7 +178,7 @@ export default {
       stage: 'talk',
       resuming: false,
       transcript: '',
-      report: { added: [], confirmed: [], removed: [], unclear: [] },
+      report: { added: [], confirmed: [], removed: [], unclear: [], runningLow: [] },
       restored: false,
       restoredAt: null,
       savedAt: null,
@@ -359,12 +374,16 @@ export default {
         payload: talkPayload(review, now)
       })
 
+      // Only a signed-in phone has a hat to log into; the store action checks.
+      const runningLow = await this.$store.dispatch('recordTalkUsage', { counts: review.counts })
+
       this.applied = applied
       this.report = {
         added: review.newItems,
         confirmed: review.confirmed,
         removed: review.notHeard,
-        unclear: review.unclear
+        unclear: review.unclear,
+        runningLow: runningLow || []
       }
       clearDraft()
       clearPendingJob()
@@ -377,6 +396,8 @@ export default {
     formatDays (days) {
       return formatDaySpan(days)
     },
+
+    runningLowNote,
 
     leftLabel (row) {
       const left = row.timeLeft || computeTimeLeft(row.expiryDate, new Date())

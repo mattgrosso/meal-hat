@@ -179,6 +179,18 @@ export const buildTalkReview = (result, timers, templates, now) => {
         timeLeft: computeTimeLeft(timer.expiryDate, now)
       })),
 
+    // How many of each food he described, by normalized name — the reading
+    // `store/usage.js` learns a rate from. Said-out-of and went-unmentioned
+    // are both ZERO, by the same rule that removes their timers: "if I don't
+    // list it, then it isn't there". Only catalog foods are ever logged.
+    counts: Object.fromEntries([
+      ...spoken.map((row) => [normalizeFoodName(row.name), row.quantity ?? 1]),
+      ...tracked.map((timer) => normalizeFoodName(timer.title))
+        .filter((key) => !spokenKeys.has(key))
+        .map((key) => [key, 0]),
+      ...[...outOf].map((key) => [key, 0])
+    ]),
+
     // Said, but not understood well enough to act on. Shown rather than
     // swallowed: the thing he actually said is the record, and a phrase that
     // fell on the floor is worth knowing about.

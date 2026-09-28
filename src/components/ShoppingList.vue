@@ -71,7 +71,12 @@
                     ><i class="bi bi-pencil"></i></button>
                     <!-- A staple that came back says why, rather than just
                          reappearing without explanation. -->
-                    <span v-if="ingredient.stapleDue" class="staple-due-note">
+                    <!-- Added by a talk-through because it is about to run
+                         out — says how fast it goes, so a bad guess shows. -->
+                    <span v-if="ingredient.runningLow" class="staple-due-note">
+                      {{ runningLowNote(ingredient.runningLow) }}
+                    </span>
+                    <span v-else-if="ingredient.stapleDue" class="staple-due-note">
                       {{ ingredient.daysSincePurchase === null || ingredient.daysSincePurchase === undefined
                         ? 'staple — not bought yet'
                         : `staple — last bought ${ingredient.daysSincePurchase} days ago` }}
@@ -323,6 +328,7 @@ import AppModal from '@/components/Modal.vue';
 import { partitionStaples, DEFAULT_STAPLE_INTERVAL_DAYS } from '@/store/staples';
 import { normalizeName } from '@/store/ingredients';
 import { todayISO } from '@/store/schedule';
+import { runningLowNote } from '@/store/usage';
 import { markBusy, clearBusy } from '@/utils/appUpdate';
 
 // The reason string this screen registers with the auto-update machinery.
@@ -524,6 +530,7 @@ export default {
     }
   },
   methods: {
+    runningLowNote,
     // Update suggestions as user types
     updateSuggestions () {
       const query = this.quickAddInput.toLowerCase().trim();
@@ -851,6 +858,15 @@ export default {
       // a staple would be hidden forever, which is exactly the failure mode
       // this feature must not have.
       if (purchased) {
+        // The purchase half of the usage log (store/usage.js): a rate can only
+        // be trusted across a gap with no purchase in it, and the rows he
+        // adds himself give the buying rhythm.
+        if (item.groceryId) {
+          this.$store.dispatch('mergeDBValue', {
+            path: `usage-log/${item.groceryId}`,
+            value: { [`${todayISO()}/bought`]: item.source === 'manual' ? 'manual' : 'meal' }
+          }).catch((error) => console.error('Failed to log the purchase:', error));
+        }
         const entry = (this.$store.state.groceryCatalog || {})[item.groceryId];
         if (entry) {
           this.$store.dispatch('updateDBValue', {

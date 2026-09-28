@@ -7,6 +7,7 @@ import router from '@/router';
 import { analyzeDuplicates, findSimilar, aggregateMealIngredients, remapMealIngredients } from './ingredients';
 import { withDrawnDate, compareByDate, isUpcoming, toISODate, isoDaysAgo } from './schedule';
 import { withPreservedPurchases } from './purchases';
+import { readingsPatch, prunePatch, runningLowFoods } from './usage';
 import { buildMirrorFeed } from '../assets/javascript/mirrorFeed';
 import fridge from './fridge';
 
@@ -269,6 +270,71 @@ export default createStore({
       await context.dispatch('mergeDBValue', { path: 'grocery-catalog', value: catalogDeletes });
 
       return { mealsChanged, shoppingItemsChanged, entriesRemoved: oldIds.length };
+    },
+
+    // After a talk-through: log what he said was in the house, then put on the
+    // shopping list anything predicted to run out within a week. See usage.js.
+    //
+    // ADD-ONLY. A prediction never removes or hides a row, and a food with no
+    // learned rate produces nothing. Rows go in as `source: 'manual'` so a
+    // redraw preserves them, one per-key write each — never a whole-node set().
+    //
+    // Non-fatal throughout: the talk-through has already landed, and missing
+    // a "running low" row costs no more than this feature not existing.
+    async recordTalkUsage (context, { counts } = {}) {
+      const hat = context.state.databaseTopKey;
+      if (!hat || !counts) return [];
+      const catalog = context.state.groceryCatalog || {};
+      const now = new Date();
+
+      try {
+        const readings = readingsPatch(counts, catalog, now);
+        if (Object.keys(readings).length) {
+          await context.dispatch('mergeDBValue', { path: 'usage-log', value: readings });
+        }
+
+        const usageLog = (await get(ref(db, `${hat}/usage-log`))).val() || {};
+        const pruned = prunePatch(usageLog, now);
+        if (Object.keys(pruned).length) {
+          await context.dispatch('mergeDBValue', { path: 'usage-log', value: pruned });
+        }
+
+        // The authoritative list, not the in-memory one — the same rule as
+        // generateShoppingListFromMeals — so a row added on another phone is
+        // seen and not duplicated.
+        const shoppingList = (await get(ref(db, `${hat}/shopping-list`))).val() || {};
+        const low = runningLowFoods(usageLog, catalog, shoppingList, now);
+
+        for (const food of low) {
+          const entry = catalog[food.groceryId];
+          const id = uuidv4();
+          await context.dispatch('updateDBValue', {
+            path: `shopping-list/${id}`,
+            value: {
+              id,
+              groceryId: food.groceryId,
+              quantity: 1,
+              units: entry.defaultUnits || '',
+              aisle: entry.defaultAisle || 0,
+              location: entry.defaultLocation || null,
+              source: 'manual',
+              purchased: false,
+              // STORED, unlike the partition's read-time flags: it records why
+              // this row was added, which stays true after the fact.
+              runningLow: {
+                runsOutOn: food.runsOutOn,
+                ...(food.perWeek ? { perWeek: Math.round(food.perWeek * 10) / 10 } : {}),
+                ...(food.everyDays ? { everyDays: food.everyDays } : {})
+              }
+            }
+          });
+        }
+
+        return low.map((food) => ({ ...food, name: catalog[food.groceryId].name }));
+      } catch (error) {
+        console.error('Failed to learn from the talk-through:', error);
+        return [];
+      }
     },
 
     // Generate shopping list items from drawn meals

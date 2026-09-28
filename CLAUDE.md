@@ -170,6 +170,27 @@ So two rules, and neither is optional:
 The cupboard section also has a "Need it" button, which forces a staple onto the
 list for this session without editing the grocery.
 
+### Running low (learned usage rates)
+
+Matt, 2026-09-28: learn how fast the house drinks Diet Coke and, when a
+talk-through shows it is low, put it on the list before it runs out.
+
+`src/store/usage.js` (pure, tested). The hat keeps `usage-log/<groceryId>/<date>`:
+`count` from each talk-through (said-out-of and unmentioned are 0, the same
+rule that removes their timers) and `bought` from each tick (`'manual'` or
+`'meal'`). A rate comes from consecutive counts with NO purchase in between;
+a purchase on the later reading's day is taken to follow it (the talk-through
+happens before the shop). Failing a rate, a buying rhythm from `'manual'`
+purchases only — meal ingredients are bought on the draw's schedule, not the
+house's. After a talk-through `recordTalkUsage` adds a `source: 'manual'` row
+carrying a STORED `runningLow` for anything due inside a week and not already
+listed.
+
+**Add-only.** No rate means nothing happens, and `partitionStaples` never moves
+a `runningLow` row off the list — the fridge holding a few is exactly why it
+was added. Counts are whatever unit he speaks in ("six cans", "two cases"),
+so a food read out in mixed units learns a rough rate.
+
 ### Checking items off
 
 The tick on a shopping-list row sets `purchased: true`; it does **not** delete
