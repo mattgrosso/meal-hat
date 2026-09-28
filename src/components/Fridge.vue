@@ -354,10 +354,13 @@ export default {
     // The scan applies itself the moment it lands — there is no confirm step
     // any more — so this just writes what it was handed and leaves the sheet
     // open on its report.
-    async confirmScan ({ timers, templates }) {
+    async confirmScan ({ timers, templates, purchases = [] }) {
       for (const timer of timers) {
         await this.$store.dispatch('fridge/addTimer', { ...timer, source: 'scan' });
       }
+      // What was bought and how many, so the house's usage rates can be
+      // measured across a shop instead of stopping at it (store/usage.js).
+      await this.$store.dispatch('recordReceiptUsage', { purchases });
       // Each confirmed food teaches a template — the same learning loop a
       // hand-typed add runs.
       for (const template of templates) {

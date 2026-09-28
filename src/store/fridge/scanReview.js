@@ -10,9 +10,9 @@
 //     your input." A pantry store is the one exception, added 2026-09-20 —
 //     nobody wants to pick a number for a tin of beans.
 
-import { computeTimeLeft } from './timers'
-import { isPerishable, DEFAULT_PANTRY_DAYS } from './perishable'
-import { guessDays } from './shelfLife'
+import { computeTimeLeft } from './timers.js'
+import { isPerishable, DEFAULT_PANTRY_DAYS } from './perishable.js'
+import { guessDays } from './shelfLife.js'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
@@ -108,6 +108,10 @@ export const buildReviewItem = (scanItem, templates, now, photoIndex = 0, starts
     // The receipt line exactly as printed, so a misexpanded abbreviation is
     // catchable ("GV MLK 2% GAL" under "Milk"). Empty for food photos.
     printedText: scanItem.printedText || '',
+    // How many were bought ("2 @ 3.49" is 2). The timer carries it as a
+    // package count, and the usage log learns from it how fast the house
+    // gets through things. Anything unreadable is one.
+    quantity: Number.isInteger(scanItem.quantity) && scanItem.quantity > 1 ? scanItem.quantity : 1,
     box: scanItem.box || null,
     photoIndex,
     included: true,
@@ -183,6 +187,11 @@ export const buildReviewList = (scans, templates, now) => {
           existing.printedDays = row.printedDays
         }
         if (!existing.estimateDays && row.estimateDays) existing.estimateDays = row.estimateDays
+        // Two lines on ONE receipt are two purchases; the same food in two
+        // photos is more likely one long receipt photographed with an overlap.
+        existing.quantity = existing.photoIndex === photoIndex
+          ? existing.quantity + row.quantity
+          : Math.max(existing.quantity, row.quantity)
         continue
       }
       seen.set(key, row)
@@ -273,9 +282,18 @@ export const confirmPayload = (items, now) => {
         // Tracked, so the shopping list knows the rice is in the cupboard;
         // flagged, so the wall never shows a two-year countdown. Same flag the
         // talk-through writes — one meaning, whichever door the food came in.
-        ...(item.shelfStable ? { shelfStable: true } : {})
+        ...(item.shelfStable ? { shelfStable: true } : {}),
+        // Left off at one, the same as a talk-through: a bare timer is one.
+        ...(item.quantity > 1 ? { quantity: item.quantity } : {})
       }
     }),
+    // What was bought and when, for the usage log (store/usage.js). A receipt
+    // is the only evidence of a shop that says how many.
+    purchases: included.map((item) => ({
+      name: item.name,
+      quantity: item.quantity || 1,
+      startsAt: item.startsAt || now
+    })),
     // The template learns the shelf life itself, never the shortened remainder
     // — otherwise photographing an old receipt would permanently teach the app
     // that milk lasts two days.

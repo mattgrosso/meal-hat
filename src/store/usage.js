@@ -1,5 +1,5 @@
-import { toISODate, fromISODate, todayISO } from './schedule';
-import { normalizeFoodName } from './fridge/scanReview';
+import { toISODate, fromISODate, todayISO } from './schedule.js';
+import { normalizeFoodName } from './fridge/scanReview.js';
 
 // How fast the house goes through things, and when each one will run out.
 //
@@ -12,8 +12,11 @@ import { normalizeFoodName } from './fridge/scanReview';
 // purchase date, and the fridge's change log is capped and carries no counts.
 // So the hat now keeps a small per-food log at `usage-log/<groceryId>/<date>`:
 //
-//   { count }   how many he said there were in a talk-through (0 = out of it)
-//   { bought }  a shopping-list row for it was ticked off ('manual' | 'meal')
+//   { count }        how many he said there were in a talk-through (0 = out of it)
+//   { bought }       it was bought: a shopping-list row ticked off ('manual' |
+//                    'meal'), or a line on a scanned receipt ('receipt')
+//   { boughtCount }  how many were bought, in the same packages he counts in,
+//                    when that is known
 //
 // One entry per food per DAY, merged, so a second talk-through the same day
 // simply corrects the first rather than looking like a day of consumption.
@@ -43,6 +46,23 @@ const RHYTHM_MIN_PURCHASES = 3;
 const hasCount = (entry) => entry.count !== null && entry.count !== undefined && entry.count !== '' &&
   Number.isFinite(Number(entry.count));
 
+// How many were bought on this entry's day, or null when nobody knows.
+const boughtCountOf = (entry) => {
+  const n = Number(entry.boughtCount);
+  return entry.boughtCount !== null && entry.boughtCount !== undefined && Number.isFinite(n) && n > 0 ? n : null;
+};
+
+// The known total bought across these entries, or null if any amount is unknown.
+const totalBought = (purchases) => {
+  let total = 0;
+  for (const entry of purchases) {
+    const n = boughtCountOf(entry);
+    if (n === null) return null;
+    total += n;
+  }
+  return total;
+};
+
 const daysBetween = (fromIso, toIso) =>
   Math.round((fromISODate(toIso) - fromISODate(fromIso)) / MS_PER_DAY);
 
@@ -63,19 +83,29 @@ export function sortedEntries (log = {}) {
 /**
  * Units used per day, from consecutive talk-through counts.
  *
- * A pair of readings only counts when nothing was BOUGHT in between — a
- * purchase adds an amount nobody recorded, so the drop across it is unknown.
+ * Across a gap, what was used is what there was, plus what was bought, minus
+ * what is left. That needs every purchase in the gap to say HOW MANY — a
+ * receipt line or a ticked row does — and a gap with a purchase of unknown
+ * size is skipped, because the drop across it cannot be measured.
+ *
  * A purchase on the day of the LATER reading is taken to come after it: a
  * talk-through describes the house before the shop. A purchase on the day of
  * the earlier one is inside the gap for the same reason.
  *
- * A count that went UP with no purchase recorded means somebody bought it and
- * did not tick it off; that pair is skipped rather than read as negative use.
+ * Usage that comes out NEGATIVE means somebody bought it and nothing recorded
+ * it; that pair is skipped rather than read as the house un-drinking a case.
+ *
+ * With no pair of readings at all, purchases before the FIRST reading still
+ * say something (Matt, 2026-09-28: "we have the receipts, so you know what I
+ * bought, and then you can see from the most recent fridge report how much is
+ * left"). Whatever was already in the house is unknown, so bought-minus-left
+ * is the least that can have been used: a LOW estimate, which predicts a
+ * run-out later than the truth. It is replaced as soon as two readings exist.
  */
 export function usageRate (log = {}) {
   const entries = sortedEntries(log);
   const readings = entries.filter(hasCount);
-  const boughtDates = entries.filter((e) => e.bought).map((e) => e.date);
+  const purchases = entries.filter((e) => e.bought || boughtCountOf(e) !== null);
 
   const pairs = [];
   for (let i = 1; i < readings.length; i += 1) {
@@ -83,10 +113,16 @@ export function usageRate (log = {}) {
     const b = readings[i];
     const days = daysBetween(a.date, b.date);
     if (days < 1) continue;
-    if (boughtDates.some((d) => d >= a.date && d < b.date)) continue;
-    const used = Number(a.count) - Number(b.count);
+    const bought = totalBought(purchases.filter((e) => e.date >= a.date && e.date < b.date));
+    if (bought === null) continue;
+    const used = Number(a.count) + bought - Number(b.count);
     if (used < 0) continue;
     pairs.push({ used, days });
+  }
+
+  if (!pairs.length && readings.length) {
+    const lead = leadInPair(purchases, readings[0]);
+    if (lead) pairs.push(lead);
   }
 
   const recent = pairs.slice(-RATE_PAIRS_USED);
@@ -95,6 +131,27 @@ export function usageRate (log = {}) {
   if (!recent.length || used <= 0) return null;
 
   return used / days;
+}
+
+// Purchases of known size before a first reading -> the least that can have
+// been used by then. Only the unbroken run of known sizes nearest the reading
+// counts, and only inside the stale window: a case bought in March says
+// nothing about September.
+function leadInPair (purchases, reading) {
+  const before = purchases
+    .filter((e) => e.date < reading.date && daysBetween(e.date, reading.date) <= READING_STALE_DAYS)
+    .reverse();
+  const run = [];
+  for (const entry of before) {
+    if (boughtCountOf(entry) === null) break;
+    run.push(entry);
+  }
+  if (!run.length) return null;
+
+  const first = run[run.length - 1];
+  const days = daysBetween(first.date, reading.date);
+  const used = totalBought(run) - Number(reading.count);
+  return days >= 1 && used > 0 ? { used, days } : null;
 }
 
 /**
@@ -131,10 +188,14 @@ export function predictRunOut (log = {}, now = new Date()) {
   const perDay = usageRate(log);
   if (perDay) {
     const latest = [...entries].reverse().find(hasCount);
-    const boughtSince = entries.some((e) => e.bought && latest && e.date >= latest.date);
-    if (latest && !boughtSince && daysBetween(latest.date, today) <= READING_STALE_DAYS) {
+    // A shop since the last count adds to it — if it says how much. One that
+    // does not leaves the stock unknown, and the rhythm below is all there is.
+    const boughtSince = latest
+      ? totalBought(entries.filter((e) => (e.bought || boughtCountOf(e) !== null) && e.date >= latest.date))
+      : null;
+    if (latest && boughtSince !== null && daysBetween(latest.date, today) <= READING_STALE_DAYS) {
       return {
-        runsOutOn: addDays(latest.date, Number(latest.count) / perDay),
+        runsOutOn: addDays(latest.date, (Number(latest.count) + boughtSince) / perDay),
         perWeek: perDay * 7
       };
     }
@@ -171,6 +232,16 @@ export function runningLowFoods (usageLog = {}, catalog = {}, shoppingList = {},
     .map(({ groceryId, prediction }) => ({ groceryId, ...prediction }));
 }
 
+/** Normalized catalog name -> grocery id, first entry winning a shared name. */
+export function catalogIdsByName (catalog = {}) {
+  const byName = {};
+  Object.entries(catalog || {}).forEach(([id, entry]) => {
+    const key = normalizeFoodName(entry?.name);
+    if (key && !byName[key]) byName[key] = id;
+  });
+  return byName;
+}
+
 /**
  * A talk-through's counts -> the merge patch for `usage-log`.
  *
@@ -180,17 +251,52 @@ export function runningLowFoods (usageLog = {}, catalog = {}, shoppingList = {},
  */
 export function readingsPatch (counts = {}, catalog = {}, now = new Date()) {
   const today = todayISO(now);
-  const byName = {};
-  Object.entries(catalog || {}).forEach(([id, entry]) => {
-    const key = normalizeFoodName(entry?.name);
-    if (key && !byName[key]) byName[key] = id;
-  });
+  const byName = catalogIdsByName(catalog);
 
   const patch = {};
   Object.entries(counts || {}).forEach(([name, count]) => {
     const id = byName[normalizeFoodName(name)];
     const n = Number(count);
     if (id && Number.isFinite(n) && n >= 0) patch[`${id}/${today}/count`] = n;
+  });
+  return patch;
+}
+
+/**
+ * How many PACKAGES a ticked-off shopping row bought, or null.
+ *
+ * A row he added himself is in his own units ("1 Case"), which are the units
+ * he counts in. A meal row asks in recipe units (28 oz of tomato sauce), so it
+ * converts through the catalog's packageSize, rounded UP because nobody buys
+ * a third of a can. Without a packageSize a meal row's amount is unknown.
+ */
+export function packagesBought (row = {}, entry = {}) {
+  const quantity = Number(row?.quantity);
+  if (!Number.isFinite(quantity) || quantity <= 0) return null;
+  if (row.source === 'manual') return quantity;
+  const size = Number(entry?.packageSize);
+  return Number.isFinite(size) && size > 0 ? Math.ceil(quantity / size) : null;
+}
+
+/**
+ * A scanned receipt's food -> the merge patch for `usage-log`.
+ *
+ * `purchases` is [{ name, quantity }]; `date` is the shop's date. Matched to the
+ * catalog the same way as a talk-through's counts. The existing `bought` mark
+ * is kept when there is one: a row ticked off in the shop says whether he
+ * added it himself, which the buying rhythm needs and a receipt cannot know.
+ * The receipt's count wins, since it is what the till actually charged for.
+ */
+export function receiptPatch (purchases = [], catalog = {}, usageLog = {}, date) {
+  const byName = catalogIdsByName(catalog);
+  const patch = {};
+  (purchases || []).forEach((item) => {
+    const id = byName[normalizeFoodName(item?.name)];
+    if (!id || !date) return;
+    const n = Number(item?.quantity);
+    const existing = (usageLog?.[id] || {})[date] || {};
+    if (!existing.bought) patch[`${id}/${date}/bought`] = 'receipt';
+    patch[`${id}/${date}/boughtCount`] = Number.isFinite(n) && n > 0 ? n : 1;
   });
   return patch;
 }

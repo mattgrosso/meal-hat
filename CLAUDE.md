@@ -177,12 +177,23 @@ talk-through shows it is low, put it on the list before it runs out.
 
 `src/store/usage.js` (pure, tested). The hat keeps `usage-log/<groceryId>/<date>`:
 `count` from each talk-through (said-out-of and unmentioned are 0, the same
-rule that removes their timers) and `bought` from each tick (`'manual'` or
-`'meal'`). A rate comes from consecutive counts with NO purchase in between;
-a purchase on the later reading's day is taken to follow it (the talk-through
-happens before the shop). Failing a rate, a buying rhythm from `'manual'`
+rule that removes their timers), `bought` from each tick (`'manual'` or
+`'meal'`) or receipt (`'receipt'`), and `boughtCount`, how many PACKAGES, when
+known. A rate is what there was, plus what was bought, minus what is left,
+between consecutive counts; a gap holding a purchase of unknown size is
+skipped. A purchase on the later reading's day is taken to follow it (the
+talk-through happens before the shop). With only one count, known purchases
+before it give a LOW floor. Failing a rate, a buying rhythm from `'manual'`
 purchases only — meal ingredients are bought on the draw's schedule, not the
-house's. After a talk-through `recordTalkUsage` adds a `source: 'manual'` row
+house's.
+
+Amounts come from the receipt (the Lambda reads `quantity` per line since
+2026-09-28, dated to the shop) and from ticks: a manual row's own quantity, a
+meal row's through `packageSize` (unknown without one). Why it matters, from
+Matt's first report: one count is never a rate, and without amounts every shop
+wiped out what the talk-throughs had learned. `scripts/backfill-usage-log.mjs`
+rebuilt the history from the fridge's change log and lists fridge names that
+match no catalog food — those can never learn a rate until the names agree. After a talk-through `recordTalkUsage` adds a `source: 'manual'` row
 carrying a STORED `runningLow` for anything due inside a week and not already
 listed.
 

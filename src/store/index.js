@@ -7,7 +7,7 @@ import router from '@/router';
 import { analyzeDuplicates, findSimilar, aggregateMealIngredients, remapMealIngredients } from './ingredients';
 import { withDrawnDate, compareByDate, isUpcoming, toISODate, isoDaysAgo } from './schedule';
 import { withPreservedPurchases } from './purchases';
-import { readingsPatch, prunePatch, runningLowFoods } from './usage';
+import { readingsPatch, receiptPatch, prunePatch, runningLowFoods } from './usage';
 import { buildMirrorFeed } from '../assets/javascript/mirrorFeed';
 import fridge from './fridge';
 
@@ -334,6 +334,35 @@ export default createStore({
       } catch (error) {
         console.error('Failed to learn from the talk-through:', error);
         return [];
+      }
+    },
+
+    // After a receipt: log each food as bought, with how many, on the shop's
+    // date. This is what lets a rate be measured ACROSS a shop — what there
+    // was, plus what came in, minus what is left — instead of every shop
+    // wiping out what the talk-throughs had learned. See usage.js.
+    //
+    // Non-fatal: the timers have already landed, and a missing log entry
+    // costs one unmeasured week.
+    async recordReceiptUsage (context, { purchases = [] } = {}) {
+      const hat = context.state.databaseTopKey;
+      if (!hat || !purchases.length) return;
+      const catalog = context.state.groceryCatalog || {};
+
+      try {
+        const usageLog = (await get(ref(db, `${hat}/usage-log`))).val() || {};
+        const byDate = {};
+        purchases.forEach((item) => {
+          const date = toISODate(item.startsAt instanceof Date ? item.startsAt : new Date());
+          (byDate[date] = byDate[date] || []).push(item);
+        });
+        const patch = Object.assign({}, ...Object.entries(byDate)
+          .map(([date, items]) => receiptPatch(items, catalog, usageLog, date)));
+        if (Object.keys(patch).length) {
+          await context.dispatch('mergeDBValue', { path: 'usage-log', value: patch });
+        }
+      } catch (error) {
+        console.error('Failed to log the receipt:', error);
       }
     },
 

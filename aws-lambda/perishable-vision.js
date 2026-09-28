@@ -231,6 +231,10 @@ const GROCERY_SCHEMA = {
             type: 'string',
             description: 'If this is the same food as one of the known foods listed in the prompt, EXACTLY that known name, character for character. Empty string if none of them is this food.'
           },
+          quantity: {
+            type: 'integer',
+            description: 'How many of this food: on a receipt, how many were bought ("2 @ 3.49" is 2, a single line is 1); in a photo, how many packages are visible. At least 1.'
+          },
           printedDate: {
             type: 'string',
             description: 'A use-by / best-by / sell-by date printed on the packaging and actually legible in the photo, as YYYY-MM-DD. Empty string if no date is legible. Never guess a date.'
@@ -256,7 +260,7 @@ const GROCERY_SCHEMA = {
             additionalProperties: false
           }
         },
-        required: ['name', 'printedText', 'knownFoodMatch', 'printedDate', 'estimatedShelfLifeDays', 'box'],
+        required: ['name', 'printedText', 'knownFoodMatch', 'quantity', 'printedDate', 'estimatedShelfLifeDays', 'box'],
         additionalProperties: false
       }
     },
@@ -299,7 +303,7 @@ Either way the job is the same: list every distinct perishable food so each can 
 ${known}
 Name items the way a person writes a fridge list: the food, not the brand or the package size. "Milk", not "Horizon Organic Whole Milk Half Gallon".
 
-One entry per distinct FOOD, not per package — three yogurt cups of the same yogurt are one item, and "2 @ 3.49" on a receipt is still one item. Two clearly different foods that happen to share a word (cheddar block vs. shredded mozzarella) are two items.
+One entry per distinct FOOD, not per package — three yogurt cups of the same yogurt are one item, and "2 @ 3.49" on a receipt is still one item, with "quantity" 2. The same food on two separate receipt lines is one item whose quantity is the total. A multipack is ONE package: "DIET COKE 12PK" bought once is quantity 1. Two clearly different foods that happen to share a word (cheddar block vs. shredded mozzarella) are two items.
 
 Include ALL food, and mark each one "perishable" or not.
 

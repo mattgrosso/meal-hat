@@ -242,6 +242,23 @@ describe('receipt rows', () => {
     expect(timers[0].expiryDate.slice(0, 10)).toBe('2026-09-01') // Aug 22 + 10
   })
 
+  // How many were bought rides on the timer and into the usage log, dated to
+  // the shop — the receipt is the only evidence of a shop that says how many.
+  it('carries the bought quantity to the timer and the purchases', () => {
+    const list = buildReviewList([
+      receiptScan('2026-08-22', [
+        scanItem({ name: 'Diet Coke', quantity: 2 }),
+        scanItem({ name: 'Diet Coke', quantity: 1 }),
+        scanItem({ name: 'Strawberries' })
+      ])
+    ], TEMPLATES, NOW)
+    const { timers, purchases } = confirmPayload(list, NOW)
+    expect(timers.find((t) => t.title === 'Diet Coke').quantity).toBe(3)
+    expect(timers.find((t) => t.title === 'Strawberries')).not.toHaveProperty('quantity')
+    expect(purchases.map((p) => [p.name, p.quantity])).toEqual([['Diet Coke', 3], ['Strawberries', 1]])
+    expect(purchases[0].startsAt.getDate()).toBe(22)
+  })
+
   // THE INVARIANT: photographing an old receipt must never teach the app that
   // strawberries last a week less than they do. It used to be protected by
   // teaching the full shelf life rather than the shortened remainder; since

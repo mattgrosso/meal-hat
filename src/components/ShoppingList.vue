@@ -328,7 +328,7 @@ import AppModal from '@/components/Modal.vue';
 import { partitionStaples, DEFAULT_STAPLE_INTERVAL_DAYS } from '@/store/staples';
 import { normalizeName } from '@/store/ingredients';
 import { todayISO } from '@/store/schedule';
-import { runningLowNote } from '@/store/usage';
+import { runningLowNote, packagesBought } from '@/store/usage';
 import { markBusy, clearBusy } from '@/utils/appUpdate';
 
 // The reason string this screen registers with the auto-update machinery.
@@ -860,16 +860,20 @@ export default {
       // a staple would be hidden forever, which is exactly the failure mode
       // this feature must not have.
       if (purchased) {
-        // The purchase half of the usage log (store/usage.js): a rate can only
-        // be trusted across a gap with no purchase in it, and the rows he
-        // adds himself give the buying rhythm.
+        const entry = (this.$store.state.groceryCatalog || {})[item.groceryId];
+        // The purchase half of the usage log (store/usage.js): a rate is
+        // measured across a shop only when it says how many were bought, and
+        // the rows he adds himself give the buying rhythm.
         if (item.groceryId) {
+          const count = packagesBought(item, entry);
           this.$store.dispatch('mergeDBValue', {
             path: `usage-log/${item.groceryId}`,
-            value: { [`${todayISO()}/bought`]: item.source === 'manual' ? 'manual' : 'meal' }
+            value: {
+              [`${todayISO()}/bought`]: item.source === 'manual' ? 'manual' : 'meal',
+              ...(count ? { [`${todayISO()}/boughtCount`]: count } : {})
+            }
           }).catch((error) => console.error('Failed to log the purchase:', error));
         }
-        const entry = (this.$store.state.groceryCatalog || {})[item.groceryId];
         if (entry) {
           this.$store.dispatch('updateDBValue', {
             path: `grocery-catalog/${item.groceryId}`,
