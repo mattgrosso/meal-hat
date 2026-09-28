@@ -166,10 +166,19 @@ export const buildTalkReview = (result, timers, templates, now) => {
         const recount = Number.isFinite(said) && said > 0 && timersPerKey.get(key) === 1
           ? Math.max(1, Math.round(said))
           : null
+        // PAST ITS DATE BUT SAID TO BE HERE (2026-09-28). The expiry still
+        // stands — see above, and the wall keeps showing it as past date so
+        // somebody looks at it — but he has just said the food is in the
+        // house, and the shopping list must hear that. Six foods in one
+        // read-through (cheddar, hot dog buns, hamburger buns, cottage cheese,
+        // tortellini, cucumbers) were mentioned, matched to a timer that had
+        // already run out, and went straight back onto the list anyway.
+        const timeLeft = computeTimeLeft(timer.expiryDate, now)
         return {
           id: timer.id,
           title: timer.title,
-          timeLeft: computeTimeLeft(timer.expiryDate, now),
+          timeLeft,
+          ...(timeLeft.expired ? { pastDate: true } : {}),
           ...(recount !== null && recount !== had ? { had, quantity: recount } : {})
         }
       }),
@@ -282,6 +291,12 @@ export const talkPayload = (review, now) => {
     recount: (review?.confirmed || [])
       .filter((row) => row.quantity)
       .map((row) => ({ id: row.id, title: row.title, had: row.had, quantity: row.quantity })),
+    // Timers past their date that he has just said are here. Stamped with
+    // when, and `fridge/inHouse.js` counts a timer seen after it expired as
+    // in the house. Nothing else about the timer changes.
+    seen: (review?.confirmed || [])
+      .filter((row) => row.pastDate)
+      .map((row) => ({ id: row.id, title: row.title })),
     remove: (review?.notHeard || []).filter((row) => row.remove).map((row) => row.id)
   }
 }

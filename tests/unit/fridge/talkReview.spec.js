@@ -318,7 +318,7 @@ describe('talkPayload', () => {
   });
 
   it('is safe on nothing at all', () => {
-    expect(talkPayload(null, NOW)).toEqual({ timers: [], templates: [], recount: [], remove: [] });
+    expect(talkPayload(null, NOW)).toEqual({ timers: [], templates: [], recount: [], seen: [], remove: [] });
   });
 });
 

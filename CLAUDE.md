@@ -762,6 +762,16 @@ The direction rule is unchanged: the fridge may only ever say YOU HAVE IT. No
 timer means nobody has described that food, not that you are out of it, and an
 **expired timer does not suppress** — it argues for buying more.
 
+**Unless a talk-through has mentioned it since** (2026-09-28). One read-through
+mentioned seven foods whose timers had already run out (cheddar, hot dog buns,
+hamburger buns, cottage cheese...), and every one of them stayed on the list.
+A match still does not restart the timer, so the wall still shows it past
+date. But the talk-through stamps `seenAt`, and `liveTimersFor` counts a timer
+seen after it expired. The next talk-through that leaves it out removes it.
+The talk-through's report also has a "Your shopping list" block that shows what
+the list made of each food he mentioned. It uses the same partition the list
+itself runs, so the two cannot disagree.
+
 Everything the partition attaches to a row (`onHand`, `packagesOnHand`,
 `partlyOnHand`, `stapleDue`…) is derived at read time and **stripped before any
 write**. Persisting it would freeze one moment's answer into the row.

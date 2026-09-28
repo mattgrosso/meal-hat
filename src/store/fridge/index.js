@@ -490,6 +490,19 @@ export default {
         }
       }
 
+      // Past its date and said to be here: the expiry stays, the sighting is
+      // recorded, and the shopping list counts it (fridge/inHouse.js).
+      for (const row of payload.seen || []) {
+        try {
+          await update(ref(db, `${timersPath(state.fridgeKey)}/${row.id}`), {
+            seenAt: new Date().toISOString()
+          })
+        } catch (error) {
+          console.error(`Failed to mark ${row.title} as seen:`, error)
+          failed += 1
+        }
+      }
+
       for (const id of payload.remove || []) {
         if (await didItLand('removeTimer', { id, source: 'talk' })) removed += 1
         else failed += 1

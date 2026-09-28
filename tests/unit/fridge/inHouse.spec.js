@@ -133,3 +133,23 @@ describe('rowCoverage', () => {
     expect(rowCoverage({ quantity: 1 }, {}, { a: timer('Milk', 5) }, NOW).covered).toBe(false);
   });
 });
+
+describe('liveTimersFor, past-date timers somebody has seen since', () => {
+  const now = new Date('2026-09-28T12:00:00Z');
+  const expired = { title: 'Cheddar', expiryDate: '2026-09-27T12:00:00Z' };
+
+  it('counts a timer seen after it expired', () => {
+    const timers = { a: { ...expired, seenAt: '2026-09-28T11:00:00Z' } };
+    expect(liveTimersFor('Cheddar', timers, now)).toHaveLength(1);
+  });
+
+  it('does not count one last seen before it expired', () => {
+    const timers = { a: { ...expired, seenAt: '2026-09-26T11:00:00Z' } };
+    expect(liveTimersFor('Cheddar', timers, now)).toEqual([]);
+  });
+
+  it('does not count a junk sighting', () => {
+    const timers = { a: { ...expired, seenAt: 'yesterday-ish' } };
+    expect(liveTimersFor('Cheddar', timers, now)).toEqual([]);
+  });
+});

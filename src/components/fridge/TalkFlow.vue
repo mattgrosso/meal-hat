@@ -93,6 +93,26 @@
           </ul>
         </template>
 
+        <!-- Matt, 2026-09-28: "things that I definitely listed... still ended
+             up on the shopping list". So the report says, food by food, what
+             the list made of what he said. Live: it re-reads the fridge, so it
+             settles as the writes above echo back. -->
+        <template v-if="shoppingCheck.off.length || shoppingCheck.stillOn.length">
+          <h3 class="pile-head">Your shopping list</h3>
+          <ul class="seen-list">
+            <li v-for="row in shoppingCheck.stillOn" :key="'on' + row.id" class="seen-row">
+              <span class="seen-tick gone">!</span>
+              <span class="seen-title">{{ row.name }}</span>
+              <span class="seen-left">still on — {{ row.why }}</span>
+            </li>
+            <li v-for="row in shoppingCheck.off" :key="'off' + row.id" class="seen-row">
+              <span class="seen-tick">✓</span>
+              <span class="seen-title">{{ row.name }}</span>
+              <span class="seen-left">off — you have it</span>
+            </li>
+          </ul>
+        </template>
+
         <template v-if="report.removed.length">
           <h3 class="pile-head danger">Removed ({{ report.removed.length }})</h3>
           <p class="pile-note">
@@ -161,6 +181,8 @@ import { rememberJob, readPendingJob, clearPendingJob } from '@/utils/fridge/pen
 import { requestNotifyPermission, notifyDone } from '@/utils/fridge/notify'
 import { knownFoodNames } from '@/store/fridge/vocabulary'
 import { runningLowNote } from '@/store/usage'
+import { partitionStaples } from '@/store/staples'
+import { normalizeFoodName } from '@/store/fridge/scanReview'
 
 export default {
   name: 'TalkFlow',
@@ -178,7 +200,7 @@ export default {
       stage: 'talk',
       resuming: false,
       transcript: '',
-      report: { added: [], confirmed: [], removed: [], unclear: [], runningLow: [] },
+      report: { added: [], confirmed: [], removed: [], unclear: [], runningLow: [], spoken: [] },
       restored: false,
       restoredAt: null,
       savedAt: null,
@@ -235,6 +257,40 @@ export default {
     },
     templates () {
       return this.$store.getters['fridge/templates']
+    },
+
+    // Every shopping-list row for a food he just mentioned, and what the list
+    // made of it — the same partition the shopping list itself renders, so
+    // this cannot disagree with it. A row still on the list says why: the
+    // house holds some but not enough, or nothing matched it at all.
+    shoppingCheck () {
+      const empty = { off: [], stillOn: [] }
+      if (this.stage !== 'done' || !this.report.spoken.length) return empty
+      const catalog = this.$store.state.groceryCatalog || {}
+      const rows = this.$store.getters.unpurchasedShoppingItems || []
+      if (!rows.length) return empty
+
+      const spoken = new Set(this.report.spoken)
+      const nameOf = (row) => catalog[row.groceryId]?.name || ''
+      const mentioned = (row) => spoken.has(normalizeFoodName(nameOf(row)))
+      const { list, cupboard } = partitionStaples(
+        rows, catalog, new Date(),
+        this.$store.getters['fridge/onHandUntil'],
+        this.$store.state.fridge.timers
+      )
+
+      return {
+        off: cupboard.filter(mentioned).map((row) => ({ id: row.id, name: nameOf(row) })),
+        stillOn: list.filter(mentioned).map((row) => ({
+          id: row.id,
+          name: nameOf(row),
+          why: row.runningLow
+            ? 'running low'
+            : row.partlyOnHand
+              ? `you have ${row.partlyOnHand}, need ${row.partlyShort ?? 'more'} more`
+              : 'nothing in the fridge matched it'
+        }))
+      }
     },
 
     // Both vocabularies, not just the fridge's — see vocabulary.js. A signed-in
@@ -383,7 +439,8 @@ export default {
         confirmed: review.confirmed,
         removed: review.notHeard,
         unclear: review.unclear,
-        runningLow: runningLow || []
+        runningLow: runningLow || [],
+        spoken: Object.entries(review.counts || {}).filter(([, n]) => n > 0).map(([key]) => key)
       }
       clearDraft()
       clearPendingJob()
@@ -401,7 +458,8 @@ export default {
 
     leftLabel (row) {
       const left = row.timeLeft || computeTimeLeft(row.expiryDate, new Date())
-      if (left.expired) return 'expired'
+      // Counted as in the house (he just said so); the date is still past.
+      if (left.expired) return row.pastDate ? 'past its date — check it' : 'expired'
       return left.days > 0 ? `${left.days}d left` : `${left.hours}h left`
     }
   }

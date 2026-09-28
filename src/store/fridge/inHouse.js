@@ -19,6 +19,14 @@
 //
 // AN EXPIRED TIMER DOES NOT SUPPRESS. It is evidence the food was here and has
 // since gone off, which argues for buying more, not less.
+//
+// UNLESS SOMEBODY HAS SAID IT IS HERE SINCE (2026-09-28). A talk-through that
+// mentions a food past its date stamps the timer `seenAt` and leaves the
+// expiry alone — the wall still shows it past date, so somebody looks at it.
+// But "we have seven hamburger buns" is a person standing at the cupboard, and
+// a list that asks for buns anyway is the exact complaint: "things that I
+// definitely listed... still ended up on the shopping list". The next
+// talk-through that does not mention it removes it, as for any other timer.
 
 // The unit problem is `consume.js`'s, and the answer is the same one: a timer
 // holds PACKAGES, a shopping row asks in whatever unit the recipe uses, and
@@ -35,7 +43,8 @@ export const normalizeName = (name) => String(name || '').trim().toLowerCase();
 
 /**
  * Live timers for one food, newest-expiring last. Expired ones are dropped
- * here so no caller has to remember to.
+ * here so no caller has to remember to — except one somebody has said is
+ * still here since it expired (see `seenAt` above).
  */
 export function liveTimersFor (name, timers = {}, now = new Date()) {
   const wanted = normalizeName(name);
@@ -46,7 +55,10 @@ export function liveTimersFor (name, timers = {}, now = new Date()) {
     .filter((timer) => timer && normalizeName(timer.title) === wanted)
     .filter((timer) => {
       const at = new Date(timer.expiryDate).getTime();
-      return !Number.isNaN(at) && at > now.getTime();
+      if (Number.isNaN(at)) return false;
+      if (at > now.getTime()) return true;
+      const seen = new Date(timer.seenAt).getTime();
+      return !Number.isNaN(seen) && seen >= at;
     })
     .sort((a, b) => new Date(a.expiryDate) - new Date(b.expiryDate));
 }
