@@ -88,7 +88,7 @@
             <li v-for="row in report.confirmed" :key="row.id" class="seen-row">
               <span class="seen-tick">✓</span>
               <span class="seen-title">{{ row.title }}</span>
-              <span class="seen-left">{{ leftLabel(row) }}</span>
+              <span class="seen-left">{{ row.quantity ? `now ${row.quantity}, ` : '' }}{{ leftLabel(row) }}</span>
             </li>
           </ul>
         </template>

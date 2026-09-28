@@ -469,6 +469,27 @@ export default {
         await dispatch('saveTemplate', { ...template, source: 'talk' })
       }
 
+      // A new count on a timer that was already there. Straight after the adds
+      // and before the removals, for the same reason as that ordering.
+      for (const row of payload.recount || []) {
+        try {
+          await update(ref(db, `${timersPath(state.fridgeKey)}/${row.id}`), {
+            // One is a bare timer, as everywhere else — null deletes the field.
+            quantity: row.quantity > 1 ? row.quantity : null,
+            updatedAt: new Date().toISOString()
+          })
+          dispatch('recordHistory', {
+            action: 'recounted',
+            title: row.title,
+            detail: `${row.had} → ${row.quantity}`,
+            source: 'talk'
+          })
+        } catch (error) {
+          console.error(`Failed to recount ${row.title}:`, error)
+          failed += 1
+        }
+      }
+
       for (const id of payload.remove || []) {
         if (await didItLand('removeTimer', { id, source: 'talk' })) removed += 1
         else failed += 1

@@ -697,7 +697,11 @@ both directions.
 
 **A match does NOT restart the timer.** Seeing food again says nothing about how
 fresh it is; restarting on every talk-through would keep a dying carton of milk
-alive forever.
+alive forever. **But a spoken COUNT does update it** (2026-09-28): "two packages
+of mozzarella" against a one-package timer used to leave it at one, and a
+pizza's 3 cups against one 2-cup bag kept mozzarella on the list. Only a number
+he actually said, and only for a food with a single timer (`recount` in
+`talkPayload`).
 
 **A new food arrives with the estimate filled in** rather than stopping for
 input, which is a deliberate departure from the scan flow's "every new food

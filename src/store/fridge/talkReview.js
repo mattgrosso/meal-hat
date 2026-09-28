@@ -134,8 +134,14 @@ export const buildTalkReview = (result, timers, templates, now) => {
   )
 
   const spokenKeys = new Set(spoken.map((row) => normalizeFoodName(row.name)))
+  const spokenByKey = new Map(spoken.map((row) => [normalizeFoodName(row.name), row]))
   const tracked = (timers || []).filter((timer) => timer && timer.title)
   const trackedKeys = new Set(tracked.map((timer) => normalizeFoodName(timer.title)))
+  const timersPerKey = new Map()
+  tracked.forEach((timer) => {
+    const key = normalizeFoodName(timer.title)
+    timersPerKey.set(key, (timersPerKey.get(key) || 0) + 1)
+  })
 
   return {
     // Already tracked and he said it is there. Nothing to do — and crucially
@@ -145,11 +151,28 @@ export const buildTalkReview = (result, timers, templates, now) => {
     confirmed: tracked
       .filter((timer) => spokenKeys.has(normalizeFoodName(timer.title)))
       .filter((timer) => !outOf.has(normalizeFoodName(timer.title)))
-      .map((timer) => ({
-        id: timer.id,
-        title: timer.title,
-        timeLeft: computeTimeLeft(timer.expiryDate, now)
-      })),
+      .map((timer) => {
+        // The COUNT is new information even though the date is not. Matt,
+        // 2026-09-28: "I told her we had two packages of mozzarella" — the
+        // timer went on holding one, so a pizza's 3 cups against one 2-cup bag
+        // kept mozzarella on the shopping list. Only a count he actually said
+        // is used (no number means "there's some", which says nothing about
+        // how much), and only when this food has a single timer: the count is
+        // for the food, and split across several cards there is no honest way
+        // to say which one changed.
+        const key = normalizeFoodName(timer.title)
+        const said = spokenByKey.get(key)?.quantity
+        const had = Number(timer.quantity) > 0 ? Number(timer.quantity) : 1
+        const recount = Number.isFinite(said) && said > 0 && timersPerKey.get(key) === 1
+          ? Math.max(1, Math.round(said))
+          : null
+        return {
+          id: timer.id,
+          title: timer.title,
+          timeLeft: computeTimeLeft(timer.expiryDate, now),
+          ...(recount !== null && recount !== had ? { had, quantity: recount } : {})
+        }
+      }),
 
     // He said it, the fridge has never heard of it. These become timers.
     // "We're out of eggs" wins over a passing mention of eggs — a dump is
@@ -254,6 +277,11 @@ export const talkPayload = (review, now) => {
     templates: included
       .filter((item) => !item.shelfStable && item.learn)
       .map((item) => ({ title: item.name, observed: item.days, anchor: item.estimateDays })),
+    // Foods he said are here in a different number than the fridge held. The
+    // expiry is untouched — see `confirmed` — only how many there are.
+    recount: (review?.confirmed || [])
+      .filter((row) => row.quantity)
+      .map((row) => ({ id: row.id, title: row.title, had: row.had, quantity: row.quantity })),
     remove: (review?.notHeard || []).filter((row) => row.remove).map((row) => row.id)
   }
 }

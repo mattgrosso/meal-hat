@@ -86,7 +86,7 @@
                          avoid — but saying what is already here stops it
                          reading as "buy the whole amount again". -->
                     <span v-else-if="ingredient.partlyOnHand" class="staple-due-note">
-                      {{ `you have some — ${formatPackages(ingredient.partlyOnHand)}, not enough` }}
+                      {{ partlyNote(ingredient) }}
                     </span>
                   </span>
                   <span>{{ ingredient.quantity }} {{ pluralizedUnits(ingredient) }}</span>
@@ -847,6 +847,8 @@ export default {
       delete updated.packagesNeeded;
       delete updated.assumedPackageSize;
       delete updated.partlyOnHand;
+      delete updated.partlyShort;
+      delete updated.partlyAmount;
 
       this.$store.dispatch('updateDBValue', {
         path: `shopping-list/${item.id}`,
@@ -1062,6 +1064,18 @@ export default {
       if (whole === 0) return half ? 'half a package' : 'less than a package';
       const label = `${whole}${half ? '½' : ''}`;
       return `${label} package${whole > 1 || half ? 's' : ''}`;
+    },
+
+    // "you have 1 package (2 cups) — buy 1 more". The amount in the recipe's
+    // own unit is what lets a wrong package size or a miscounted fridge be
+    // spotted at a glance, against the quantity printed beside it.
+    partlyNote (ingredient) {
+      const held = this.formatPackages(ingredient.partlyOnHand);
+      const amount = Number(ingredient.partlyAmount) > 0
+        ? ` (${Math.round(ingredient.partlyAmount * 10) / 10}${ingredient.units ? ` ${pluralize(ingredient.units, ingredient.partlyAmount)}` : ''})`
+        : '';
+      const short = Number(ingredient.partlyShort) > 0 ? `buy ${ingredient.partlyShort} more` : 'not enough';
+      return `you have ${held}${amount} — ${short}`;
     },
 
     // Which evidence is keeping this row off the list, in the order of how

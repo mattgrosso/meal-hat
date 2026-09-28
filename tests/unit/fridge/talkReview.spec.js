@@ -201,6 +201,35 @@ describe('buildTalkReview', () => {
     expect(review).toEqual({ confirmed: [], newItems: [], notHeard: [], counts: {}, unclear: [] });
   });
 
+  // Matt, 2026-09-28: "I told her we had two packages of mozzarella" — and
+  // the one-package timer stayed at one, so the list asked for more.
+  it('takes a spoken COUNT for food already tracked, without restarting it', () => {
+    const review = buildTalkReview(
+      { items: [said({ knownFoodMatch: 'Cheddar Cheese', quantity: 2 })] },
+      timers, templates, NOW
+    );
+    expect(review.confirmed[0]).toMatchObject({ id: 't1', had: 1, quantity: 2 });
+    expect(review.confirmed[0].timeLeft.days).toBe(60);
+  });
+
+  it('lowers a count too, and leaves it alone when no number was said or it matches', () => {
+    const held = [timer('t1', 'Cheddar Cheese', 60, { quantity: 3 })];
+    const fewer = buildTalkReview({ items: [said({ knownFoodMatch: 'Cheddar Cheese', quantity: 1 })] }, held, templates, NOW);
+    expect(fewer.confirmed[0]).toMatchObject({ had: 3, quantity: 1 });
+
+    const vague = buildTalkReview({ items: [said({ knownFoodMatch: 'Cheddar Cheese', quantity: null })] }, held, templates, NOW);
+    expect(vague.confirmed[0].quantity).toBeUndefined();
+
+    const same = buildTalkReview({ items: [said({ knownFoodMatch: 'Cheddar Cheese', quantity: 3 })] }, held, templates, NOW);
+    expect(same.confirmed[0].quantity).toBeUndefined();
+  });
+
+  it('does not recount a food split across several timers', () => {
+    const split = [timer('t1', 'Cheddar Cheese', 60), timer('t9', 'Cheddar Cheese', 30)];
+    const review = buildTalkReview({ items: [said({ knownFoodMatch: 'Cheddar Cheese', quantity: 4 })] }, split, templates, NOW);
+    expect(review.confirmed.every((r) => r.quantity === undefined)).toBe(true);
+  });
+
   it('never loses a tracked timer — every one is confirmed or going', () => {
     const review = buildTalkReview(
       { items: [said({ knownFoodMatch: 'Cheddar Cheese' })] },
@@ -229,6 +258,11 @@ describe('talkPayload', () => {
     expect(talkPayload(review, NOW).timers[0].quantity).toBeUndefined();
     const noQty = { newItems: [{ name: 'Milk', included: true, days: 7, startsAt: NOW }] };
     expect(talkPayload(noQty, NOW).timers[0].quantity).toBeUndefined();
+  });
+
+  it('passes recounts through, and only those', () => {
+    const review = { confirmed: [{ id: 't1', title: 'Mozzarella', had: 1, quantity: 2 }, { id: 't2', title: 'Eggs' }] };
+    expect(talkPayload(review, NOW).recount).toEqual([{ id: 't1', title: 'Mozzarella', had: 1, quantity: 2 }]);
   });
 
   it('counts the days from today, landing on the right date', () => {
@@ -284,7 +318,7 @@ describe('talkPayload', () => {
   });
 
   it('is safe on nothing at all', () => {
-    expect(talkPayload(null, NOW)).toEqual({ timers: [], templates: [], remove: [] });
+    expect(talkPayload(null, NOW)).toEqual({ timers: [], templates: [], recount: [], remove: [] });
   });
 });
 

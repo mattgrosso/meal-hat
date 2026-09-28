@@ -249,6 +249,10 @@ describe('partitionStaples — anything the house already holds', () => {
     );
     expect(cupboard).toEqual([]);
     expect(list[0].partlyOnHand).toBe(1);
+    // The arithmetic rides along so the row can show it: one 2-cup block is
+    // 2 cups, and one more block covers the 3 the meal needs.
+    expect(list[0].partlyAmount).toBe(2);
+    expect(list[0].partlyShort).toBe(1);
   });
 
   it('does not let an EXPIRED timer take anything off the list', () => {

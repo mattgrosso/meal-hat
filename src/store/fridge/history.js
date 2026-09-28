@@ -23,7 +23,9 @@ const ACTION_VERBS = {
   // Cooking a meal has always written these two, and neither had a verb — so
   // every line the "Made it" sheet produced read "Changed the mozzarella".
   'used up': 'Used up',
-  'used some': 'Used some'
+  'used some': 'Used some',
+  // A talk-through saying there are more (or fewer) than the fridge held.
+  recounted: 'Recounted'
 }
 
 // Where the change came from. Worth saying out loud: "removed by hand" and

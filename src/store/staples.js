@@ -157,7 +157,22 @@ export function partitionStaples (rows, catalog = {}, now = new Date(), onHandUn
       // Partly covered: it stays on the list, and carries what the house holds
       // so the row can say "you have 1 of the 2 you need" instead of silently
       // asking for the whole amount again.
-      list.push(coverage && coverage.onHand > 0 ? { ...row, partlyOnHand: coverage.onHand } : row);
+      //
+      // With the arithmetic, not just the verdict (2026-09-28): "you have some,
+      // not enough" beside 3 cups of mozzarella gave no way to tell a real
+      // shortfall from a fridge that had simply miscounted. `partlyShort` is
+      // whole packages still to buy, which is the number the shop needs.
+      if (coverage && coverage.onHand > 0) {
+        const packageSize = Number(entry?.packageSize) > 0 ? Number(entry.packageSize) : null;
+        list.push({
+          ...row,
+          partlyOnHand: coverage.onHand,
+          partlyShort: coverage.needed === null ? null : Math.max(1, Math.ceil(coverage.needed - coverage.onHand - 1e-6)),
+          partlyAmount: packageSize === null ? null : coverage.onHand * packageSize
+        });
+        return;
+      }
+      list.push(row);
       return;
     }
 
