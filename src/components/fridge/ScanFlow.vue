@@ -67,7 +67,7 @@
           <li v-for="(item, index) in reviewItems" :key="index" class="seen-row">
             <span class="seen-tick">+</span>
             <span class="seen-body">
-              <span class="seen-title">{{ item.name }}</span>
+              <span class="seen-title">{{ item.name }}<span v-if="item.quantity > 1"> ×{{ item.quantity }}</span></span>
               <span v-if="item.printedText" class="seen-printed">{{ item.printedText }}</span>
             </span>
             <span class="seen-left">
