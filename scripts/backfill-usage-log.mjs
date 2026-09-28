@@ -149,7 +149,8 @@ receipts.forEach((key) => {
 
 // The latest tick with no amount, from the ticked row still on the list.
 Object.entries(usageLog).forEach(([id, log]) => {
-  const latest = [...sortedEntries(log)].reverse().find((e) => e.bought)
+  // Ticks only: a receipt entry is not what the row on the list recorded.
+  const latest = [...sortedEntries(log)].reverse().find((e) => e.bought === 'manual' || e.bought === 'meal')
   if (!latest || has(id, latest.date, 'boughtCount')) return
   const rows = Object.values(shoppingList).filter((row) => row?.groceryId === id && row.purchased)
   const total = rows.reduce((sum, row) => sum + (packagesBought(row, catalog[id]) || 0), 0)
