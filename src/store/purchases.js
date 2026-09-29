@@ -47,3 +47,16 @@ export function withPreservedPurchases (regenerated, previousItems) {
     return { ...row, purchased: stillCovered };
   });
 }
+
+/**
+ * The row an "add to the list" should top up, or null to start a new one.
+ *
+ * Only a row still to buy counts. A ticked-off row is a record of something
+ * already in the trolley: adding to it grew a row hidden in the collapsed
+ * "Bought" section, so re-adding butter after ticking it by mistake appeared
+ * to do nothing at all.
+ */
+export function openRowForGrocery (shoppingList, groceryId) {
+  return Object.values(shoppingList || {})
+    .find((item) => item && item.groceryId === groceryId && !item.purchased) || null;
+}

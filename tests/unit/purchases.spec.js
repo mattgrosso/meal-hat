@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { withPreservedPurchases } from '../../src/store/purchases.js';
+import { withPreservedPurchases, openRowForGrocery } from '../../src/store/purchases.js';
 
 // The bug this exists to stop: tick the mozzarella off on Saturday, draw next
 // week's meals on Sunday, and it comes back at full quantity — because
@@ -117,5 +117,32 @@ describe('withPreservedPurchases', () => {
     expect(withPreservedPurchases([], [])).toEqual([]);
     expect(withPreservedPurchases(null, null)).toEqual([]);
     expect(withPreservedPurchases([row('z', 1)], null)[0].purchased).toBe(false);
+  });
+});
+
+describe('openRowForGrocery', () => {
+  it('tops up a row that is still to buy', () => {
+    const list = { a: { id: 'a', groceryId: 'butter', quantity: 1, purchased: false } };
+    expect(openRowForGrocery(list, 'butter')).toBe(list.a);
+  });
+
+  // Carrie, 2026-09-28: added butter, ticked it by accident, and re-adding it
+  // only grew the row hidden under "Bought".
+  it('never tops up a ticked-off row', () => {
+    const list = { a: { id: 'a', groceryId: 'butter', quantity: 1, purchased: true } };
+    expect(openRowForGrocery(list, 'butter')).toBeNull();
+  });
+
+  it('finds the open row beside a bought one', () => {
+    const list = {
+      a: { id: 'a', groceryId: 'butter', quantity: 1, purchased: true },
+      b: { id: 'b', groceryId: 'butter', quantity: 2, purchased: false }
+    };
+    expect(openRowForGrocery(list, 'butter')).toBe(list.b);
+  });
+
+  it('copes with an empty list', () => {
+    expect(openRowForGrocery(null, 'butter')).toBeNull();
+    expect(openRowForGrocery({}, 'butter')).toBeNull();
   });
 });

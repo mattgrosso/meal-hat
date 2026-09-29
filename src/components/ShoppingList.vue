@@ -329,6 +329,7 @@ import { partitionStaples, DEFAULT_STAPLE_INTERVAL_DAYS } from '@/store/staples'
 import { normalizeName } from '@/store/ingredients';
 import { todayISO } from '@/store/schedule';
 import { runningLowNote, packagesBought } from '@/store/usage';
+import { openRowForGrocery } from '@/store/purchases';
 import { markBusy, clearBusy } from '@/utils/appUpdate';
 
 // The reason string this screen registers with the auto-update machinery.
@@ -634,9 +635,9 @@ export default {
 
     // Add item directly to shopping list
     addToShoppingList (item) {
-      const shoppingList = this.$store.state.shoppingList;
-      // Find existing item by groceryId (not id)
-      const existingItem = shoppingList ? Object.values(shoppingList).find(listItem => listItem.groceryId === item.id) : null;
+      // Top up an existing row by groceryId (not id) — but only one still to
+      // buy. A ticked-off row stays as the record of what was bought.
+      const existingItem = openRowForGrocery(this.$store.state.shoppingList, item.id);
       const shoppingItemId = uuidv4();
 
       if (existingItem) {
@@ -1220,7 +1221,7 @@ export default {
       if (document.querySelector('[data-step="5"]')) {
         tour.addStep({
           title: 'Bought, and the cupboard',
-          text: 'Things you tick off collect under "Bought", where you can put one back if you tapped it by mistake. Staples you already have sit under "In the cupboard" — they come back to the list on their own once it has been a while, so you will not quietly run out.',
+          text: 'Things you tick off collect under "Bought", where the curved arrow puts one back if you tapped it by mistake. Staples you already have sit under "In the cupboard" — they come back to the list on their own once it has been a while, so you will not quietly run out.',
           attachTo: {
             element: '[data-step="5"]',
             on: 'top'
