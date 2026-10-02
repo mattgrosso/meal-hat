@@ -136,7 +136,7 @@ import draggable from 'vuedraggable';
 import MealCookedSheet from '@/components/MealCookedSheet.vue';
 import AppModal from '@/components/Modal.vue';
 import {
-  toISODate, fromISODate, withDrawnDate, nextMealId
+  toISODate, fromISODate, withDrawnDate, nextMealId, swapScheduleRows
 } from '@/store/schedule';
 
 export default {
@@ -278,23 +278,25 @@ export default {
       const date1 = toISODate(draggedItem.assignedDate);
       const date2 = toISODate(itemAtNewIndex.assignedDate);
 
+      // Whole rows, not just mealId — read before the local swap below.
+      const rows = swapScheduleRows(draggedItem, itemAtNewIndex);
+
       // Swap the meal and mealId of the dragged item and the item at the new index.
       [draggedItem.meal, itemAtNewIndex.meal] = [itemAtNewIndex.meal, draggedItem.meal];
       [draggedItem.mealId, itemAtNewIndex.mealId] = [itemAtNewIndex.mealId, draggedItem.mealId];
 
+      // Only a meal from the hat has drawn history. A one-off's `meal` is a
+      // stand-in built from the row (id = the ROW's id), and writing it back
+      // would plant a phantom meal in the hat.
+      const hatMeals = [
+        meal1 && !meal1.oneOff && withDrawnDate(this.replaceDrawnDate(meal1, date1, date2), date2),
+        meal2 && !meal2.oneOff && withDrawnDate(this.replaceDrawnDate(meal2, date2, date1), date1)
+      ].filter(Boolean);
+
       // One atomic write for the whole swap. This was four separate set() calls
       // — two schedule rows and two meals — so an interruption could leave the
       // schedule showing one arrangement and the meals' drawn history another.
-      await this.$store.dispatch('reassignDrawnMeals', {
-        rows: [
-          { id: draggedItem.id, mealId: draggedItem.mealId, assignedDate: date1 },
-          { id: itemAtNewIndex.id, mealId: itemAtNewIndex.mealId, assignedDate: date2 }
-        ],
-        meals: [
-          withDrawnDate(this.replaceDrawnDate(meal1, date1, date2), date2),
-          withDrawnDate(this.replaceDrawnDate(meal2, date2, date1), date1)
-        ]
-      });
+      await this.$store.dispatch('reassignDrawnMeals', { rows, meals: hatMeals });
 
       // Regenerate shopping list since meal dates may have changed
       await this.$store.dispatch('generateShoppingListFromMeals');

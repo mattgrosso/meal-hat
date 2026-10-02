@@ -567,6 +567,12 @@ way to record a night the hat has no opinion about.
   no ingredients, and `aggregateMealIngredients` already skips a drawn row
   whose meal it cannot resolve, so the shopping list is untouched.
 
+**Moving a row must carry the whole row.** Dragging on the schedule swaps
+everything but the id and date (`swapScheduleRows`). It used to rewrite both
+rows as `{ id, mealId, assignedDate }`, so a dragged one-off lost its name
+and vanished, and a Learn to Cook lesson night lost the `lesson` marker and
+`ingredients` that app writes on it.
+
 **Both readers of a drawn row must fall back to its own `name`.** The schedule's
 `drawnMeals` computed and `buildMirrorFeed` each drop a row they cannot resolve
 to a hat meal — correct for a meal deleted out of the hat, catastrophic for a

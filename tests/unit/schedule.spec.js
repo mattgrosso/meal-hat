@@ -9,7 +9,8 @@ import {
   drawnTooRecently,
   datesInRange,
   isoDaysAgo,
-  DRAWN_DATES_KEPT
+  DRAWN_DATES_KEPT,
+  swapScheduleRows
 } from '../../src/store/schedule.js';
 
 describe('toISODate', () => {
@@ -286,5 +287,20 @@ describe('nextMealId', () => {
   it('is safe on junk', () => {
     expect(nextMealId(null, new Date())).toBe(null);
     expect(nextMealId([{ id: 'x' }], new Date())).toBe(null);
+  });
+});
+
+describe('swapScheduleRows', () => {
+  it('keeps each date and id where it was and trades everything else', () => {
+    const drawn = { id: 'a', mealId: 'chili', assignedDate: '2026-10-02', meal: { id: 'chili' } };
+    const lesson = { id: 'b', name: 'Mustard pork chops', manual: true, lesson: 'pan-sauce', ingredients: [{ groceryItemId: 'g1', quantity: 1 }], assignedDate: '2026-10-03' };
+    const [first, second] = swapScheduleRows(drawn, lesson);
+    expect(first).toEqual({ id: 'a', assignedDate: '2026-10-02', name: 'Mustard pork chops', manual: true, lesson: 'pan-sauce', ingredients: [{ groceryItemId: 'g1', quantity: 1 }] });
+    expect(second).toEqual({ id: 'b', assignedDate: '2026-10-03', mealId: 'chili' });
+  });
+
+  it('normalizes older date shapes on the way out', () => {
+    const [first] = swapScheduleRows({ id: 'a', assignedDate: 'Fri Oct 02 2026' }, { id: 'b', mealId: 'x', assignedDate: '2026-10-03' });
+    expect(first).toEqual({ id: 'a', assignedDate: '2026-10-02', mealId: 'x' });
   });
 });

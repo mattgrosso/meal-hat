@@ -1143,8 +1143,10 @@ export default createStore({
      * Move or remove existing schedule rows, and their meals' drawn history,
      * in ONE atomic write.
      *
-     * `rows` is [{ id, mealId, assignedDate }] to write, or [{ id, value: null }]
-     * to delete. `meals` is the already-updated meal records.
+     * `rows` is whole rows to write (see swapScheduleRows: a one-off's name and
+     * a lesson night's marker and ingredients must survive a move), or
+     * [{ id, value: null }] to delete. `meals` is the already-updated meal
+     * records.
      *
      * Reordering the schedule used to be four independent set() calls and
      * deleting a meal two, with no ordering guarantee between them. An
@@ -1161,7 +1163,7 @@ export default createStore({
         if (!row?.id) return;
         updates[`drawnMeals/${row.id}`] = row.value === null
           ? null
-          : removeNaNAndUndefined({ id: row.id, mealId: row.mealId, assignedDate: row.assignedDate });
+          : removeNaNAndUndefined({ ...row });
       });
 
       meals.forEach((meal) => {

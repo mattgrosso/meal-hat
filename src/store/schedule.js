@@ -212,3 +212,22 @@ export function nextMealId (meals, now = new Date()) {
 
   return upcoming ? upcoming.id : null;
 }
+
+/**
+ * Dragging one schedule row onto another: the DATES stay where they are and
+ * everything else trades places. Returns the two rows to write.
+ *
+ * Everything else, not just `mealId`. A one-off carries its own `name` and
+ * `manual`, and a Learn to Cook lesson night also carries `lesson` and its
+ * `ingredients` (enjoy-cooking's mealHatSchedule.js). Swapping only `mealId`
+ * wrote both rows back as `{ id, mealId, assignedDate }`: a one-off lost its
+ * name and vanished from the schedule, and a lesson night lost the marker the
+ * course finds it by. `meal` is the component's resolved copy, never stored.
+ */
+export function swapScheduleRows (a, b) {
+  const payload = ({ id, assignedDate, meal, ...rest }) => rest;
+  return [
+    { ...payload(b), id: a.id, assignedDate: toISODate(a.assignedDate) },
+    { ...payload(a), id: b.id, assignedDate: toISODate(b.assignedDate) }
+  ];
+}
