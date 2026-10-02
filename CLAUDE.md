@@ -1222,6 +1222,12 @@ CloudFront, all via the **`personal-deploy`** AWS profile. Infra (account
 - CloudFront distribution **`E1C9X1FV3WBDN6`**, custom domain `mealhat.com` + www
 - Route 53 hosted zone `Z097753917S7LG3I2FEWJ`, ACM cert in us-east-1
 
+**`cook/` in the bucket is another app** (enjoy-cooking, the cooking course,
+since 2026-10-02) deployed into this site so it opens inside Meal Hat's
+installed app and shares the sign-in. This deploy syncs WITHOUT `--delete`,
+which is what keeps it alive: never add `--delete` without
+`--exclude 'cook/*'`.
+
 `yarn build` runs `update-version` (`src/assets/javascript/version.js`), which
 prompts for a semver bump. It no longer needs a terminal: name the bump up
 front with **`VERSION_BUMP=minor yarn deploy`** (`patch`/`minor`/`major`), and

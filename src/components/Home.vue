@@ -45,12 +45,14 @@
         >
           Fridge
         </router-link>
-        <!-- The cooking course (cook.mealhat.com, the enjoy-cooking repo) is
-             its own app on the same Firebase project and follows the same
-             hat, so any member can use it — no gate like the fridge's. A
-             plain link, not a router-link: it's another origin. -->
+        <!-- The cooking course (the enjoy-cooking repo) is its own app on the
+             same Firebase project, deployed into this site at /cook/ — same
+             origin, so it opens inside the installed app and shares the
+             sign-in. It follows the same hat, so any member can use it — no
+             gate like the fridge's. A plain link, not a router-link: it's
+             another app. -->
         <a
-          href="https://cook.mealhat.com"
+          href="/cook/"
           class="btn btn-primary"
         >
           Learn to Cook
