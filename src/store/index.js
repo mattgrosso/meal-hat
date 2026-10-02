@@ -1,5 +1,5 @@
 import { createStore } from 'vuex';
-import { onValue, ref, set, get, update, query, orderByChild, startAt } from "firebase/database";
+import { onValue, ref, set, get, update, query, orderByChild, startAt, runTransaction } from "firebase/database";
 import { GoogleAuthProvider, signInWithPopup, signOut } from "firebase/auth";
 import { db, auth, authReady, firebaseConfig } from '@/firebase';
 import { v4 as uuidv4 } from 'uuid';
@@ -44,6 +44,7 @@ export default createStore({
     databaseTopKey: null,
     mostRecentDatabase: null,
     showTutorial: null,
+    watchingShoppingListStale: null, // the hat whose flag is being watched
     meals: null,
     drawnMealsWithHistory: null,
     drawnMeals: null,
@@ -145,6 +146,9 @@ export default createStore({
     },
     setUpdateAvailable (state, value) {
       state.updateAvailable = value;
+    },
+    setWatchingShoppingListStale (state, value) {
+      state.watchingShoppingListStale = value;
     },
     setShowTutorial (state, value) {
       state.showTutorial = value;
@@ -719,6 +723,18 @@ export default createStore({
         });
       }
 
+      // The cooking course (mealhat.com/cook/) writes lesson nights straight
+      // into drawnMeals, but it can't run this store's shopping-list rebuild.
+      // It raises this flag instead, and whichever Meal Hat is open (or opens
+      // next) does the rebuild — so a lesson night's ingredients reach the list
+      // the same way a drawn meal's do.
+      if (context.state.watchingShoppingListStale !== context.state.databaseTopKey) {
+        context.commit('setWatchingShoppingListStale', context.state.databaseTopKey);
+        onValue(ref(db, `${context.state.databaseTopKey}/schema/shoppingListStale`), (snapshot) => {
+          if (snapshot.val()) context.dispatch('rebuildStaleShoppingList');
+        });
+      }
+
       // If there's no mealHatsList in the state, fetch it from the database.
       if (!context.state.mealHatsList && context.getters.primaryDatabaseTopKey) {
         onValue(ref(db, `${context.getters.primaryDatabaseTopKey}/meal-hats-list`), (snapshot) => {
@@ -1054,6 +1070,30 @@ export default createStore({
      *
      * Returns true once the hat is known to be ISO-only.
      */
+    // See the shoppingListStale listener in initializeDB. Claims the flag in a
+    // transaction first, so two open devices don't both rebuild at once and
+    // double the list; waits (briefly) for the meals and catalog the rebuild
+    // reads from.
+    async rebuildStaleShoppingList (context) {
+      const hat = context.state.databaseTopKey;
+      if (!hat) return;
+      for (let waited = 0; waited < 15000; waited += 250) {
+        if (context.state.meals && Object.keys(context.state.groceryCatalog || {}).length) break;
+        await new Promise((resolve) => setTimeout(resolve, 250));
+      }
+      let claimed = false;
+      try {
+        await runTransaction(ref(db, `${hat}/schema/shoppingListStale`), (value) => {
+          claimed = Boolean(value);
+          return null;
+        });
+      } catch (error) {
+        console.error('Could not claim the shopping-list rebuild:', error);
+        return;
+      }
+      if (claimed) await context.dispatch('generateShoppingListFromMeals');
+    },
+
     async migrateDrawnMealDates (context) {
       const topKey = context.state.databaseTopKey;
       if (!topKey) return false;

@@ -63,6 +63,17 @@ describe('aggregateMealIngredients', () => {
     expect(Object.keys(result).sort()).toEqual(['beef', 'onion']);
   });
 
+  it('takes a one-off row\'s own ingredients (cooking-course lesson nights)', () => {
+    const drawn = [
+      { mealId: 'soup', assignedDate: '2026-06-26' },
+      { manual: true, lesson: 'pan-sauce', name: 'Pork chops', assignedDate: '2026-06-27', ingredients: [{ groceryItemId: 'onion', quantity: 1 }] },
+      { manual: true, name: 'Takeout', assignedDate: '2026-06-28' }
+    ];
+    const result = aggregateMealIngredients({ drawnMeals: drawn, getMeal, catalog, now });
+    expect(result.onion.quantity).toBe(4);
+    expect(Object.keys(result)).toEqual(['onion']);
+  });
+
   it('excludes meals assigned before today', () => {
     const drawn = [
       { mealId: 'chili', assignedDate: '2026-06-20' }, // past

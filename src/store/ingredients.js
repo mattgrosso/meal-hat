@@ -51,16 +51,22 @@ export function aggregateMealIngredients ({ drawnMeals, getMeal, catalog = {}, n
   });
 
   upcomingMeals.forEach((drawnMeal) => {
-    const meal = getMeal(drawnMeal.mealId);
-    if (meal && meal.ingredients) {
-      meal.ingredients.forEach((ingredient) => {
+    // A one-off has no meal to look up, but it can carry its own ingredients
+    // in the same shape. The cooking course (mealhat.com/cook/) writes its
+    // lesson nights that way, so they land on the list like any drawn meal
+    // (Matt, 2026-10-02: "that should definitely just happen automatically,
+    // just like whenever any other meal gets scheduled").
+    const meal = drawnMeal.mealId ? getMeal(drawnMeal.mealId) : null;
+    const ingredients = meal?.ingredients || drawnMeal.ingredients;
+    if (ingredients) {
+      ingredients.forEach((ingredient) => {
         const groceryItem = catalog[ingredient.groceryItemId];
         if (groceryItem) {
           const id = groceryItem.id;
           if (mealIngredients[id]) {
             mealIngredients[id].quantity += ingredient.quantity;
           } else {
-            mealIngredients[id] = { ...groceryItem, quantity: ingredient.quantity, mealId: drawnMeal.mealId };
+            mealIngredients[id] = { ...groceryItem, quantity: ingredient.quantity, mealId: drawnMeal.mealId || null };
           }
         }
       });
