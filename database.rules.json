@@ -45,7 +45,10 @@
     // The named child wins.
     "bugReports": {
       ".read": false,
-      ".write": "auth != null"
+      "$reportId": {
+        ".write": "auth != null && !data.exists() && newData.exists()",
+        ".validate": "newData.hasChildren(['transcript']) && newData.child('transcript').isString() && newData.child('transcript').val().length <= 5000 && (!newData.hasChild('appState') || (newData.child('appState').isString() && newData.child('appState').val().length <= 20000))"
+      }
     },
 
     // The reply to a bug report (2026-09-21, ported from Cinema Roll):
