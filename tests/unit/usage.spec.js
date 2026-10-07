@@ -8,7 +8,9 @@ import {
   prunePatch,
   runningLowNote,
   receiptPatch,
-  packagesBought
+  packagesBought,
+  staleRunningLowRows,
+  mealUsage
 } from '../../src/store/usage.js';
 import { partitionStaples } from '../../src/store/staples.js';
 import { buildTalkReview } from '../../src/store/fridge/talkReview.js';
@@ -275,5 +277,106 @@ describe('talk-through counts', () => {
     };
     const review = buildTalkReview(result, timers, [], NOW);
     expect(review.counts).toEqual({ 'diet coke': 6, milk: 1, butter: 0, egg: 0 });
+  });
+});
+
+// Report 2026-10-07: "we have a full bag of cheddar cheese, two full bags of
+// mozzarella shredded, and it tells me we need to get both of those". All of
+// them were running-low rows. The numbers below are his real mozzarella log.
+describe('running low leaves the meals out of it', () => {
+  const mozzarella = {
+    '2026-09-28': { count: 2, bought: 'meal', boughtCount: 2 },
+    '2026-10-03': { bought: 'receipt', boughtCount: 1 },
+    '2026-10-07': { count: 2 }
+  };
+  const OCT7 = new Date(2026, 9, 7, 17);
+  // Homemade Pizza on 10/5: 3 cups against a 2-cup bag.
+  const pizza = [{ date: '2026-10-05', packages: 1.5 }];
+
+  it('counting the pizza as household use calls two bags a six-day supply', () => {
+    expect(predictRunOut(mozzarella, OCT7).runsOutOn).toBe('2026-10-13');
+  });
+
+  it('without it, two bags last past the week', () => {
+    expect(usageRate(mozzarella, pizza) * 7).toBeCloseTo((1.5 / 9) * 7);
+    expect(predictRunOut(mozzarella, OCT7, pizza).runsOutOn > '2026-10-14').toBe(true);
+  });
+
+  it('a food only the meals used has no rate of its own', () => {
+    const log = { '2026-09-28': { count: 2 }, '2026-10-07': { count: 0 } };
+    expect(usageRate(log, [{ date: '2026-10-01', packages: 3 }])).toBeNull();
+  });
+
+  it('a meal outside the gap is not subtracted from it', () => {
+    const log = { '2026-09-28': { count: 2 }, '2026-10-07': { count: 0 } };
+    expect(usageRate(log, [{ date: '2026-10-07', packages: 2 }]) * 9).toBeCloseTo(2);
+  });
+
+  it('nothing used since the last count is not running low', () => {
+    // His Sliced Cheddar: 6 (probably slices), then 0, one bought, still 1.
+    const sliced = {
+      '2026-09-20': { count: 6 },
+      '2026-09-28': { count: 0 },
+      '2026-10-03': { bought: 'receipt', boughtCount: 1 },
+      '2026-10-07': { count: 1 }
+    };
+    expect(usageRate(sliced)).toBeNull();
+    expect(predictRunOut(sliced, OCT7)).toBeNull();
+  });
+});
+
+describe('mealUsage', () => {
+  const catalog = {
+    mozz: { id: 'mozz', name: 'Mozzarella', packageSize: 2 },
+    salt: { id: 'salt', name: 'Salt' }
+  };
+  const meals = { pizza: { id: 'pizza', ingredients: [{ groceryItemId: 'mozz', quantity: 3 }, { groceryItemId: 'salt', quantity: 1 }] } };
+
+  it('turns drawn meals into packages per food, by date', () => {
+    const drawn = [{ mealId: 'pizza', assignedDate: '2026-10-05' }];
+    expect(mealUsage(drawn, (id) => meals[id], catalog)).toEqual({ mozz: [{ date: '2026-10-05', packages: 1.5 }] });
+  });
+
+  it('reads a one-off night that carries its own ingredients', () => {
+    const drawn = [{ name: 'Lesson', assignedDate: '2026-10-05', ingredients: [{ groceryItemId: 'mozz', quantity: 2 }] }];
+    expect(mealUsage(drawn, () => null, catalog)).toEqual({ mozz: [{ date: '2026-10-05', packages: 1 }] });
+  });
+});
+
+describe('staleRunningLowRows', () => {
+  const catalog = { coke: { id: 'coke', name: 'Diet Coke' }, mozz: { id: 'mozz', name: 'Mozzarella' } };
+  const low = { runsOutOn: '2026-10-01' };
+
+  it('takes back a guess the latest count no longer supports', () => {
+    const log = { coke: { ...dietCoke, '2026-09-28': { count: 20 } } };
+    const list = { r1: { groceryId: 'coke', runningLow: low, purchased: false } };
+    expect(staleRunningLowRows(list, log, catalog, NOW).map((r) => r.id)).toEqual(['r1']);
+  });
+
+  it('keeps one that still runs out this week', () => {
+    const list = { r1: { groceryId: 'coke', runningLow: low, purchased: false } };
+    expect(staleRunningLowRows(list, { coke: dietCoke }, catalog, NOW)).toEqual([]);
+  });
+
+  it('takes back one with no prediction left at all', () => {
+    const list = { r1: { groceryId: 'mozz', runningLow: low, purchased: false } };
+    expect(staleRunningLowRows(list, {}, catalog, NOW).map((r) => r.id)).toEqual(['r1']);
+  });
+
+  it('never touches a bought row, a row he added himself, or a meal row', () => {
+    const list = {
+      r1: { groceryId: 'mozz', runningLow: low, purchased: true },
+      r2: { groceryId: 'mozz', source: 'manual', purchased: false },
+      r3: { groceryId: 'mozz', source: 'meal', purchased: false }
+    };
+    expect(staleRunningLowRows(list, {}, catalog, NOW)).toEqual([]);
+  });
+
+  it('uses the meals to judge, like the add does', () => {
+    const log = { mozz: { '2026-09-20': { count: 4 }, '2026-09-27': { count: 2 } } };
+    const list = { r1: { groceryId: 'mozz', runningLow: low, purchased: false } };
+    expect(staleRunningLowRows(list, log, catalog, NOW)).toEqual([]);
+    const mealUse = { mozz: [{ date: '2026-09-22', packages: 1.5 }] };
+    expect(staleRunningLowRows(list, log, catalog, NOW, undefined, mealUse).map((r) => r.id)).toEqual(['r1']);
   });
 });

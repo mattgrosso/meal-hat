@@ -142,6 +142,19 @@
           </ul>
         </template>
 
+        <!-- Its own earlier guesses, taken back: running-low rows the counts
+             just given no longer support. See staleRunningLowRows. -->
+        <template v-if="report.cleared.length">
+          <h3 class="pile-head">Taken off the shopping list ({{ report.cleared.length }})</h3>
+          <p class="pile-note">These were added as running low. Going by what you just said, they aren't.</p>
+          <ul class="seen-list">
+            <li v-for="row in report.cleared" :key="'c' + row.groceryId" class="seen-row">
+              <span class="seen-tick">−</span>
+              <span class="seen-title">{{ row.name }}</span>
+            </li>
+          </ul>
+        </template>
+
         <template v-if="report.unclear.length">
           <h3 class="pile-head">Couldn't place these</h3>
           <ul class="unclear-list">
@@ -200,7 +213,7 @@ export default {
       stage: 'talk',
       resuming: false,
       transcript: '',
-      report: { added: [], confirmed: [], removed: [], unclear: [], runningLow: [], spoken: [] },
+      report: { added: [], confirmed: [], removed: [], unclear: [], runningLow: [], cleared: [], spoken: [] },
       restored: false,
       restoredAt: null,
       savedAt: null,
@@ -246,9 +259,16 @@ export default {
       const parts = []
       if (added) parts.push(`${added} added`)
       if (removed) parts.push(`${removed} removed`)
+      // "Your shopping list knows about it" used to close every report, even
+      // one whose own list below said cheddar and mozzarella were still on it
+      // (2026-10-07). Point at the exceptions instead of vouching for them.
+      const stillOn = this.shoppingCheck.stillOn.length
+      const listNote = stillOn
+        ? ` ${stillOn === 1 ? '1 thing you mentioned is' : `${stillOn} things you mentioned are`} still on the shopping list — see below.`
+        : ''
       const done = parts.length
-        ? `${parts.join(', ')}. Your shopping list knows about it.`
-        : 'Nothing changed.'
+        ? `${parts.join(', ')}.${listNote}`
+        : `Nothing changed.${listNote}`
       // Say it out loud. A partial apply that reports itself as a clean one
       // sends him to the shop trusting a list that is wrong.
       return failed
@@ -431,7 +451,7 @@ export default {
       })
 
       // Only a signed-in phone has a hat to log into; the store action checks.
-      const runningLow = await this.$store.dispatch('recordTalkUsage', { counts: review.counts })
+      const usage = await this.$store.dispatch('recordTalkUsage', { counts: review.counts })
 
       this.applied = applied
       this.report = {
@@ -439,7 +459,8 @@ export default {
         confirmed: review.confirmed,
         removed: review.notHeard,
         unclear: review.unclear,
-        runningLow: runningLow || [],
+        runningLow: usage?.added || [],
+        cleared: usage?.cleared || [],
         spoken: Object.entries(review.counts || {}).filter(([, n]) => n > 0).map(([key]) => key)
       }
       clearDraft()

@@ -197,9 +197,19 @@ match no catalog food — those can never learn a rate until the names agree. Af
 carrying a STORED `runningLow` for anything due inside a week and not already
 listed.
 
-**Add-only.** No rate means nothing happens, and `partitionStaples` never moves
-a `runningLow` row off the list — the fridge holding a few is exactly why it
-was added. Counts are whatever unit he speaks in ("six cans", "two cases"),
+**Add-only, except for its own guesses.** No rate means nothing happens, and
+`partitionStaples` never moves a `runningLow` row off the list — the fridge
+holding a few is exactly why it was added. But each talk-through re-checks the
+unbought `runningLow` rows (`staleRunningLowRows`) and deletes any the fresh
+numbers no longer put inside the week. Before 2026-10-07 nothing did, and the
+list had piled up 36 of them.
+
+**The rate is the house's, not the meals'** (2026-10-07). What the drawn meals
+called for in a gap (`mealUsage`, via `packageSize`) is subtracted from what
+was used, because the meal rows already buy for the schedule against the
+fridge — counting last week's pizza too asked for mozzarella beside two full
+bags. And a food whose latest stretch shows nothing used gets no prediction,
+however fast an older stretch went. Counts are whatever unit he speaks in ("six cans", "two cases"),
 so a food read out in mixed units learns a rough rate.
 
 ### Checking items off

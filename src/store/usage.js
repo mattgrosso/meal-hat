@@ -95,6 +95,14 @@ export function sortedEntries (log = {}) {
  * Usage that comes out NEGATIVE means somebody bought it and nothing recorded
  * it; that pair is skipped rather than read as the house un-drinking a case.
  *
+ * WHAT THE MEALS ATE IS TAKEN OUT (2026-10-07). `mealUse` is the packages the
+ * drawn meals called for, by date (see `mealUsage`). The meal rows already
+ * buy for the meals on the schedule, against what the fridge holds, so a rate
+ * that also counts last week's pizza asks for the mozzarella twice. Matt, with
+ * two full bags in the fridge: "it tells me we need to get both of those".
+ * What is left is what the house gets through on its own, floored at zero —
+ * a skipped meal is not the house un-eating cheese.
+ *
  * With no pair of readings at all, purchases before the FIRST reading still
  * say something (Matt, 2026-09-28: "we have the receipts, so you know what I
  * bought, and then you can see from the most recent fridge report how much is
@@ -102,7 +110,7 @@ export function sortedEntries (log = {}) {
  * is the least that can have been used: a LOW estimate, which predicts a
  * run-out later than the truth. It is replaced as soon as two readings exist.
  */
-export function usageRate (log = {}) {
+export function usageRate (log = {}, mealUse = []) {
   const entries = sortedEntries(log);
   const readings = entries.filter(hasCount);
   const purchases = entries.filter((e) => e.bought || boughtCountOf(e) !== null);
@@ -117,13 +125,24 @@ export function usageRate (log = {}) {
     if (bought === null) continue;
     const used = Number(a.count) + bought - Number(b.count);
     if (used < 0) continue;
-    pairs.push({ used, days });
+    const eaten = (mealUse || [])
+      .filter((m) => m.date >= a.date && m.date < b.date)
+      .reduce((sum, m) => sum + m.packages, 0);
+    pairs.push({ used: Math.max(0, used - eaten), days });
   }
 
   if (!pairs.length && readings.length) {
-    const lead = leadInPair(purchases, readings[0]);
+    const lead = leadInPair(purchases, readings[0], mealUse);
     if (lead) pairs.push(lead);
   }
+
+  // UNTOUCHED SINCE THE LAST COUNT IS NOT RUNNING LOW (2026-10-07). Sliced
+  // Cheddar went 0, bought one, still 1 — nothing used in nine days — and was
+  // put on the list anyway, because an older stretch (a count of six, likely
+  // slices rather than packs) dominated the average. The latest stretch can
+  // only veto here, never raise the rate.
+  const latest = pairs[pairs.length - 1];
+  if (latest && latest.used <= 0) return null;
 
   const recent = pairs.slice(-RATE_PAIRS_USED);
   const used = recent.reduce((sum, p) => sum + p.used, 0);
@@ -137,7 +156,7 @@ export function usageRate (log = {}) {
 // been used by then. Only the unbroken run of known sizes nearest the reading
 // counts, and only inside the stale window: a case bought in March says
 // nothing about September.
-function leadInPair (purchases, reading) {
+function leadInPair (purchases, reading, mealUse = []) {
   const before = purchases
     .filter((e) => e.date < reading.date && daysBetween(e.date, reading.date) <= READING_STALE_DAYS)
     .reverse();
@@ -150,7 +169,10 @@ function leadInPair (purchases, reading) {
 
   const first = run[run.length - 1];
   const days = daysBetween(first.date, reading.date);
-  const used = totalBought(run) - Number(reading.count);
+  const eaten = (mealUse || [])
+    .filter((m) => m.date >= first.date && m.date < reading.date)
+    .reduce((sum, m) => sum + m.packages, 0);
+  const used = totalBought(run) - Number(reading.count) - eaten;
   return days >= 1 && used > 0 ? { used, days } : null;
 }
 
@@ -181,11 +203,11 @@ export function buyingRhythm (log = {}) {
  * A usage rate wins over a buying rhythm: it comes from what he actually said
  * was in the house. The rhythm is the fallback for foods never counted.
  */
-export function predictRunOut (log = {}, now = new Date()) {
+export function predictRunOut (log = {}, now = new Date(), mealUse = []) {
   const today = todayISO(now);
   const entries = sortedEntries(log);
 
-  const perDay = usageRate(log);
+  const perDay = usageRate(log, mealUse);
   if (perDay) {
     const latest = [...entries].reverse().find(hasCount);
     // A shop since the last count adds to it — if it says how much. One that
@@ -221,15 +243,66 @@ export function predictRunOut (log = {}, now = new Date()) {
  * it was just dealt with), fridge-only foods that are never shopped for, and
  * anything whose catalog entry is gone.
  */
-export function runningLowFoods (usageLog = {}, catalog = {}, shoppingList = {}, now = new Date(), horizonDays = RUNNING_LOW_HORIZON_DAYS) {
+export function runningLowFoods (usageLog = {}, catalog = {}, shoppingList = {}, now = new Date(), horizonDays = RUNNING_LOW_HORIZON_DAYS, mealUseById = {}) {
   const listed = new Set(Object.values(shoppingList || {}).map((row) => row && row.groceryId).filter(Boolean));
   const horizon = addDays(todayISO(now), horizonDays);
 
   return Object.entries(usageLog || {})
     .filter(([groceryId]) => catalog[groceryId] && !catalog[groceryId].fridgeOnly && !listed.has(groceryId))
-    .map(([groceryId, log]) => ({ groceryId, prediction: predictRunOut(log, now) }))
+    .map(([groceryId, log]) => ({ groceryId, prediction: predictRunOut(log, now, mealUseById[groceryId]) }))
     .filter(({ prediction }) => prediction && prediction.runsOutOn <= horizon)
     .map(({ groceryId, prediction }) => ({ groceryId, ...prediction }));
+}
+
+/**
+ * Running-low rows the latest numbers no longer support, to take back off.
+ *
+ * A running-low row used to be permanent until bought: nothing re-checked it,
+ * and the fridge is (rightly) never allowed to move one. So on 2026-10-07 the
+ * list held 36 of them, some predicting a run-out three weeks gone, and a
+ * talk-through saying "two full bags of mozzarella" changed none of them.
+ *
+ * Each talk-through now re-asks the question with what it just learned. A row
+ * goes when there is no longer a prediction, or the predicted day is past the
+ * horizon. Bought rows are left alone — they are the tick's business — and so
+ * is a row whose food has left the catalog, since there is nothing to ask.
+ */
+export function staleRunningLowRows (shoppingList = {}, usageLog = {}, catalog = {}, now = new Date(), horizonDays = RUNNING_LOW_HORIZON_DAYS, mealUseById = {}) {
+  const horizon = addDays(todayISO(now), horizonDays);
+  return Object.entries(shoppingList || {})
+    .map(([id, row]) => ({ id, ...(row || {}) }))
+    .filter((row) => row.runningLow && !row.purchased && catalog[row.groceryId])
+    .filter((row) => {
+      const prediction = predictRunOut(usageLog?.[row.groceryId] || {}, now, mealUseById[row.groceryId]);
+      return !prediction || prediction.runsOutOn > horizon;
+    });
+}
+
+/**
+ * What the drawn meals called for, in PACKAGES, per grocery id:
+ * `{ groceryId: [{ date, packages }] }`.
+ *
+ * Every drawn row counts, cooked or not. Drawn is only the plan, but erring
+ * toward "the meals ate it" makes the house's own rate lower, which adds
+ * fewer rows — the cheap direction for a feature that may only ever add.
+ * An ingredient with no packageSize cannot be converted and is left out.
+ */
+export function mealUsage (drawnMeals = [], getMeal = () => null, catalog = {}) {
+  const byId = {};
+  (drawnMeals || []).forEach((drawn) => {
+    const date = toISODate(drawn?.assignedDate);
+    if (!date) return;
+    const meal = drawn.mealId ? getMeal(drawn.mealId) : null;
+    const ingredients = meal?.ingredients || drawn.ingredients || [];
+    Object.values(ingredients || {}).forEach((ingredient) => {
+      const id = ingredient?.groceryItemId;
+      const size = Number(catalog[id]?.packageSize);
+      const quantity = Number(ingredient?.quantity);
+      if (!id || !(size > 0) || !(quantity > 0)) return;
+      (byId[id] = byId[id] || []).push({ date, packages: quantity / size });
+    });
+  });
+  return byId;
 }
 
 /** Normalized catalog name -> grocery id, first entry winning a shared name. */

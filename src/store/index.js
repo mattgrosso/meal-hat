@@ -7,7 +7,7 @@ import router from '@/router';
 import { analyzeDuplicates, findSimilar, aggregateMealIngredients, remapMealIngredients } from './ingredients';
 import { withDrawnDate, compareByDate, isUpcoming, toISODate, isoDaysAgo } from './schedule';
 import { withPreservedPurchases } from './purchases';
-import { readingsPatch, receiptPatch, prunePatch, runningLowFoods } from './usage';
+import { readingsPatch, receiptPatch, prunePatch, runningLowFoods, staleRunningLowRows, mealUsage } from './usage';
 import { buildMirrorFeed } from '../assets/javascript/mirrorFeed';
 import fridge from './fridge';
 
@@ -279,15 +279,22 @@ export default createStore({
     // After a talk-through: log what he said was in the house, then put on the
     // shopping list anything predicted to run out within a week. See usage.js.
     //
-    // ADD-ONLY. A prediction never removes or hides a row, and a food with no
-    // learned rate produces nothing. Rows go in as `source: 'manual'` so a
-    // redraw preserves them, one per-key write each — never a whole-node set().
+    // A prediction never hides a row the user added or a meal asked for, and
+    // a food with no learned rate produces nothing. Rows go in as `source:
+    // 'manual'` so a redraw preserves them, one per-key write each — never a
+    // whole-node set().
+    //
+    // The one thing it removes is its OWN earlier guess (2026-10-07): an
+    // unbought running-low row the latest counts no longer support. Without
+    // that, "two full bags of mozzarella" left a running-low mozzarella row
+    // standing, and nothing would ever have taken it down.
     //
     // Non-fatal throughout: the talk-through has already landed, and missing
     // a "running low" row costs no more than this feature not existing.
     async recordTalkUsage (context, { counts } = {}) {
       const hat = context.state.databaseTopKey;
-      if (!hat || !counts) return [];
+      const none = { added: [], cleared: [] };
+      if (!hat || !counts) return none;
       const catalog = context.state.groceryCatalog || {};
       const now = new Date();
 
@@ -307,7 +314,21 @@ export default createStore({
         // generateShoppingListFromMeals — so a row added on another phone is
         // seen and not duplicated.
         const shoppingList = (await get(ref(db, `${hat}/shopping-list`))).val() || {};
-        const low = runningLowFoods(usageLog, catalog, shoppingList, now);
+        // WithHistory: the past is what a rate is measured over. `drawnMeals`
+        // is upcoming only and would subtract nothing.
+        const mealUse = mealUsage(
+          context.state.drawnMealsWithHistory || [],
+          (id) => (context.state.meals ? context.getters.getMeal(id) : null),
+          catalog
+        );
+
+        const stale = staleRunningLowRows(shoppingList, usageLog, catalog, now, undefined, mealUse);
+        for (const row of stale) {
+          await context.dispatch('updateDBValue', { path: `shopping-list/${row.id}`, value: null });
+          delete shoppingList[row.id];
+        }
+
+        const low = runningLowFoods(usageLog, catalog, shoppingList, now, undefined, mealUse);
 
         for (const food of low) {
           const entry = catalog[food.groceryId];
@@ -334,10 +355,13 @@ export default createStore({
           });
         }
 
-        return low.map((food) => ({ ...food, name: catalog[food.groceryId].name }));
+        return {
+          added: low.map((food) => ({ ...food, name: catalog[food.groceryId].name })),
+          cleared: stale.map((row) => ({ groceryId: row.groceryId, name: catalog[row.groceryId].name }))
+        };
       } catch (error) {
         console.error('Failed to learn from the talk-through:', error);
-        return [];
+        return none;
       }
     },
 
