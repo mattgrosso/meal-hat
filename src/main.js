@@ -16,7 +16,7 @@ import './registerServiceWorker'
 const app = createApp(App);
 
 // Crash reporting → Sentry → Bug Desk (src/sentry.js). Production builds only.
-setupSentry(app);
+setupSentry(app, { router });
 
 app.use(store);
 
