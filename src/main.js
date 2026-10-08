@@ -2,6 +2,7 @@ import { createApp } from 'vue';
 import App from './App.vue';
 import store from './store';
 import router from './router';
+import { setupSentry } from './sentry';
 // Only the Bootstrap partials this app uses — see the file for the list and
 // why each is there. Was bootstrap.min.css whole (221KB raw / 30KB gzipped).
 import "./assets/scss/bootstrap.scss";
@@ -13,6 +14,9 @@ import "bootstrap";
 import './registerServiceWorker'
 
 const app = createApp(App);
+
+// Crash reporting → Sentry → Bug Desk (src/sentry.js). Production builds only.
+setupSentry(app);
 
 app.use(store);
 
