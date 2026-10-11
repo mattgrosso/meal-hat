@@ -22,7 +22,12 @@ export const POLL_EVERY_MS = 4000
 // and the very first check after unlocking fails a four-minute deadline,
 // reporting a job that finished twenty seconds in as broken. A frozen tab
 // isn't polling, so a frozen tab shouldn't be running down a clock.
-export const POLL_TIMEOUT_MS = 4 * 60 * 1000
+//
+// Twelve minutes since 2026-10-11, when the Lambda's answer budget doubled to
+// let a long talk-through finish: a full one can take about five minutes, and
+// the function itself may run fifteen. Four minutes would abandon a job that
+// was about to succeed.
+export const POLL_TIMEOUT_MS = 12 * 60 * 1000
 export const MAX_POLLS = Math.ceil(POLL_TIMEOUT_MS / POLL_EVERY_MS)
 
 export class ScanError extends Error {

@@ -484,10 +484,35 @@ WHAT NOT TO DO:
 - Do not merge two foods you are unsure about. Two rows they can decline beats one row that is wrong.`;
 };
 
+// Thinking and the answer share max_tokens, and a long talk-through spent all
+// 16000 of them before its list was done (2026-10-11): the answer stopped
+// mid-item and the run failed as "could not make sense of that". Hence 32000,
+// which the SDK only accepts STREAMED (it refuses a non-streamed call it
+// expects to run past ten minutes). At the speed measured that day a full
+// 32000 is about five minutes, which is why the function's timeout is 900s
+// and the client waits twelve.
+const MAX_TOKENS = 32000;
+
+// Streams, then checks for a cut-off BEFORE reading the JSON. messages.parse()
+// parsed first, so a truncated answer threw a bare SyntaxError and the
+// friendly "too much at once" message below was unreachable. A plain
+// json_schema format is not parsed by the stream helper, so this does it.
+const readStructured = async (params, tooMuchMessage) => {
+  const message = await client.messages.stream({ ...params, model: MODEL, max_tokens: MAX_TOKENS }).finalMessage();
+
+  if (message?.stop_reason === 'max_tokens') {
+    const error = new Error(tooMuchMessage);
+    error.userFacing = true;
+    throw error;
+  }
+
+  const text = (message?.content || []).find((block) => block.type === 'text')?.text;
+  if (!text) throw new Error(`No output (stop_reason: ${message?.stop_reason})`);
+  return JSON.parse(text);
+};
+
 const readTranscript = async ({ transcript, knownFoods }) => {
-  const message = await client.messages.parse({
-    model: MODEL,
-    max_tokens: 16000,
+  const parsed = await readStructured({
     thinking: { type: 'adaptive' },
     output_config: { format: { type: 'json_schema', schema: TRANSCRIPT_SCHEMA } },
     messages: [
@@ -499,16 +524,7 @@ const readTranscript = async ({ transcript, knownFoods }) => {
         ]
       }
     ]
-  });
-
-  if (message?.stop_reason === 'max_tokens') {
-    const error = new Error('That was a lot to take in at once. Try it in two goes.');
-    error.userFacing = true;
-    throw error;
-  }
-
-  const parsed = message.parsed_output;
-  if (!parsed) throw new Error(`No parsed output (stop_reason: ${message?.stop_reason})`);
+  }, 'That was a lot to take in at once. Try it in two goes.');
 
   return {
     kind: 'transcript',
@@ -542,11 +558,7 @@ const validationError = ({ image, mediaType, knownFoods, transcript }) => {
 };
 
 const readGroceries = async ({ image, mediaType, knownFoods }) => {
-  const message = await client.messages.parse({
-    model: MODEL,
-    // A big haul is far smaller than a 76-game shelf, but the cap that
-    // truncated Shelfie mid-JSON is not worth re-discovering here.
-    max_tokens: 16000,
+  const parsed = await readStructured({
     thinking: { type: 'adaptive' },
     output_config: { format: { type: 'json_schema', schema: GROCERY_SCHEMA } },
     messages: [
@@ -558,18 +570,7 @@ const readGroceries = async ({ image, mediaType, knownFoods }) => {
         ]
       }
     ]
-  });
-
-  if (message?.stop_reason === 'max_tokens') {
-    const error = new Error('That photo has more on it than one scan can hold. Try photographing half of it.');
-    error.userFacing = true;
-    throw error;
-  }
-
-  const parsed = message.parsed_output;
-  if (!parsed) {
-    throw new Error(`No parsed output (stop_reason: ${message?.stop_reason})`);
-  }
+  }, 'That photo has more on it than one scan can hold. Try photographing half of it.');
 
   return {
     photoKind: ['receipt', 'storage'].includes(parsed.photoKind) ? parsed.photoKind : 'groceries',
