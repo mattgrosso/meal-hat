@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { planShoppingList, regularDue, mealRowId, stockRowId } from '../../src/store/shoppingPlan.js';
+import { planShoppingList, regularDue, mealRowId, stockRowId, packageUnits } from '../../src/store/shoppingPlan.js';
 import { partitionStaples } from '../../src/store/staples.js';
 import { onHandUntilFrom, topUpPlan } from '../../src/store/fridge/inHouse.js';
 
@@ -225,5 +225,15 @@ describe('topUpPlan — a receipt checks for the food first', () => {
     const timers = { t1: { title: 'Milk', quantity: 3, expiryDate: '2026-10-01T00:00:00Z' } };
     expect(topUpPlan({ title: 'Milk', expiryDate: later }, timers, NOW))
       .toMatchObject({ id: 't1', changes: { expiryDate: later, quantity: null } });
+  });
+});
+
+describe('packageUnits', () => {
+  it('keeps a package word and drops a recipe unit', () => {
+    expect(packageUnits('Case')).toBe('Case');
+    expect(packageUnits('Lb')).toBe('Lb');
+    expect(packageUnits('eggs')).toBe('');
+    expect(packageUnits('cloves')).toBe('');
+    expect(packageUnits(undefined)).toBe('');
   });
 });

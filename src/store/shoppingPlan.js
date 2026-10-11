@@ -56,6 +56,12 @@ const addDays = (iso, days) => {
   return todayISO(new Date(y, m - 1, d + days));
 };
 
+// A regular is bought by the PACKAGE — one case, one carton. Its catalog
+// units are often the recipe's ("eggs", "cloves"), and "1 eggs" on the list
+// would ask for a single egg; those show as a bare 1.
+const PACKAGE_WORDS = /^(case|bag|bottle|jar|box|carton|loaf|can|pack|package|tub|block|lb|pound|gallon)s?$/i;
+export const packageUnits = (units) => (PACKAGE_WORDS.test(String(units || '').trim()) ? units : '');
+
 /**
  * Is this regular about to run out? Returns why, or null.
  *
@@ -168,7 +174,7 @@ export function planShoppingList ({
       id: stockRowId(groceryId),
       groceryId,
       quantity: 1,
-      units: entry.defaultUnits || '',
+      units: packageUnits(entry.defaultUnits),
       aisle: entry.defaultAisle || 0,
       location: entry.defaultLocation || null,
       source: 'stock',
