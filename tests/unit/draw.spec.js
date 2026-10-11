@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mealWeight, pickWeightedMeal, eligibleMeals } from '../../src/store/draw.js';
+import { mealWeight, pickWeightedMeal, eligibleMeals, perishablesOnHand, onHandBoost, MAX_BOOST } from '../../src/store/draw.js';
 
 const TODAY = '2026-08-19';
 
@@ -134,5 +134,63 @@ describe('eligibleMeals', () => {
 
   it('returns nothing for an empty hat', () => {
     expect(eligibleMeals(null, TODAY)).toEqual([]);
+  });
+});
+
+describe('using up what is in the house', () => {
+  const NOW = new Date('2026-10-11T12:00:00Z');
+  const inDays = (n) => new Date(NOW.getTime() + n * 86400000).toISOString();
+  const catalog = {
+    g1: { id: 'g1', name: 'Chicken' },
+    g2: { id: 'g2', name: 'Lettuce' },
+    g3: { id: 'g3', name: 'Rice' },
+    g4: { id: 'g4', name: 'Tortillas' }
+  };
+  const timers = {
+    t1: { title: 'chicken ', expiryDate: inDays(2) },
+    t2: { title: 'Lettuce', expiryDate: inDays(10) },
+    t3: { title: 'Rice', expiryDate: inDays(700), shelfStable: true },
+    t4: { title: 'Tortillas', expiryDate: inDays(-3) }
+  };
+  const withIngredients = (id, ...groceryIds) => ({
+    id, name: id, ingredients: groceryIds.map((groceryItemId) => ({ groceryItemId, quantity: 1 }))
+  });
+
+  it('knows perishables on hand, which go off soon, and skips pantry and expired food', () => {
+    const onHand = perishablesOnHand(timers, NOW);
+    expect([...onHand.keys()].sort()).toEqual(['chicken', 'lettuce']);
+    expect(onHand.get('chicken').soon).toBe(true);
+    expect(onHand.get('lettuce').soon).toBe(false);
+  });
+
+  it('boosts a meal per food on hand, more for food going off, capped at double', () => {
+    const onHand = perishablesOnHand(timers, NOW);
+    expect(onHandBoost(withIngredients('plain', 'g3', 'g4'), catalog, onHand)).toBe(1);
+    expect(onHandBoost(withIngredients('salad', 'g2'), catalog, onHand)).toBeCloseTo(1.25);
+    expect(onHandBoost(withIngredients('stirfry', 'g1'), catalog, onHand)).toBeCloseTo(1.5);
+
+    const many = {};
+    const manyCatalog = {};
+    for (let i = 0; i < 6; i++) {
+      many[`t${i}`] = { title: `Food ${i}`, expiryDate: inDays(1) };
+      manyCatalog[`f${i}`] = { id: `f${i}`, name: `Food ${i}` };
+    }
+    const big = withIngredients('big', 'f0', 'f1', 'f2', 'f3', 'f4', 'f5');
+    expect(onHandBoost(big, manyCatalog, perishablesOnHand(many, NOW))).toBe(MAX_BOOST);
+  });
+
+  it('lets a food boost only the first meal that claims it', () => {
+    const onHand = perishablesOnHand(timers, NOW);
+    expect(onHandBoost(withIngredients('stirfry', 'g1'), catalog, onHand, new Set(['chicken']))).toBe(1);
+  });
+
+  it('feeds the boost into the weighted pick without excluding anything', () => {
+    const onHand = perishablesOnHand(timers, NOW);
+    const a = { ...withIngredients('uses-chicken', 'g1'), minDaysBetween: 14, drawnDates: ['2026-09-27'] };
+    const b = { ...withIngredients('plain', 'g3'), minDaysBetween: 14, drawnDates: ['2026-09-27'] };
+    const boost = (meal) => onHandBoost(meal, catalog, onHand);
+    // Equal overdue weight (1 each); chicken boosts a to 1.5, so a holds 60%.
+    expect(pickWeightedMeal([a, b], '2026-10-11', { random: () => 0.59, boost }).id).toBe('uses-chicken');
+    expect(pickWeightedMeal([a, b], '2026-10-11', { random: () => 0.61, boost }).id).toBe('plain');
   });
 });

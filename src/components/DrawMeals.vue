@@ -35,7 +35,7 @@ import { defineAsyncComponent } from 'vue';
 // visits never press.
 import Header from '@/components/Header.vue';
 import { todayISO, fromISODate, datesInRange } from '@/store/schedule';
-import { eligibleMeals, pickWeightedMeal } from '@/store/draw';
+import { eligibleMeals, pickWeightedMeal, perishablesOnHand, onHandBoost, onHandFoodsFor } from '@/store/draw';
 import { markBusy, clearBusy } from '@/utils/appUpdate';
 
 // The reason string this screen registers with the auto-update machinery.
@@ -151,15 +151,21 @@ export default {
     async drawMeals () {
       const assignments = [];
       const unfilled = [];
+      // What the fridge holds, read once for the whole draw. Each food boosts
+      // only the first meal that uses it — see store/draw.js.
+      const onHand = perishablesOnHand(this.$store.state.fridge?.timers || {});
+      const usedFoods = new Set();
 
       this.allDatesInRange.forEach((isoDate) => {
-        const meal = this.getRandomMealForDate(isoDate, assignments);
+        const meal = this.getRandomMealForDate(isoDate, assignments, onHand, usedFoods);
 
         if (!meal) {
           unfilled.push(isoDate);
           return;
         }
 
+        onHandFoodsFor(meal, this.$store.state.groceryCatalog, onHand, usedFoods)
+          .forEach((key) => usedFoods.add(key));
         assignments.push({ meal, isoDate });
       });
 
@@ -188,7 +194,7 @@ export default {
       const date = fromISODate(value);
       return date ? date.toDateString() : null;
     },
-    getRandomMealForDate (isoDate, alreadyAssigned) {
+    getRandomMealForDate (isoDate, alreadyAssigned, onHand = new Map(), usedFoods = new Set()) {
       const takenIds = new Set(alreadyAssigned.map(({ meal }) => meal.id));
 
       const allMeals = this.$store.state.meals;
@@ -198,8 +204,12 @@ export default {
 
       // Weighted by how overdue each meal is, rather than flat random — see
       // store/draw.js. Still a hat: the least overdue meal stays in contention,
-      // it just comes up less often.
-      return pickWeightedMeal(eligibleMeals(allMeals, isoDate, takenIds), isoDate);
+      // it just comes up less often. Meals using perishables already in the
+      // house get up to double that.
+      const catalog = this.$store.state.groceryCatalog;
+      return pickWeightedMeal(eligibleMeals(allMeals, isoDate, takenIds), isoDate, {
+        boost: (meal) => onHandBoost(meal, catalog, onHand, usedFoods)
+      });
     },
     getMeal (id) {
       if (!id) {

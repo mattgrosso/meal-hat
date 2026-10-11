@@ -172,6 +172,13 @@ likely as the most recent, and the least likely still held 8.5%. Keep it that
 way — a strict "longest wait wins" makes the schedule deterministic, which is
 the opposite of a hat.
 
+**Food already in the house nudges it too** (Matt, 2026-10-11). On top of the
+overdue weight, `onHandBoost` multiplies a meal's weight by up to 2: +0.25 per
+ingredient with a live perishable timer, +0.5 if that food goes off within 5
+days. `shelfStable` timers never count (they are in every meal), names join
+exactly as in `consume.js`, and within one draw a food boosts only the first
+meal picked, so one pack of chicken cannot pull the whole week toward chicken.
+
 ### Editing an ingredient
 
 The pencil beside a shopping-list item edits the GROCERY CATALOG entry, not the

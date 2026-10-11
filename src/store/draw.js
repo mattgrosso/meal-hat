@@ -1,4 +1,5 @@
 import { toISODate, fromISODate, drawnTooRecently } from './schedule';
+import { normalizeName, liveTimersFor } from './fridge/inHouse';
 
 // Choosing which meal comes out of the hat.
 //
@@ -77,11 +78,11 @@ export function mealWeight (meal, isoDate) {
  * Pick one meal, weighted. `random` is injectable so the choice can be tested
  * without relying on Math.random.
  */
-export function pickWeightedMeal (meals, isoDate, { random = Math.random } = {}) {
+export function pickWeightedMeal (meals, isoDate, { random = Math.random, boost = null } = {}) {
   const candidates = (meals || []).filter(Boolean);
   if (!candidates.length) return null;
 
-  const weights = candidates.map((meal) => mealWeight(meal, isoDate));
+  const weights = candidates.map((meal) => mealWeight(meal, isoDate) * (boost ? boost(meal) : 1));
   const total = weights.reduce((sum, weight) => sum + weight, 0);
 
   // Degenerate case — fall back to uniform rather than returning nothing.
@@ -105,4 +106,66 @@ export function eligibleMeals (meals, isoDate, alreadyUsedIds = new Set()) {
   return Object.values(meals || {})
     .filter(Boolean)
     .filter((meal) => !drawnTooRecently(meal, isoDate) && !alreadyUsedIds.has(meal.id));
+}
+
+// Using up what is already in the house (Matt, 2026-10-11): "sometimes we
+// already have food in the house and it'll be good to use that food".
+//
+// A NUDGE ON TOP OF THE OVERDUE WEIGHT, never a filter. Each ingredient the
+// fridge holds a live timer for adds a little; one going off within
+// `SOON_DAYS` adds more; the whole thing is capped at `MAX_BOOST` so a meal
+// that clears out the fridge is at most twice as likely. Still a hat.
+//
+// PERISHABLES ONLY. A `shelfStable` timer (rice, tinned tomatoes, olive oil)
+// is in nearly every meal and lasts for years — counting it would boost
+// everything equally, which boosts nothing.
+//
+// Names are the join, exactly as in consume.js: the catalog entry's name
+// against the timer's title, lowercased and trimmed. A food spelled two ways
+// simply does not boost.
+export const SOON_DAYS = 5;
+export const MAX_BOOST = 2;
+const PER_FOOD = 0.25;
+const PER_SOON_FOOD = 0.5;
+
+/**
+ * Normalized food name -> { name, soon } for every perishable the house holds
+ * a live timer for. `soon` = goes off within SOON_DAYS (or is only alive
+ * because somebody has said it is here since its date).
+ */
+export function perishablesOnHand (timers = {}, now = new Date()) {
+  const perishable = Object.fromEntries(
+    Object.entries(timers || {}).filter(([, timer]) => timer && timer.title && !timer.shelfStable)
+  );
+  const horizon = now.getTime() + SOON_DAYS * MS_PER_DAY;
+  const out = new Map();
+  Object.values(perishable).forEach((timer) => {
+    const key = normalizeName(timer.title);
+    if (out.has(key)) return;
+    const live = liveTimersFor(timer.title, perishable, now);
+    if (!live.length) return;
+    out.set(key, { name: live[0].title, soon: new Date(live[0].expiryDate).getTime() <= horizon });
+  });
+  return out;
+}
+
+/**
+ * Which on-hand perishables this meal would use, skipping any in `usedFoods`
+ * — a food already claimed by an earlier pick in the same draw, so one pack
+ * of chicken does not pull the whole week toward chicken.
+ */
+export function onHandFoodsFor (meal, catalog = {}, onHand = new Map(), usedFoods = new Set()) {
+  const keys = new Set();
+  (meal?.ingredients || []).forEach((ingredient) => {
+    const key = normalizeName(catalog?.[ingredient?.groceryItemId]?.name);
+    if (key && onHand.has(key) && !usedFoods.has(key)) keys.add(key);
+  });
+  return [...keys];
+}
+
+/** Multiplier for the meal's weight: 1 (nothing on hand) up to MAX_BOOST. */
+export function onHandBoost (meal, catalog = {}, onHand = new Map(), usedFoods = new Set()) {
+  const extra = onHandFoodsFor(meal, catalog, onHand, usedFoods)
+    .reduce((sum, key) => sum + (onHand.get(key).soon ? PER_SOON_FOOD : PER_FOOD), 0);
+  return Math.min(1 + extra, MAX_BOOST);
 }
