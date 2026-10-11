@@ -79,6 +79,10 @@
                       aria-label="Edit this ingredient"
                       @click="openGroceryEditor(ingredient)"
                     ><i class="bi bi-pencil"></i></button>
+                    <!-- What to get, when the name alone isn't enough. -->
+                    <span v-if="ingredient.groceryItem && ingredient.groceryItem.note" class="item-note">
+                      {{ ingredient.groceryItem.note }}
+                    </span>
                     <!-- A staple that came back says why, rather than just
                          reappearing without explanation. -->
                     <!-- Added by a talk-through because it is about to run
@@ -228,6 +232,10 @@
             "{{ editForm.name }}" is already another ingredient. Two entries with the same
             name will both keep appearing — merge them instead if that isn't what you want.
           </p>
+        </div>
+        <div class="col-12">
+          <label class="form-label">Note for the shop</label>
+          <input type="text" class="form-control" v-model="editForm.note" placeholder="e.g. not black cherry">
         </div>
         <div class="col-6">
           <label class="form-label">Default units</label>
@@ -789,7 +797,8 @@ export default {
         defaultLocation: entry.defaultLocation || null,
         staple: Boolean(entry.staple),
         stapleIntervalDays: entry.stapleIntervalDays || '',
-        packageSize: entry.packageSize || ''
+        packageSize: entry.packageSize || '',
+        note: entry.note || ''
       };
     },
     closeGroceryEditor () {
@@ -822,7 +831,9 @@ export default {
           stapleIntervalDays: this.editForm.staple && interval > 0 ? interval : null,
           // Same rule: blank means "unknown", which is not the same as 1.
           // Checking a meal off says out loud when it had to assume.
-          packageSize: packageSize > 0 ? packageSize : null
+          packageSize: packageSize > 0 ? packageSize : null,
+          // Shown under the name at the shop ("not black cherry").
+          note: (this.editForm.note || '').trim() || null
         }
       });
 
@@ -1428,6 +1439,13 @@ export default {
   }
 
   /* The cupboard is reassurance, not a worklist — quieter than the real list. */
+  .item-note {
+    display: block;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #b02a37;
+  }
+
   .cupboard-section {
     .cupboard-toggle {
       background: none;
