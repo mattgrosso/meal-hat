@@ -159,6 +159,25 @@ said for a food on several cards folds them onto the soonest-expiring one.
 Receipts top up the food's existing card (`topUpPlan`) instead of adding a
 second one.
 
+### "Maybe add these?" — finding the regulars
+
+Matt, 2026-10-11: suggest what Meal Hat thinks should be on the list, *"but I
+don't want you to just guess and add them automatically"* — a yes or no on
+each. The plan only acts on the usage log for `staple` foods, and very few
+are flagged, so this is how the rest get found.
+
+`src/store/regularSuggestions.js` (pure, `tests/unit/regularSuggestions.spec.js`,
+and the second test in `tests/e2e/shopping-list-plan.spec.js`). A non-staple
+is offered when `predictRunOut` puts it inside the week, or he has bought it
+from his own rows 3+ times in 120 days and the fridge does not hold it. Never
+for anything already on the list. At most five.
+
+It is computed at READ time from `state.planEvidence` (the usage log and meal
+use the last plan read, memory only), so showing it writes nothing. Yes is a
+field-scoped catalog write (`staple: true`, plus `stapleIntervalDays` from a
+known buying rhythm) and a manual row for this trip. No stamps
+`regularDeclinedOn`, which hides it for 60 days, not forever.
+
 ### Drawing meals
 
 `src/store/draw.js` picks weighted by how OVERDUE a meal is, not flat random.

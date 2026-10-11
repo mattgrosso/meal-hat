@@ -54,6 +54,10 @@ export default createStore({
     groceryCatalog: {}, // Single source for all grocery items: id → { id, name, defaultUnits, defaultAisle, defaultLocation }
     // When this tab last worked the list out (ms), for the list's own header.
     shoppingListPlannedAt: null,
+    // What the last plan read about how the house uses food (usage log, and
+    // what the meals ate). Memory only: the "Maybe add these?" box on the
+    // shopping list reads it, and must write nothing until he answers.
+    planEvidence: { usageLog: {}, mealUseById: {} },
     shoppingList: {}, // Unified shopping list: id → { groceryId, quantity, units, aisle, location, source, mealId?, purchased }
 
     // Hats this user belongs to — backs the MealHats sharing screen.
@@ -171,6 +175,9 @@ export default createStore({
     },
     setShoppingListPlannedAt (state, at) {
       state.shoppingListPlannedAt = at;
+    },
+    setPlanEvidence (state, evidence) {
+      state.planEvidence = evidence;
     },
     setShoppingList (state, shoppingList) {
       state.shoppingList = shoppingList || {};
@@ -407,6 +414,7 @@ export default createStore({
       }
 
       const getMeal = (id) => context.getters.getMeal(id);
+      const mealUseById = mealUsage(drawnMealsToUse, getMeal, context.state.groceryCatalog || {});
       const { updates, rows } = planShoppingList({
         stored: context.state.shoppingList || {},
         drawnMeals: drawnMealsToUse,
@@ -415,11 +423,12 @@ export default createStore({
         usageLog,
         onHandUntil: onHandUntilFrom(timers),
         // The past is what a rate is measured over; see usage.js mealUsage.
-        mealUseById: mealUsage(drawnMealsToUse, getMeal, context.state.groceryCatalog || {}),
+        mealUseById,
         now: new Date()
       });
 
       context.commit('setShoppingList', rows);
+      context.commit('setPlanEvidence', { usageLog, mealUseById });
       context.commit('setShoppingListPlannedAt', Date.now());
 
       // Surgical, and only what changed — opening the list twice writes

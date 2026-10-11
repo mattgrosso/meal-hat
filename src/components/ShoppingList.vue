@@ -49,6 +49,27 @@
             </template>
           </p>
 
+          <!-- Maybe add these? Foods that look like regulars but are not
+               staples yet (regularSuggestions.js). Worked out on read and
+               written only when he answers: Yes makes it a staple and puts it
+               on this list, No hides it for about two months. -->
+          <div v-if="regularSuggestions.length" class="regular-suggestions my-3" data-step="6">
+            <p class="regular-suggestions-title mb-1">Maybe add these?</p>
+            <p class="small text-muted mb-2">Yes adds it to this list and keeps it coming back when you're due.</p>
+            <ul class="list-group">
+              <li class="list-group-item d-flex justify-content-between align-items-center gap-2" v-for="suggestion in regularSuggestions" :key="suggestion.groceryId">
+                <span class="regular-suggestion-text">
+                  {{ suggestion.name }}
+                  <span class="staple-due-note">{{ suggestionReason(suggestion) }}</span>
+                </span>
+                <span class="d-flex gap-1 flex-shrink-0">
+                  <button class="btn btn-sm btn-success" :aria-label="`Yes, add ${suggestion.name}`" @click="answerSuggestion(suggestion, true)">Yes</button>
+                  <button class="btn btn-sm btn-outline-secondary" :aria-label="`No, not ${suggestion.name}`" @click="answerSuggestion(suggestion, false)">No</button>
+                </span>
+              </li>
+            </ul>
+          </div>
+
           <!-- Sort Toggle -->
           <div v-if="sortedShoppingList.length" class="d-flex gap-2 mb-3">
             <button
@@ -348,6 +369,7 @@ import { normalizeName } from '@/store/ingredients';
 import { todayISO } from '@/store/schedule';
 import { runningLowNote, packagesBought } from '@/store/usage';
 import { openRowForGrocery } from '@/store/purchases';
+import { suggestRegulars, suggestionReason, answerPatch } from '@/store/regularSuggestions';
 import { markBusy, clearBusy } from '@/utils/appUpdate';
 
 // The reason string this screen registers with the auto-update machinery.
@@ -537,6 +559,22 @@ export default {
       return this.stapleSplit.cupboard;
     },
 
+    // Read-only: nothing is written until Yes or No. Hidden while the list is
+    // still being worked out, so it never offers something the plan is about
+    // to add anyway.
+    regularSuggestions () {
+      if (this.planning) return [];
+      const evidence = this.$store.state.planEvidence || {};
+      return suggestRegulars({
+        catalog: this.$store.state.groceryCatalog || {},
+        usageLog: evidence.usageLog,
+        shoppingList: this.$store.state.shoppingList || {},
+        onHandUntil: this.$store.getters['fridge/onHandUntil'],
+        mealUseById: evidence.mealUseById,
+        now: new Date()
+      });
+    },
+
     sortedShoppingList () {
       const items = [...this.stapleSplit.list];
       if (this.sortMode === 'location') {
@@ -560,6 +598,32 @@ export default {
   },
   methods: {
     runningLowNote,
+    suggestionReason,
+
+    // Yes: a staple from now on (field-scoped, so nothing else on the entry
+    // is touched) and on this trip's list as his own row, which the plan
+    // leaves alone until it is ticked. No: quiet for about two months.
+    async answerSuggestion (suggestion, yes) {
+      const patch = answerPatch(suggestion, yes);
+      // Local first, so the row leaves the box at once.
+      const entry = (this.$store.state.groceryCatalog || {})[suggestion.groceryId];
+      if (entry) {
+        Object.entries(patch).forEach(([path, value]) => {
+          const field = path.split('/')[1];
+          if (value === null) delete entry[field];
+          else entry[field] = value;
+        });
+      }
+      try {
+        await this.$store.dispatch('mergeDBValue', { path: 'grocery-catalog', value: patch });
+      } catch (error) {
+        console.error('Could not save the answer:', error);
+      }
+      if (yes && entry) {
+        this.addToShoppingList({ ...entry, id: suggestion.groceryId, quantity: 1 });
+        this.$emit('showToast', { delay: 3000, message: `Added ${entry.name}. It will come back when you're due.` });
+      }
+    },
 
     // Work the list out from scratch. Runs on every open, and from the
     // Refresh link. It waits briefly for the hat's meals and catalog on a cold
@@ -1270,6 +1334,29 @@ export default {
         ]
       });
 
+      if (document.querySelector('[data-step="6"]')) {
+        tour.addStep({
+          title: 'Maybe add these?',
+          text: 'Things Meal Hat thinks you buy regularly but has not been told about. Yes adds it to this list and brings it back on its own when you are due. No hides it for about two months. Nothing is added unless you say yes.',
+          attachTo: {
+            element: '[data-step="6"]',
+            on: 'bottom'
+          },
+          buttons: [
+            {
+              text: 'Back',
+              action: tour.back,
+              classes: 'btn-secondary btn btn-sm'
+            },
+            {
+              text: 'Next',
+              action: tour.next,
+              classes: 'btn-success btn btn-sm'
+            }
+          ]
+        });
+      }
+
       // Only when the section is actually on screen: both the cupboard and the
       // bought list are conditional, and Shepherd cannot attach a step to an
       // element that is not rendered. Same guard MealHats uses for its delete
@@ -1427,6 +1514,14 @@ export default {
     white-space: nowrap;
     /* Small text, but the label and box together clear the tap minimum. */
     min-height: 40px;
+  }
+
+  .regular-suggestions-title {
+    font-weight: 700;
+  }
+
+  .regular-suggestion-text {
+    min-width: 0;
   }
 
   .staple-due-note {

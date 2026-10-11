@@ -114,4 +114,71 @@ test.describe('the shopping list, worked out on open', () => {
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
     expect(overflow, 'the page must not scroll sideways').toBe(false);
   });
+
+  // Matt, 2026-10-11: "a section at the top of items that ... Meal Hat thinks
+  // we maybe should include, and then I can approve or not ... I don't want
+  // you to just guess and add them automatically."
+  test('maybe add these: offered, written only on an answer, yes makes a staple', async ({ page, request }) => {
+    await page.setViewportSize({ width: 402, height: 874 });
+    await setupAuthAndDisableTutorial(page);
+    await navigateDirectly(page, '/');
+    await page.waitForSelector('.drawn-meals-schedule', { timeout: 15000 });
+
+    await put(request, `${HAT}/grocery-catalog`, {
+      seltzer: { id: 'seltzer', name: 'Lime seltzer, the big twelve-pack', defaultUnits: 'Case', defaultAisle: 9 },
+      bread: { id: 'bread', name: 'Sandwich Bread', defaultUnits: 'Loaf', defaultAisle: 2 },
+      oil: { id: 'oil', name: 'Olive Oil', staple: true, lastPurchased: isoIn(-3) }
+    });
+    await put(request, `${HAT}/drawnMeals`, null);
+    await put(request, `${HAT}/shopping-list`, null);
+    await put(request, `${HAT}/usage-log`, {
+      // A can a day, three left: runs out this week.
+      seltzer: { [isoIn(-8)]: { count: 10 }, [isoIn(-1)]: { count: 3 } },
+      // Added by hand three times lately.
+      bread: { [isoIn(-80)]: { bought: 'manual' }, [isoIn(-73)]: { bought: 'manual' }, [isoIn(-66)]: { bought: 'manual' } }
+    });
+
+    await navigateDirectly(page, '/shopping-list');
+    await page.locator('.shepherd-cancel-icon').click({ timeout: 2000 }).catch(() => {});
+    await expect(page.locator('.planned-line')).toContainText('Worked out at', { timeout: 15000 });
+
+    const box = page.locator('.regular-suggestions');
+    await expect(box).toContainText('Maybe add these?');
+    await expect(box.locator('li')).toHaveCount(2);
+    await expect(box.locator('li').first()).toContainText('Lime seltzer');
+    await expect(box).not.toContainText('Olive Oil');
+
+    // Nothing was written just by showing them.
+    const listBefore = await (await request.get(`${DB}/${HAT}/shopping-list.json${NS}`, { headers: OWNER })).json();
+    expect(listBefore).toBeNull();
+
+    await page.screenshot({ path: 'test-results/shopping-list-suggestions.png', fullPage: true });
+    const rowsOverflow = await box.locator('li').evaluateAll((els) => els.some((el) => el.scrollWidth > el.getBoundingClientRect().width + 0.5));
+    expect(rowsOverflow, 'a suggestion row must fit a phone').toBe(false);
+
+    await box.locator('li').filter({ hasText: 'Sandwich Bread' }).getByRole('button', { name: /^No/ }).click();
+    await box.locator('li').filter({ hasText: 'Lime seltzer' }).getByRole('button', { name: /^Yes/ }).click();
+    await expect(box).toHaveCount(0);
+
+    await expect.poll(async () => (await (await request.get(`${DB}/${HAT}/grocery-catalog.json${NS}`, { headers: OWNER })).json()).seltzer.staple).toBe(true);
+    const catalog = await (await request.get(`${DB}/${HAT}/grocery-catalog.json${NS}`, { headers: OWNER })).json();
+    expect(catalog.bread.regularDeclinedOn).toBe(isoIn(0));
+    expect(catalog.bread.staple).toBeFalsy();
+    expect(catalog.seltzer.name).toBe('Lime seltzer, the big twelve-pack');
+
+    await expect.poll(async () => {
+      const list = await (await request.get(`${DB}/${HAT}/shopping-list.json${NS}`, { headers: OWNER })).json();
+      return Object.values(list || {}).filter((row) => row.groceryId === 'seltzer' && !row.purchased).length;
+    }).toBe(1);
+
+    // Open it again: still one seltzer row, and the box stays empty.
+    await page.reload();
+    await expect(page.locator('.planned-line')).toContainText('Worked out at', { timeout: 15000 });
+    await expect(page.locator('.regular-suggestions')).toHaveCount(0);
+    const list = await (await request.get(`${DB}/${HAT}/shopping-list.json${NS}`, { headers: OWNER })).json();
+    expect(Object.values(list).filter((row) => row.groceryId === 'seltzer')).toHaveLength(1);
+
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
+    expect(overflow, 'the page must not scroll sideways').toBe(false);
+  });
 });
