@@ -3,6 +3,7 @@ import {
   normalizeName,
   findGroceryIdByName,
   aggregateMealIngredients,
+  ingredientQuantity,
   remapMealIngredients,
   analyzeDuplicates,
   findSimilar,
@@ -61,6 +62,22 @@ describe('aggregateMealIngredients', () => {
     expect(result.onion.quantity).toBe(5);
     expect(result.beef.quantity).toBe(1);
     expect(Object.keys(result).sort()).toEqual(['beef', 'onion']);
+  });
+
+  it('counts a blank quantity as one, so the row is never empty or NaN', () => {
+    // Sentry, 2026-10-11: a meal saved with an empty quantity box reached the
+    // list with no amount, and two blanks summed to NaN.
+    const blankMeals = {
+      a: { id: 'a', ingredients: [{ groceryItemId: 'onion' }, { groceryItemId: 'beef', quantity: '' }] },
+      b: { id: 'b', ingredients: [{ groceryItemId: 'onion', quantity: null }, { groceryItemId: 'beef', quantity: '2' }] }
+    };
+    const drawn = [
+      { mealId: 'a', assignedDate: '2026-06-26' },
+      { mealId: 'b', assignedDate: '2026-06-27' }
+    ];
+    const result = aggregateMealIngredients({ drawnMeals: drawn, getMeal: (id) => blankMeals[id], catalog, now });
+    expect(result.onion.quantity).toBe(2);
+    expect(result.beef.quantity).toBe(3);
   });
 
   it('takes a one-off row\'s own ingredients (cooking-course lesson nights)', () => {
@@ -259,5 +276,16 @@ describe('aggregateMealIngredients — today counts as upcoming', () => {
     const drawnMeals = [{ mealId: 'm1', assignedDate: new Date('2026-09-20T12:00:00').getTime() }];
     const out = aggregateMealIngredients({ drawnMeals, getMeal, catalog, now: NOW });
     expect(Object.keys(out).sort()).toEqual(['g1', 'g2']);
+  });
+});
+
+describe('ingredientQuantity', () => {
+  it('reads numbers and numeric strings as they are', () => {
+    expect(ingredientQuantity(3)).toBe(3);
+    expect(ingredientQuantity(0.5)).toBe(0.5);
+    expect(ingredientQuantity('28')).toBe(28);
+  });
+  it('treats a blank or unreadable amount as one (what the add-meal form now saves)', () => {
+    [undefined, null, '', 'abc', NaN, 0, -2].forEach((q) => expect(ingredientQuantity(q)).toBe(1));
   });
 });

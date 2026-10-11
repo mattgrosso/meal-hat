@@ -55,7 +55,7 @@ import { v4 as uuidv4 } from 'uuid';
 // and its stylesheet were downloaded by every visit — to power a "?" button most
 // visits never press.
 import Header from '@/components/Header.vue';
-import { normalizeName as normalizeGroceryName, findGroceryIdByName } from '@/store/ingredients';
+import { normalizeName as normalizeGroceryName, findGroceryIdByName, ingredientQuantity } from '@/store/ingredients';
 
 export default {
   name: 'AddMeals',
@@ -198,7 +198,7 @@ export default {
           createdThisMeal[key] = groceryId;
         }
 
-        resolved.push({ groceryItemId: groceryId, quantity: ingredient.quantity });
+        resolved.push({ groceryItemId: groceryId, quantity: ingredientQuantity(ingredient.quantity) });
       });
 
       return resolved;

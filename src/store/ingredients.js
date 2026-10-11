@@ -20,6 +20,19 @@ export function findGroceryIdByName (name, catalog = {}) {
   return match ? match.id : null;
 }
 
+// How much of a grocery one meal ingredient asks for, as a number.
+//
+// The add-meal form starts every quantity box empty, and an empty box saved
+// as-is: some meals carry an ingredient with no amount (or the number as a
+// string, from older data). Summed raw, one blank left the shopping-list row
+// with no quantity and two made NaN, which the write sanitizer then stripped
+// (Sentry, 2026-10-11). A blank means "some", so it counts as one — the row
+// still appears, which is the direction every uncertain case errs here.
+export function ingredientQuantity (quantity) {
+  const n = Number(quantity);
+  return quantity !== null && quantity !== '' && Number.isFinite(n) && n > 0 ? n : 1;
+}
+
 // Aggregate the ingredients of upcoming drawn meals into a map keyed by grocery
 // id, summing quantities for ingredients shared across meals. `getMeal` resolves
 // a meal by id; `catalog` resolves a grocery entry by id.
@@ -64,9 +77,9 @@ export function aggregateMealIngredients ({ drawnMeals, getMeal, catalog = {}, n
         if (groceryItem) {
           const id = groceryItem.id;
           if (mealIngredients[id]) {
-            mealIngredients[id].quantity += ingredient.quantity;
+            mealIngredients[id].quantity += ingredientQuantity(ingredient.quantity);
           } else {
-            mealIngredients[id] = { ...groceryItem, quantity: ingredient.quantity, mealId: drawnMeal.mealId || null };
+            mealIngredients[id] = { ...groceryItem, quantity: ingredientQuantity(ingredient.quantity), mealId: drawnMeal.mealId || null };
           }
         }
       });
