@@ -425,7 +425,11 @@ export default {
       const packageSizes = new Map(Object.values(this.$store.state.groceryCatalog || {})
         .filter((entry) => entry && Number(entry.packageSize) > 0)
         .map((entry) => [normalizeFoodName(entry.name), Number(entry.packageSize)]))
-      const review = buildTalkReview(result, this.timers, this.templates, now, { keepUnmentioned, packageSizes })
+      // "Shredded cheddar" -> the catalog's Cheddar Cheese — see asCatalogName.
+      const catalogNames = Object.values(this.$store.state.groceryCatalog || {})
+        .map((entry) => entry && entry.name)
+        .filter(Boolean)
+      const review = buildTalkReview(result, this.timers, this.templates, now, { keepUnmentioned, packageSizes, catalogNames })
       const applied = await this.$store.dispatch('fridge/applyTalk', {
         payload: talkPayload(review, now)
       })

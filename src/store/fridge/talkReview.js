@@ -39,12 +39,12 @@ export { isPerishable, PANTRY_THRESHOLD_DAYS, DEFAULT_PANTRY_DAYS } from './peri
  * arriving as "Pepper" is invisible unless the row can be read back against
  * what was actually said. Same job the receipt flow's `printedText` does.
  */
-export const buildTalkItem = (item, templates, now, packageSizes = new Map()) => {
-  const template =
-    findTemplate(item?.knownFoodMatch, templates) ||
-    findTemplate(item?.name, templates)
+export const buildTalkItem = (item, templates, now, packageSizes = new Map(), catalogNames = []) => {
+  const match = asCatalogName(item?.knownFoodMatch, catalogNames)
+  const said = asCatalogName(item?.name, catalogNames)
+  const template = findTemplate(match, templates) || findTemplate(said, templates)
 
-  const name = template ? template.title : String(item?.name || '').trim()
+  const name = template ? template.title : said
   const spoken = String(item?.heard || '').trim()
   const perishable = isPerishable(item, template)
 
@@ -65,8 +65,9 @@ export const buildTalkItem = (item, templates, now, packageSizes = new Map()) =>
     heard: spoken,
     // A template renaming what was said has to be visible, or a sourdough loaf
     // silently inherits sandwich bread's shelf life. The scan flow learned
-    // this one the hard way ("SRDGH BREAD LOAF").
-    readAs: template && normalizeFoodName(String(item?.name || '')) !== normalizeFoodName(name)
+    // this one the hard way ("SRDGH BREAD LOAF"). So does a catalog name
+    // taking over a shredded or grated one.
+    readAs: normalizeFoodName(String(item?.name || '')) !== normalizeFoodName(name)
       ? String(item?.name || '').trim()
       : '',
     included: true,
@@ -87,6 +88,26 @@ export const buildTalkItem = (item, templates, now, packageSizes = new Map()) =>
     quantity: inPackages(item, name, packageSizes),
     startsAt: now
   }
+}
+
+// THE FORM IS NOT THE FOOD (2026-10-11). "A full package of shredded cheddar"
+// came back as "Shredded Cheddar Cheese" while every meal asks for the
+// catalog's "Cheddar Cheese" — and names are the join, so the shopping list
+// never saw the bag and asked him to buy cheddar. The model is sent the
+// catalog's names and still reaches for the more descriptive one. So a name
+// the catalog does not know, which is a catalog food with "shredded" or
+// "grated" in front, becomes that catalog food. Only those two words: "Sliced
+// Cheddar" is a different food here (slices, 25 to a pack), and a name the
+// catalog already holds is never touched.
+const FORM_PREFIX = /^(shredded|grated)\s+/i
+
+export const asCatalogName = (name, catalogNames = []) => {
+  const raw = String(name || '').trim()
+  const known = (wanted) => (catalogNames || [])
+    .find((entry) => normalizeFoodName(entry) === normalizeFoodName(wanted))
+  if (!raw || known(raw)) return raw
+  const bare = raw.replace(FORM_PREFIX, '')
+  return (bare !== raw && known(bare)) || raw
 }
 
 // How long food that is past its date, but said to be here, gets.
@@ -133,12 +154,14 @@ export function inPackages (item, name, packageSizes = new Map()) {
 // it is his too (2026-10-11): "it's possible that sometimes I won't read every
 // staple if it's like some flour or some sugar." So a regular he skipped stays
 // in the house and logs no count; one he says they're OUT of still goes.
-export const buildTalkReview = (result, timers, templates, now, { keepUnmentioned = new Set(), packageSizes = new Map() } = {}) => {
+// `catalogNames`: every catalog food's name, so a spoken "shredded cheddar"
+// lands on the food the meals use — see asCatalogName.
+export const buildTalkReview = (result, timers, templates, now, { keepUnmentioned = new Set(), packageSizes = new Map(), catalogNames = [] } = {}) => {
   const spoken = []
   const seen = new Map()
 
   ;(result?.items || []).forEach((item) => {
-    const row = buildTalkItem(item, templates, now, packageSizes)
+    const row = buildTalkItem(item, templates, now, packageSizes, catalogNames)
     if (!row.name) return
     const key = normalizeFoodName(row.name)
     const existing = seen.get(key)
@@ -161,8 +184,10 @@ export const buildTalkReview = (result, timers, templates, now, { keepUnmentione
   const outOf = new Set(
     (result?.outOf || [])
       .map((item) => normalizeFoodName(
-        (findTemplate(item?.knownFoodMatch, templates) || findTemplate(item?.name, templates))?.title ||
-        item?.name
+        (findTemplate(asCatalogName(item?.knownFoodMatch, catalogNames), templates) ||
+          findTemplate(asCatalogName(item?.name, catalogNames), templates))?.title ||
+        asCatalogName(item?.knownFoodMatch, catalogNames) ||
+        asCatalogName(item?.name, catalogNames)
       ))
       .filter(Boolean)
   )

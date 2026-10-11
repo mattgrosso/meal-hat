@@ -4,7 +4,8 @@ import {
   buildTalkItem,
   buildTalkReview,
   talkReviewReady,
-  talkPayload
+  talkPayload,
+  asCatalogName
 } from '../../../src/store/fridge/talkReview';
 
 const NOW = new Date('2026-09-20T12:00:00Z');
@@ -403,5 +404,47 @@ describe('past its date but said to be here (2026-10-11)', () => {
     const review = buildTalkReview({ items: [said({ name: 'Milk', knownFoodMatch: 'Milk' })] }, held, [], NOW);
     const seen = talkPayload(review, NOW).seen;
     expect(seen).toEqual([{ id: 'm', title: 'Milk', expiryDate: inDays(3) }]);
+  });
+});
+
+// Report 2026-10-11: "I definitely said that I had a full package of shredded
+// cheddar" — it was saved as "Shredded Cheddar Cheese", the meals ask for
+// "Cheddar Cheese", and the shopping list asked him to buy cheddar.
+describe('the form is not the food (2026-10-11)', () => {
+  const catalog = ['Cheddar Cheese', 'Sliced Cheddar', 'Parmesan Cheese'];
+
+  it('lands shredded or grated X on the catalog\'s X', () => {
+    expect(asCatalogName('Shredded Cheddar Cheese', catalog)).toBe('Cheddar Cheese');
+    expect(asCatalogName('grated parmesan cheese', catalog)).toBe('Parmesan Cheese');
+  });
+
+  it('leaves a name the catalog already holds, and any other word, alone', () => {
+    expect(asCatalogName('Sliced Cheddar', catalog)).toBe('Sliced Cheddar');
+    expect(asCatalogName('Shredded Mozzarella', catalog)).toBe('Shredded Mozzarella');
+    expect(asCatalogName('Shredded Cheddar Cheese', [...catalog, 'Shredded Cheddar Cheese'])).toBe('Shredded Cheddar Cheese');
+    expect(asCatalogName('Shredded Cheddar Cheese', [])).toBe('Shredded Cheddar Cheese');
+  });
+
+  it('confirms the existing cheddar timer instead of starting a second food', () => {
+    const held = [timer('c', 'Cheddar Cheese', 5)];
+    const review = buildTalkReview(
+      { items: [said({ heard: 'a full package of shredded cheddar', name: 'Shredded Cheddar Cheese', knownFoodMatch: '' })] },
+      held, templates, NOW, { catalogNames: catalog }
+    );
+    expect(review.newItems).toEqual([]);
+    expect(review.notHeard).toEqual([]);
+    expect(review.confirmed.map((row) => row.title)).toEqual(['Cheddar Cheese']);
+    expect(review.counts['cheddar cheese']).toBe(1);
+  });
+
+  it('says what it was read as, and "out of shredded cheddar" removes the cheddar', () => {
+    const row = buildTalkItem(said({ name: 'Shredded Cheddar Cheese' }), [], NOW, new Map(), catalog);
+    expect(row.name).toBe('Cheddar Cheese');
+    expect(row.readAs).toBe('Shredded Cheddar Cheese');
+    const review = buildTalkReview(
+      { items: [], outOf: [{ name: 'Shredded Cheddar Cheese' }] },
+      [timer('c', 'Cheddar Cheese', 5)], [], NOW, { catalogNames: catalog }
+    );
+    expect(review.notHeard[0]).toMatchObject({ id: 'c', saidOutOf: true });
   });
 });
