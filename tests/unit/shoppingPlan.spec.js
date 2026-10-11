@@ -221,6 +221,12 @@ describe('topUpPlan — a receipt checks for the food first', () => {
     expect(topUpPlan({ title: 'Milk', expiryDate: later }, { t: { title: 'Eggs', expiryDate: later } }, NOW)).toBeNull();
   });
 
+  it('a past-date card kept alive by a sighting takes the fresh date', () => {
+    const timers = { t1: { title: 'Milk', expiryDate: '2026-10-01T00:00:00Z', seenAt: '2026-10-07T00:00:00Z' } };
+    expect(topUpPlan({ title: 'Milk', expiryDate: later }, timers, NOW))
+      .toMatchObject({ id: 't1', changes: { quantity: 2, expiryDate: later, seenAt: null } });
+  });
+
   it('replaces a card that has gone off and nobody has seen since', () => {
     const timers = { t1: { title: 'Milk', quantity: 3, expiryDate: '2026-10-01T00:00:00Z' } };
     expect(topUpPlan({ title: 'Milk', expiryDate: later }, timers, NOW))

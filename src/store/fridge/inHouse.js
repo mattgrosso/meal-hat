@@ -181,10 +181,17 @@ export function topUpPlan (incoming = {}, timers = {}, now = new Date()) {
 
   const card = live[0];
   const had = asPositiveNumber(card.quantity) ?? 1;
+  // A card only alive because somebody said it was here after its date
+  // (`seenAt`) must not swallow fresh food under that old date — a new carton
+  // of milk would arrive already expired. The fresh date wins.
+  const pastDate = new Date(card.expiryDate).getTime() <= now.getTime();
   return {
     id: card.id,
     title: card.title,
-    changes: { quantity: had + adding },
+    changes: {
+      quantity: had + adding,
+      ...(pastDate ? { expiryDate: incoming.expiryDate, seenAt: null } : {})
+    },
     detail: `${had} → ${had + adding}`
   };
 }
