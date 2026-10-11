@@ -212,3 +212,30 @@ describe('shouldAutoAttempt', () => {
     expect(shouldAutoAttempt('js/app.1acf3f22.js', broken)).toBe(true);
   });
 });
+
+describe('the kitchen wall retries (2026-10-11)', () => {
+  const memory = () => {
+    const data = {};
+    return { getItem: (k) => data[k] ?? null, setItem: (k, v) => { data[k] = String(v); } };
+  };
+
+  it('may try the same version again, but only after the wait', () => {
+    const storage = memory();
+    const opts = (now) => ({ retryAfterMs: 10 * 60 * 1000, now });
+    expect(shouldAutoAttempt('js/app.aa.js', storage, opts(0))).toBe(true);
+    expect(shouldAutoAttempt('js/app.aa.js', storage, opts(60 * 1000))).toBe(false);
+    expect(shouldAutoAttempt('js/app.aa.js', storage, opts(11 * 60 * 1000))).toBe(true);
+  });
+
+  it('without a wait it is still once per version', () => {
+    const storage = memory();
+    expect(shouldAutoAttempt('js/app.aa.js', storage, { now: 0 })).toBe(true);
+    expect(shouldAutoAttempt('js/app.aa.js', storage, { now: 10 ** 9 })).toBe(false);
+  });
+
+  it('a cache-busted reload keeps the key, the view pin and the hash', async () => {
+    const { cacheBustedUrl } = await import('../../src/utils/appUpdate.js');
+    const next = cacheBustedUrl('https://mealhat.com/?view=wall&k=abc#/fridge', 42);
+    expect(next).toBe('https://mealhat.com/?view=wall&k=abc&_v=42#/fridge');
+  });
+});

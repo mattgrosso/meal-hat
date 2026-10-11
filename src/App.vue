@@ -21,8 +21,11 @@ import {
   entryBundleFromScripts,
   isSafeMomentForReload,
   reloadForUpdate,
-  shouldAutoAttempt
+  shouldAutoAttempt,
+  cacheBustedUrl,
+  waitForNewWorker
 } from '@/utils/appUpdate.js';
+import { resolveViewMode } from '@/utils/fridge/viewMode';
 
 // How long after opening or foregrounding the app still counts as a "fresh
 // moment" — nothing is in flight yet, so an update can simply be applied.
@@ -38,6 +41,18 @@ const QUIET_POLL_MS = 5000;
 // Backstop check, for an installed PWA left open and foregrounded for hours
 // with no lifecycle event ever firing.
 const PERIODIC_CHECK_MS = 30 * 60 * 1000;
+
+// THE KITCHEN WALL (2026-10-11). A tablet in Fully Kiosk that is never closed,
+// never foregrounded and never touched: none of the phone triggers fire, and
+// Matt was still looking at the old wall long after a deploy. So on the wall
+// the check runs every 2 minutes, an update is applied at once (there is no
+// typing to protect), a reload that did not land is retried after 10, and the
+// page reloads itself at 4am anyway in case anything else ever goes stale.
+const WALL_CHECK_MS = 2 * 60 * 1000;
+const WALL_RETRY_MS = 10 * 60 * 1000;
+const WALL_NIGHTLY_HOUR = 4;
+const isWallDisplay = () =>
+  /^#\/fridge/.test(window.location.hash) && resolveViewMode() === 'wall';
 
 export default {
   name: 'MealHat',
@@ -94,7 +109,20 @@ export default {
       window.addEventListener(eventName, this.noteActivity, { passive: true });
     });
 
-    setInterval(this.checkForUpdate, PERIODIC_CHECK_MS);
+    this.loadedAt = Date.now();
+    this.lastPeriodicCheckAt = Date.now();
+    setInterval(() => {
+      const wall = isWallDisplay();
+      if (wall || Date.now() - this.lastPeriodicCheckAt >= PERIODIC_CHECK_MS) {
+        this.lastPeriodicCheckAt = Date.now();
+        this.checkForUpdate();
+      }
+      // Nightly backstop for the wall: reload once in the 4am hour, if it has
+      // been up since before then.
+      if (wall && new Date().getHours() === WALL_NIGHTLY_HOUR && Date.now() - this.loadedAt > 2 * 60 * 60 * 1000) {
+        window.location.replace(cacheBustedUrl(window.location.href));
+      }
+    }, WALL_CHECK_MS);
   },
   methods: {
     noteActivity () {
@@ -165,6 +193,19 @@ export default {
     },
     armAutoUpdate () {
       const target = this.deployedBundleSeen || 'unknown';
+
+      // The wall: nobody types on it, so apply now, past any cache.
+      if (isWallDisplay()) {
+        if (!shouldAutoAttempt(target, window.sessionStorage, { retryAfterMs: WALL_RETRY_MS })) {
+          // Tried this version within the last few minutes. Look again on the
+          // next check rather than stopping for good.
+          this.$store.commit('setUpdateAvailable', false);
+          return;
+        }
+        waitForNewWorker().then(() => window.location.replace(cacheBustedUrl(window.location.href)));
+        return;
+      }
+
       if (!shouldAutoAttempt(target)) return; // once per version, never a loop
 
       // Fresh moment (just opened or just foregrounded): nothing is in flight

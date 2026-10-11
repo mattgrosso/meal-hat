@@ -127,12 +127,33 @@ export function isSafeMomentForReload ({
 // is strictly stronger because each deploy carries its own key.
 const ATTEMPT_KEY = 'auto-update-attempted-for';
 
-export function shouldAutoAttempt (targetBundle, storage = window.sessionStorage) {
+// `retryAfterMs` is for the kitchen wall only (2026-10-11): a kiosk that never
+// closes keeps one sessionStorage for weeks, so "once, ever" meant a single
+// reload that landed on a stale copy left it on the old version for good —
+// Matt: "I still see a whole bunch of timers on the wall tablet." It may try
+// the same version again, but only after that long, which is still no loop.
+export function shouldAutoAttempt (targetBundle, storage = window.sessionStorage, { retryAfterMs = null, now = Date.now() } = {}) {
   try {
-    if (storage.getItem(ATTEMPT_KEY) === targetBundle) return false;
-    storage.setItem(ATTEMPT_KEY, targetBundle);
+    const [bundle, at] = String(storage.getItem(ATTEMPT_KEY) || '').split('|');
+    if (bundle === targetBundle) {
+      const since = now - Number(at);
+      if (!retryAfterMs || !(since >= retryAfterMs)) return false;
+    }
+    storage.setItem(ATTEMPT_KEY, `${targetBundle}|${now}`);
     return true;
   } catch {
     return true; // storage unavailable: still better to try once than never
   }
+}
+
+/**
+ * The URL to reload a kiosk onto: the same page with a throwaway `_v` so no
+ * cache along the way can answer with the old index.html. Keeps the fridge
+ * key, the view pin and the `#/fridge` hash — losing any of them strands the
+ * wall (see CLAUDE.md, "THE KEY MUST STAY IN THE URL").
+ */
+export function cacheBustedUrl (href, now = Date.now()) {
+  const url = new URL(href);
+  url.searchParams.set('_v', String(now));
+  return url.toString();
 }
