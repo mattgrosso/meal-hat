@@ -128,33 +128,6 @@
           </ul>
         </template>
 
-        <!-- Predicted to run out within a week, from how fast the house has
-             gone through it before (store/usage.js). Added, never hidden. -->
-        <template v-if="report.runningLow.length">
-          <h3 class="pile-head">Added to the shopping list ({{ report.runningLow.length }})</h3>
-          <p class="pile-note">Going by how fast you use them, these run out this week.</p>
-          <ul class="seen-list">
-            <li v-for="row in report.runningLow" :key="row.groceryId" class="seen-row">
-              <span class="seen-tick">+</span>
-              <span class="seen-title">{{ row.name }}</span>
-              <span class="seen-left">{{ runningLowNote(row).replace('running low — ', '') }}</span>
-            </li>
-          </ul>
-        </template>
-
-        <!-- Its own earlier guesses, taken back: running-low rows the counts
-             just given no longer support. See staleRunningLowRows. -->
-        <template v-if="report.cleared.length">
-          <h3 class="pile-head">Taken off the shopping list ({{ report.cleared.length }})</h3>
-          <p class="pile-note">These were added as running low. Going by what you just said, they aren't.</p>
-          <ul class="seen-list">
-            <li v-for="row in report.cleared" :key="'c' + row.groceryId" class="seen-row">
-              <span class="seen-tick">−</span>
-              <span class="seen-title">{{ row.name }}</span>
-            </li>
-          </ul>
-        </template>
-
         <template v-if="report.unclear.length">
           <h3 class="pile-head">Couldn't place these</h3>
           <ul class="unclear-list">
@@ -193,7 +166,6 @@ import { saveDraft, readDraft, clearDraft } from '@/utils/fridge/talkDraft'
 import { rememberJob, readPendingJob, clearPendingJob } from '@/utils/fridge/pendingJob'
 import { requestNotifyPermission, notifyDone } from '@/utils/fridge/notify'
 import { knownFoodNames } from '@/store/fridge/vocabulary'
-import { runningLowNote } from '@/store/usage'
 import { partitionStaples } from '@/store/staples'
 import { normalizeFoodName } from '@/store/fridge/scanReview'
 
@@ -213,7 +185,7 @@ export default {
       stage: 'talk',
       resuming: false,
       transcript: '',
-      report: { added: [], confirmed: [], removed: [], unclear: [], runningLow: [], cleared: [], spoken: [] },
+      report: { added: [], confirmed: [], removed: [], unclear: [], spoken: [] },
       restored: false,
       restoredAt: null,
       savedAt: null,
@@ -445,22 +417,28 @@ export default {
     // so both land in exactly the same place.
     async applyResult (result) {
       const now = new Date()
-      const review = buildTalkReview(result, this.timers, this.templates, now)
+      // Regulars he didn't mention stay — see buildTalkReview.
+      const keepUnmentioned = new Set(Object.values(this.$store.state.groceryCatalog || {})
+        .filter((entry) => entry && entry.staple)
+        .map((entry) => normalizeFoodName(entry.name)))
+      // "Six buns" -> packages, through each food's packageSize — see inPackages.
+      const packageSizes = new Map(Object.values(this.$store.state.groceryCatalog || {})
+        .filter((entry) => entry && Number(entry.packageSize) > 0)
+        .map((entry) => [normalizeFoodName(entry.name), Number(entry.packageSize)]))
+      const review = buildTalkReview(result, this.timers, this.templates, now, { keepUnmentioned, packageSizes })
       const applied = await this.$store.dispatch('fridge/applyTalk', {
         payload: talkPayload(review, now)
       })
 
       // Only a signed-in phone has a hat to log into; the store action checks.
-      const usage = await this.$store.dispatch('recordTalkUsage', { counts: review.counts })
+      await this.$store.dispatch('recordTalkUsage', { counts: review.counts })
 
       this.applied = applied
       this.report = {
         added: review.newItems,
-        confirmed: review.confirmed,
+        confirmed: review.confirmed.filter((row) => !row.mergedAway),
         removed: review.notHeard,
         unclear: review.unclear,
-        runningLow: usage?.added || [],
-        cleared: usage?.cleared || [],
         spoken: Object.entries(review.counts || {}).filter(([, n]) => n > 0).map(([key]) => key)
       }
       clearDraft()
@@ -474,8 +452,6 @@ export default {
     formatDays (days) {
       return formatDaySpan(days)
     },
-
-    runningLowNote,
 
     leftLabel (row) {
       const left = row.timeLeft || computeTimeLeft(row.expiryDate, new Date())

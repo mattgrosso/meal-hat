@@ -6,7 +6,7 @@
         A count rides ON the card rather than making another card. Six
         identical cards on a wall you glance at is not information, it is
         noise — Matt's first read-through put 41 of them up.
-     --><span v-if="timer.quantity > 1" class="timer-count">×{{ timer.quantity }}</span>
+     --><span v-if="formatCount(timer.quantity)" class="timer-count">{{ formatCount(timer.quantity) }}</span>
       </h2>
       <button class="remove-btn" @click="$emit('remove', timer.id)">×</button>
     </div>
@@ -54,7 +54,7 @@
 </template>
 
 <script>
-import { computeTimeLeft, timerStatus, extendedExpiry, templateDaysAfterEdit, formatDaySpan } from '@/store/fridge/timers'
+import { computeTimeLeft, timerStatus, extendedExpiry, templateDaysAfterEdit, formatDaySpan, formatCount } from '@/store/fridge/timers'
 
 export default {
   name: 'CountdownTimer',
@@ -90,6 +90,7 @@ export default {
     this.stopTimer()
   },
   methods: {
+    formatCount,
     startTimer () {
       this.interval = setInterval(() => {
         this.now = new Date()

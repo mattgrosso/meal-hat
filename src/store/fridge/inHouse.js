@@ -115,3 +115,76 @@ export function rowCoverage (row, entry, timers = {}, now = new Date()) {
     assumedPackageSize: packageSize === null
   };
 }
+
+/**
+ * Normalized food name -> the latest date it counts as in the house, across
+ * its timers. Feeds the staple rules (`isOnHand`). A timer somebody has said
+ * is here since it expired counts as here, the same as `liveTimersFor` — so
+ * the regulars and the meal rows read the house the same way.
+ */
+export function onHandUntilFrom (timers = {}) {
+  const out = {};
+  Object.values(timers || {}).forEach((timer) => {
+    const name = normalizeName(timer?.title);
+    if (!name || !timer.expiryDate) return;
+    const expiry = new Date(timer.expiryDate).getTime();
+    if (Number.isNaN(expiry)) return;
+    const seen = new Date(timer.seenAt).getTime();
+    const until = !Number.isNaN(seen) && seen >= expiry ? '9999-12-31T00:00:00.000Z' : timer.expiryDate;
+    if (!out[name] || new Date(until) > new Date(out[name])) out[name] = until;
+  });
+  return out;
+}
+
+// Plural-blind, like the talk-through: "Hot Dog Buns" on the card and "hot
+// dog bun" on a receipt are one food.
+const foodKey = (name) => {
+  const lower = normalizeName(name);
+  return lower.endsWith('s') ? lower.slice(0, -1) : lower;
+};
+
+/**
+ * Where an incoming food goes: onto the card already holding it, or (null) a
+ * new card. Returns `{ id, title, changes, detail }` for a top-up.
+ *
+ * Several cards for one food: the one going off soonest takes it, so the
+ * food converges on one card instead of growing more.
+ */
+export function topUpPlan (incoming = {}, timers = {}, now = new Date()) {
+  const key = foodKey(incoming.title);
+  if (!key) return null;
+  const adding = asPositiveNumber(incoming.quantity) ?? 1;
+
+  const cards = Object.entries(timers || {})
+    .map(([id, timer]) => ({ id, ...timer }))
+    .filter((timer) => timer && foodKey(timer.title) === key)
+    .sort((a, b) => new Date(a.expiryDate) - new Date(b.expiryDate));
+  if (!cards.length) return null;
+
+  const live = liveTimersFor(cards[0].title, Object.fromEntries(cards.map((c) => [c.id, c])), now);
+  if (!live.length) {
+    // Everything on file for it has gone off and nobody has said otherwise:
+    // the new food replaces it, on the card it already has.
+    const card = cards[0];
+    return {
+      id: card.id,
+      title: card.title,
+      changes: {
+        expiryDate: incoming.expiryDate,
+        quantity: adding > 1 ? adding : null,
+        seenAt: null,
+        ...(incoming.shelfStable ? { shelfStable: true } : {})
+      },
+      detail: `replaced, ${adding}`
+    };
+  }
+
+  const card = live[0];
+  const had = asPositiveNumber(card.quantity) ?? 1;
+  return {
+    id: card.id,
+    title: card.title,
+    changes: { quantity: had + adding },
+    detail: `${had} → ${had + adding}`
+  };
+}

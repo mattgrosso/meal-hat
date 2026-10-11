@@ -356,7 +356,8 @@ export default {
     // open on its report.
     async confirmScan ({ timers, templates, purchases = [] }) {
       for (const timer of timers) {
-        await this.$store.dispatch('fridge/addTimer', { ...timer, source: 'scan' });
+        // Tops up the food's existing card when there is one.
+        await this.$store.dispatch('fridge/addOrTopUpTimer', { ...timer, source: 'scan' });
       }
       // What was bought and how many, so the house's usage rates can be
       // measured across a shop instead of stopping at it (store/usage.js).

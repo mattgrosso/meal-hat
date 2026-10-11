@@ -14,6 +14,7 @@ import { foldObservation } from './shelfLife'
 import { sortHistory, HISTORY_LIMIT } from './history'
 import { timersPath, templatesPath, historyPath, templateKey } from './paths'
 import { reconcileShelfLives, fridgeFoodId } from './reconcile'
+import { onHandUntilFrom, topUpPlan } from './inHouse'
 import { pairingPath, isFreshPairing } from '@/utils/fridge/pairing'
 import { isValidKey } from '@/utils/fridge/fridgeKey'
 
@@ -85,17 +86,7 @@ export default {
     // Latest rather than soonest: two cartons of eggs means you have eggs until
     // the later one goes. Taking the soonest would put eggs back on the list
     // while a good carton sat in the door.
-    onHandUntil: (state) => {
-      const out = {};
-      Object.values(state.timers || {}).forEach((timer) => {
-        const name = String(timer?.title || '').trim().toLowerCase();
-        if (!name || !timer.expiryDate) return;
-        const at = new Date(timer.expiryDate).getTime();
-        if (Number.isNaN(at)) return;
-        if (!out[name] || at > new Date(out[name]).getTime()) out[name] = timer.expiryDate;
-      });
-      return out;
-    },
+    onHandUntil: (state) => onHandUntilFrom(state.timers),
 
     shelfLifeByName: (state) => {
       const out = {}
@@ -269,6 +260,29 @@ export default {
         console.error('Error adding fridge timer:', error)
       } finally {
         commit('SET_LOADING', false)
+      }
+    },
+
+    // A food coming in from a receipt: top up the card already in the house
+    // for it, and only start a new card when there is none. Matt, 2026-10-11:
+    // "the first thing it does is check to see if we already had that so that
+    // it can increase the quantity ... if it doesn't find a match, then it
+    // will actually make a new line."
+    //
+    // The card keeps its date — the older food goes off first, and every
+    // date here errs early. A card already past its date that nobody has
+    // said is still here is treated as gone: the new food replaces it.
+    async addOrTopUpTimer ({ state, dispatch }, { source = 'scan', ...timer }) {
+      const plan = topUpPlan(timer, state.timers)
+      if (!plan) return dispatch('addTimer', { ...timer, source })
+      try {
+        await update(ref(db, `${timersPath(state.fridgeKey)}/${plan.id}`), {
+          ...plan.changes,
+          updatedAt: new Date().toISOString()
+        })
+        dispatch('recordHistory', { action: 'recounted', title: plan.title, detail: plan.detail, source })
+      } catch (error) {
+        console.error(`Failed to top up ${timer.title}:`, error)
       }
     },
 
@@ -475,7 +489,7 @@ export default {
         try {
           await update(ref(db, `${timersPath(state.fridgeKey)}/${row.id}`), {
             // One is a bare timer, as everywhere else — null deletes the field.
-            quantity: row.quantity > 1 ? row.quantity : null,
+            quantity: row.quantity !== 1 ? row.quantity : null,
             updatedAt: new Date().toISOString()
           })
           dispatch('recordHistory', {

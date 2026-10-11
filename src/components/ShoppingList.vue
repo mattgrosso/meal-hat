@@ -39,6 +39,16 @@
             </div>
           </div>
 
+          <!-- Worked out fresh on every open (shoppingPlan.js) — from the
+               schedule, the kitchen snapshot and the regulars. Safe to repeat:
+               ticks and hand-added rows are never touched. -->
+          <p class="planned-line small text-muted mb-2">
+            <template v-if="planning">Working out the list…</template>
+            <template v-else-if="plannedAtLabel">Worked out at {{ plannedAtLabel }} from the schedule and the kitchen ·
+              <button type="button" class="btn btn-link btn-sm p-0 align-baseline" @click="planList">Refresh</button>
+            </template>
+          </p>
+
           <!-- Sort Toggle -->
           <div v-if="sortedShoppingList.length" class="d-flex gap-2 mb-3">
             <button
@@ -377,6 +387,9 @@ export default {
       editingGrocery: null,
       editForm: {},
 
+      // True while the list is being worked out (see planList).
+      planning: false,
+
       // Staples the user has explicitly pulled onto this list despite being in
       // the cupboard. Session-only on purpose — "I'm out of olive oil" is about
       // this shopping trip, and marking it bought records the real answer.
@@ -384,6 +397,8 @@ export default {
     }
   },
   async mounted () {
+    this.planList();
+
     // Close suggestions when clicking outside
     this.handleDocumentClick = (e) => {
       if (!this.$refs.quickAddInput || !this.$refs.quickAddInput.contains(e.target)) {
@@ -442,6 +457,11 @@ export default {
   },
   computed: {
     // Is this screen holding state a reload would lose? Watched above.
+    plannedAtLabel () {
+      const at = this.$store.state.shoppingListPlannedAt;
+      return at ? new Date(at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '';
+    },
+
     shoppingListBusy () {
       return Boolean(this.userInteracting || this.editingGrocery || this.forcedOntoList.length);
     },
@@ -532,6 +552,26 @@ export default {
   },
   methods: {
     runningLowNote,
+
+    // Work the list out from scratch. Runs on every open, and from the
+    // Refresh link. It waits briefly for the hat's meals and catalog on a cold
+    // start, the same as rebuildStaleShoppingList.
+    async planList () {
+      if (this.planning) return;
+      this.planning = true;
+      try {
+        for (let waited = 0; waited < 15000; waited += 250) {
+          const state = this.$store.state;
+          if (state.databaseTopKey && state.meals && Object.keys(state.groceryCatalog || {}).length) break;
+          await new Promise((resolve) => setTimeout(resolve, 250));
+        }
+        await this.$store.dispatch('generateShoppingListFromMeals');
+      } catch (error) {
+        console.error('Could not work out the shopping list:', error);
+      } finally {
+        this.planning = false;
+      }
+    },
     // Update suggestions as user types
     updateSuggestions () {
       const query = this.quickAddInput.toLowerCase().trim();
@@ -835,6 +875,11 @@ export default {
       this.userInteracting = true;
 
       const updated = { ...item, purchased };
+      // The day it was ticked: a regular or a hand-added row bought today
+      // stays in Bought for the rest of the trip and is cleared after that
+      // (shoppingPlan.js). Opening the list again must not undo a tick.
+      if (purchased) updated.purchasedOn = todayISO();
+      else delete updated.purchasedOn;
       delete updated.groceryItem; // a read-time join, never persisted
       // Everything the partition attaches is DERIVED AT READ TIME from the
       // catalog and the fridge. Persisting any of it would freeze a moment's
@@ -870,7 +915,7 @@ export default {
           this.$store.dispatch('mergeDBValue', {
             path: `usage-log/${item.groceryId}`,
             value: {
-              [`${todayISO()}/bought`]: item.source === 'manual' ? 'manual' : 'meal',
+              [`${todayISO()}/bought`]: item.source === 'meal' ? 'meal' : 'manual',
               ...(count ? { [`${todayISO()}/boughtCount`]: count } : {})
             }
           }).catch((error) => console.error('Failed to log the purchase:', error));

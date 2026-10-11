@@ -107,3 +107,15 @@ describe('formatDaySpan', () => {
     expect(formatDaySpan(15)).toBe('2 weeks 1 day')
   })
 })
+
+describe('formatCount', () => {
+  it('says nothing for one, whole packs as ×N, parts in quarters', async () => {
+    const { formatCount } = await import('../../../src/store/fridge/timers');
+    expect(formatCount(undefined)).toBe('');
+    expect(formatCount(1)).toBe('');
+    expect(formatCount(3)).toBe('×3');
+    expect(formatCount(0.375)).toBe('×½');
+    expect(formatCount(0.1)).toBe('×¼');
+    expect(formatCount(1.75)).toBe('×1¾');
+  });
+});

@@ -4,10 +4,11 @@ import { GoogleAuthProvider, signInWithPopup, signOut } from "firebase/auth";
 import { db, auth, authReady, firebaseConfig } from '@/firebase';
 import { v4 as uuidv4 } from 'uuid';
 import router from '@/router';
-import { analyzeDuplicates, findSimilar, aggregateMealIngredients, remapMealIngredients } from './ingredients';
+import { analyzeDuplicates, findSimilar, remapMealIngredients } from './ingredients';
 import { withDrawnDate, compareByDate, isUpcoming, toISODate, isoDaysAgo } from './schedule';
-import { withPreservedPurchases } from './purchases';
-import { readingsPatch, receiptPatch, prunePatch, runningLowFoods, staleRunningLowRows, mealUsage } from './usage';
+import { readingsPatch, receiptPatch, prunePatch, mealUsage } from './usage';
+import { planShoppingList } from './shoppingPlan';
+import { onHandUntilFrom } from './fridge/inHouse';
 import { buildMirrorFeed } from '../assets/javascript/mirrorFeed';
 import fridge from './fridge';
 
@@ -51,6 +52,8 @@ export default createStore({
 
     // UNIFIED DATA MODEL
     groceryCatalog: {}, // Single source for all grocery items: id → { id, name, defaultUnits, defaultAisle, defaultLocation }
+    // When this tab last worked the list out (ms), for the list's own header.
+    shoppingListPlannedAt: null,
     shoppingList: {}, // Unified shopping list: id → { groceryId, quantity, units, aisle, location, source, mealId?, purchased }
 
     // Hats this user belongs to — backs the MealHats sharing screen.
@@ -166,6 +169,9 @@ export default createStore({
     setGroceryCatalog (state, groceryCatalog) {
       state.groceryCatalog = groceryCatalog || {};
     },
+    setShoppingListPlannedAt (state, at) {
+      state.shoppingListPlannedAt = at;
+    },
     setShoppingList (state, shoppingList) {
       state.shoppingList = shoppingList || {};
     },
@@ -276,25 +282,17 @@ export default createStore({
       return { mealsChanged, shoppingItemsChanged, entriesRemoved: oldIds.length };
     },
 
-    // After a talk-through: log what he said was in the house, then put on the
-    // shopping list anything predicted to run out within a week. See usage.js.
+    // After a talk-through: log what he said was in the house. That is all.
     //
-    // A prediction never hides a row the user added or a meal asked for, and
-    // a food with no learned rate produces nothing. Rows go in as `source:
-    // 'manual'` so a redraw preserves them, one per-key write each — never a
-    // whole-node set().
+    // This used to add "running low" rows to the list on the spot, and take
+    // back its own stale ones. Since 2026-10-11 the list is worked out when it
+    // is OPENED (shoppingPlan.js), from the same log, so the talk-through and
+    // the draw can happen in either order and nothing goes stale in between.
     //
-    // The one thing it removes is its OWN earlier guess (2026-10-07): an
-    // unbought running-low row the latest counts no longer support. Without
-    // that, "two full bags of mozzarella" left a running-low mozzarella row
-    // standing, and nothing would ever have taken it down.
-    //
-    // Non-fatal throughout: the talk-through has already landed, and missing
-    // a "running low" row costs no more than this feature not existing.
+    // Non-fatal: the talk-through has already landed.
     async recordTalkUsage (context, { counts } = {}) {
       const hat = context.state.databaseTopKey;
-      const none = { added: [], cleared: [] };
-      if (!hat || !counts) return none;
+      if (!hat || !counts) return;
       const catalog = context.state.groceryCatalog || {};
       const now = new Date();
 
@@ -303,65 +301,13 @@ export default createStore({
         if (Object.keys(readings).length) {
           await context.dispatch('mergeDBValue', { path: 'usage-log', value: readings });
         }
-
         const usageLog = (await get(ref(db, `${hat}/usage-log`))).val() || {};
         const pruned = prunePatch(usageLog, now);
         if (Object.keys(pruned).length) {
           await context.dispatch('mergeDBValue', { path: 'usage-log', value: pruned });
         }
-
-        // The authoritative list, not the in-memory one — the same rule as
-        // generateShoppingListFromMeals — so a row added on another phone is
-        // seen and not duplicated.
-        const shoppingList = (await get(ref(db, `${hat}/shopping-list`))).val() || {};
-        // WithHistory: the past is what a rate is measured over. `drawnMeals`
-        // is upcoming only and would subtract nothing.
-        const mealUse = mealUsage(
-          context.state.drawnMealsWithHistory || [],
-          (id) => (context.state.meals ? context.getters.getMeal(id) : null),
-          catalog
-        );
-
-        const stale = staleRunningLowRows(shoppingList, usageLog, catalog, now, undefined, mealUse);
-        for (const row of stale) {
-          await context.dispatch('updateDBValue', { path: `shopping-list/${row.id}`, value: null });
-          delete shoppingList[row.id];
-        }
-
-        const low = runningLowFoods(usageLog, catalog, shoppingList, now, undefined, mealUse);
-
-        for (const food of low) {
-          const entry = catalog[food.groceryId];
-          const id = uuidv4();
-          await context.dispatch('updateDBValue', {
-            path: `shopping-list/${id}`,
-            value: {
-              id,
-              groceryId: food.groceryId,
-              quantity: 1,
-              units: entry.defaultUnits || '',
-              aisle: entry.defaultAisle || 0,
-              location: entry.defaultLocation || null,
-              source: 'manual',
-              purchased: false,
-              // STORED, unlike the partition's read-time flags: it records why
-              // this row was added, which stays true after the fact.
-              runningLow: {
-                runsOutOn: food.runsOutOn,
-                ...(food.perWeek ? { perWeek: Math.round(food.perWeek * 10) / 10 } : {}),
-                ...(food.everyDays ? { everyDays: food.everyDays } : {})
-              }
-            }
-          });
-        }
-
-        return {
-          added: low.map((food) => ({ ...food, name: catalog[food.groceryId].name })),
-          cleared: stale.map((row) => ({ groceryId: row.groceryId, name: catalog[row.groceryId].name }))
-        };
       } catch (error) {
         console.error('Failed to learn from the talk-through:', error);
-        return none;
       }
     },
 
@@ -443,90 +389,45 @@ export default createStore({
         return;
       }
 
-      // Collect (and sum) the ingredients of upcoming drawn meals, keyed by grocery id.
-      const mealIngredients = aggregateMealIngredients({
+      // Everything else the plan reads, straight from the database for the
+      // same reason as the two reads above: the fridge's timers may not have
+      // arrived in this tab yet, and a plan made against an empty fridge would
+      // call every regular "not seen in the house".
+      const hat = context.state.databaseTopKey;
+      let usageLog = {};
+      let timers = context.state.fridge?.timers || {};
+      if (hat) {
+        try {
+          usageLog = (await get(ref(db, `${hat}/usage-log`))).val() || {};
+          const fridgeKey = (await get(ref(db, `${hat}/fridgeKey`))).val();
+          if (fridgeKey) timers = (await get(ref(db, `fridge/${fridgeKey}/timers`))).val() || {};
+        } catch (error) {
+          console.error('Could not read the usage log or fridge; planning without them:', error);
+        }
+      }
+
+      const getMeal = (id) => context.getters.getMeal(id);
+      const { updates, rows } = planShoppingList({
+        stored: context.state.shoppingList || {},
         drawnMeals: drawnMealsToUse,
-        getMeal: (id) => context.getters.getMeal(id),
-        catalog: context.state.groceryCatalog
+        getMeal,
+        catalog: context.state.groceryCatalog || {},
+        usageLog,
+        onHandUntil: onHandUntilFrom(timers),
+        // The past is what a rate is measured over; see usage.js mealUsage.
+        mealUseById: mealUsage(drawnMealsToUse, getMeal, context.state.groceryCatalog || {}),
+        now: new Date()
       });
 
-      // Build surgical, key-scoped updates instead of overwriting the whole list.
-      // Each entry here targets one item by key; sibling items (including manual
-      // ones and anything added elsewhere) are left untouched.
-      const shoppingListUpdates = {};
-      const catalogUpdates = {};
+      context.commit('setShoppingList', rows);
+      context.commit('setShoppingListPlannedAt', Date.now());
 
-      // Queue removal of the previously-generated meal items only. Manual items
-      // (source !== 'meal') are never queued, so they survive the regeneration.
-      Object.values(context.state.shoppingList || {}).forEach(item => {
-        if (item && item.source === 'meal') {
-          shoppingListUpdates[item.id] = null; // null tells Firebase update() to delete this key
-        }
-      });
-
-      // Build the freshly-generated meal items, then carry "already bought"
-      // across before queueing them. Regeneration deletes every meal row and
-      // re-derives it with a new uuid, so a purchase marked on the old row does
-      // not survive on its own — see purchases.js.
-      const regeneratedRows = [];
-
-      Object.values(mealIngredients).forEach(item => {
-        // Ensure a grocery catalog entry exists for this item.
-        if (!context.state.groceryCatalog[item.id]) {
-          catalogUpdates[item.id] = {
-            id: item.id,
-            name: item.name,
-            defaultUnits: item.units || item.defaultUnits || '',
-            defaultAisle: item.aisle || item.defaultAisle || 0,
-            defaultLocation: item.location || item.defaultLocation || null
-          };
-        }
-
-        const catalogEntry = catalogUpdates[item.id] || context.state.groceryCatalog[item.id];
-        const shoppingItemId = uuidv4();
-
-        regeneratedRows.push({
-          id: shoppingItemId,
-          groceryId: item.id,
-          quantity: item.quantity,
-          units: item.units || item.defaultUnits || '',
-          aisle: item.aisle || item.defaultAisle || 0,
-          location: item.location || (catalogEntry && catalogEntry.defaultLocation) || null,
-          source: 'meal',
-          mealId: item.mealId,
-          purchased: false
-        });
-      });
-
-      // Read from the list as it stands BEFORE this rebuild — it was refreshed
-      // from the database at the top of this action, so it is authoritative and
-      // includes anything ticked off on another device.
-      withPreservedPurchases(regeneratedRows, Object.values(context.state.shoppingList || {}))
-        .forEach((row) => { shoppingListUpdates[row.id] = row; });
-
-      // Apply the same changes to local state so the UI updates immediately.
-      Object.entries(shoppingListUpdates).forEach(([id, value]) => {
-        if (value === null) {
-          context.commit('removeFromShoppingList', id);
-        } else {
-          context.commit('addToShoppingList', value);
-        }
-      });
-      Object.values(catalogUpdates).forEach(entry => context.commit('addToGroceryCatalog', entry));
-
-      // Persist surgically. update() merges the given keys into each node and
-      // leaves every other key alone — so no full-collection overwrite, and no
-      // clobbering of items this device never knew about.
-      const writes = [];
-      if (Object.keys(shoppingListUpdates).length) {
-        writes.push(context.dispatch('mergeDBValue', { path: 'shopping-list', value: shoppingListUpdates }));
+      // Surgical, and only what changed — opening the list twice writes
+      // nothing the second time. See shoppingPlan.js.
+      if (Object.keys(updates).length) {
+        await context.dispatch('mergeDBValue', { path: 'shopping-list', value: updates });
       }
-      if (Object.keys(catalogUpdates).length) {
-        writes.push(context.dispatch('mergeDBValue', { path: 'grocery-catalog', value: catalogUpdates }));
-      }
-      await Promise.all(writes);
-
-      console.log('Regenerated', Object.keys(mealIngredients).length, 'meal ingredients for shopping list');
+      console.log('Shopping list planned:', Object.keys(updates).length, 'changes');
     },
 
     async login (context) {

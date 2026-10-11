@@ -68,3 +68,16 @@ export const formatDaySpan = (totalDays) => {
   }
   return `${whole} day${whole > 1 ? 's' : ''}`
 }
+
+// A card's count for display: '' for one (a bare card), ×3 for whole packs,
+// and quarters for part of one — three loose buns of an eight-pack is ×½,
+// not ×0.38. Counts are in packages (talkReview.js `inPackages`).
+const QUARTERS = ['', '¼', '½', '¾']
+export const formatCount = (quantity) => {
+  const n = Number(quantity)
+  if (!Number.isFinite(n) || n <= 0 || n === 1) return ''
+  const quarters = Math.max(1, Math.round(n * 4))
+  const whole = Math.floor(quarters / 4)
+  if (whole === 1 && quarters % 4 === 0) return ''
+  return `×${whole || ''}${QUARTERS[quarters % 4]}`
+}

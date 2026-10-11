@@ -387,7 +387,12 @@ const TRANSCRIPT_SCHEMA = {
           },
           quantity: {
             type: 'integer',
-            description: 'How many separate packages, containers or units of this food the speaker describes. 1 unless they clearly said more ("two cartons of eggs" is 2). Use 1 for a vague amount ("some carrots").'
+            description: 'How many of this food the speaker describes, counted the way THEY counted it — see "counted". 1 unless they clearly said more ("two cartons of eggs" is 2). Use 1 for a vague amount ("some carrots").'
+          },
+          counted: {
+            type: 'string',
+            enum: ['packages', 'pieces'],
+            description: '"packages" if the number counts packages or containers — bags, boxes, cartons, cans, jars, bottles, loaves, cases, blocks ("two bags of hot dog buns", "a carton of eggs", "three cans of tomato sauce"), or the food simply comes one to a package. "pieces" if it counts single items of a food that comes several to a package ("six hot dog buns", "nine eggs", "four slices of cheese", "two veggie patties").'
           },
           perishable: {
             type: 'boolean',
@@ -398,7 +403,7 @@ const TRANSCRIPT_SCHEMA = {
             description: 'Typical days this food stays good from today, given how the speaker describes it. If they say it is nearly off, or opened, or has been there a while, say so with a SHORT number — that is the most useful thing you can contribute.'
           }
         },
-        required: ['heard', 'name', 'knownFoodMatch', 'quantity', 'perishable', 'estimatedShelfLifeDays'],
+        required: ['heard', 'name', 'knownFoodMatch', 'quantity', 'counted', 'perishable', 'estimatedShelfLifeDays'],
         additionalProperties: false
       }
     },
@@ -456,6 +461,7 @@ SELF-CORRECTION IS NORMAL AND THE LAST WORD WINS. "There's milk — no wait, tha
 NAMING:
 
 - One entry per distinct FOOD, not per container. "Three yogurts" is one item with quantity 3.
+- Say what the number counts. "Six hot dog buns" is 6 pieces; "two bags of hot dog buns" is 2 packages. They are very different amounts, and the household's shopping list depends on telling them apart.
 - Name the food, not the brand or the size: "Milk", not "Horizon Organic Whole Half Gallon".
 - Two foods that share a word are two items: a cheddar block and shredded mozzarella are not one cheese.
 - "heard" must quote THEIR words for the item. It is shown back to them as the check on your reading, so it has to be recognisably what they said. Do not tidy it, do not paraphrase it.

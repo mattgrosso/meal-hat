@@ -224,10 +224,42 @@ describe('buildTalkReview', () => {
     expect(same.confirmed[0].quantity).toBeUndefined();
   });
 
-  it('does not recount a food split across several timers', () => {
+  it('folds a food split across several cards onto the soonest, with the count said', () => {
+    // 2026-10-11: "I want the app to always know ... how much we have."
     const split = [timer('t1', 'Cheddar Cheese', 60), timer('t9', 'Cheddar Cheese', 30)];
     const review = buildTalkReview({ items: [said({ knownFoodMatch: 'Cheddar Cheese', quantity: 4 })] }, split, templates, NOW);
-    expect(review.confirmed.every((r) => r.quantity === undefined)).toBe(true);
+    expect(review.confirmed.find((r) => r.id === 't9')).toMatchObject({ had: 2, quantity: 4 });
+    expect(review.confirmed.find((r) => r.id === 't1').mergedAway).toBe(true);
+    const payload = talkPayload(review, NOW);
+    expect(payload.remove).toEqual(['t1']);
+    expect(payload.recount).toEqual([{ id: 't9', title: 'Cheddar Cheese', had: 2, quantity: 4 }]);
+  });
+
+  it('folds several cards even when the count said equals the total', () => {
+    const split = [timer('t1', 'Cheddar Cheese', 60), timer('t9', 'Cheddar Cheese', 30)];
+    const review = buildTalkReview({ items: [said({ knownFoodMatch: 'Cheddar Cheese', quantity: 2 })] }, split, templates, NOW);
+    expect(talkPayload(review, NOW).recount).toEqual([{ id: 't9', title: 'Cheddar Cheese', had: 2, quantity: 2 }]);
+  });
+
+  it('leaves several cards alone when no count was said', () => {
+    const split = [timer('t1', 'Cheddar Cheese', 60), timer('t9', 'Cheddar Cheese', 30)];
+    const review = buildTalkReview({ items: [said({ knownFoodMatch: 'Cheddar Cheese', quantity: null })] }, split, templates, NOW);
+    expect(review.confirmed.every((r) => r.quantity === undefined && !r.mergedAway)).toBe(true);
+  });
+
+  it('keeps a regular he did not mention, and logs no count for it', () => {
+    // "sometimes I won't read every staple if it's like some flour or some sugar"
+    const held = [timer('f', 'Flour', 300), timer('e', 'Eggs', 10)];
+    const review = buildTalkReview({ items: [] }, held, templates, NOW, { keepUnmentioned: new Set(['flour']) });
+    expect(review.notHeard.map((r) => r.title)).toEqual(['Eggs']);
+    expect(review.counts).toEqual({ egg: 0 });
+  });
+
+  it('still removes a regular he says they are out of', () => {
+    const held = [timer('f', 'Flour', 300)];
+    const review = buildTalkReview({ items: [], outOf: [{ name: 'Flour' }] }, held, templates, NOW, { keepUnmentioned: new Set(['flour']) });
+    expect(review.notHeard.map((r) => r.title)).toEqual(['Flour']);
+    expect(review.counts).toEqual({ flour: 0 });
   });
 
   it('never loses a tracked timer — every one is confirmed or going', () => {
@@ -336,5 +368,31 @@ describe('talkReviewReady', () => {
     // Saying the fridge is emptier than the app thinks is a legitimate and
     // complete outcome. The photo flow learned the same lesson.
     expect(talkReviewReady([])).toBe(true);
+  });
+});
+
+describe('pieces and packages (2026-10-11)', () => {
+  // "Six hot dog buns" used to arrive as six BAGS of buns, so a cupboard with
+  // six loose buns covered any meal and buns never reached the list.
+  const sizes = new Map([['hot dog bun', 8]]);
+
+  it('turns counted pieces into packages through packageSize', () => {
+    const row = buildTalkItem(said({ name: 'Hot Dog Buns', quantity: 6, counted: 'pieces' }), [], NOW, sizes);
+    expect(row.quantity).toBe(0.75);
+  });
+
+  it('leaves counted packages alone', () => {
+    const row = buildTalkItem(said({ name: 'Hot Dog Buns', quantity: 2, counted: 'packages' }), [], NOW, sizes);
+    expect(row.quantity).toBe(2);
+  });
+
+  it('leaves pieces alone when the food has no packageSize', () => {
+    const row = buildTalkItem(said({ name: 'Eggs', quantity: 9, counted: 'pieces' }), [], NOW, sizes);
+    expect(row.quantity).toBe(9);
+  });
+
+  it('writes a part-package count onto the new card', () => {
+    const review = buildTalkReview({ items: [said({ name: 'Hot Dog Buns', quantity: 6, counted: 'pieces' })] }, [], [], NOW, { packageSizes: sizes });
+    expect(talkPayload({ ...review, newItems: review.newItems.map((i) => ({ ...i, included: true, days: 5 })) }, NOW).timers[0].quantity).toBe(0.75);
   });
 });

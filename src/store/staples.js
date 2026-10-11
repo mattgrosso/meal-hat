@@ -176,7 +176,11 @@ export function partitionStaples (rows, catalog = {}, now = new Date(), onHandUn
       return;
     }
 
-    if (stapleIsDue(entry, now, onHandUntil)) {
+    // The plan (shoppingPlan.js) has already asked whether this regular is
+    // running out, with the usage rate and not just the date; `runningLow`
+    // above is its yes, `stocked` its no. The date rule below is only for a
+    // row the plan has not seen yet.
+    if (!row.stocked && stapleIsDue(entry, now, onHandUntil)) {
       // Carry why it resurfaced, so the row can say so rather than just
       // reappearing without explanation.
       list.push({ ...row, stapleDue: true, daysSincePurchase: daysSincePurchase(entry, now) });

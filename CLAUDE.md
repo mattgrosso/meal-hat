@@ -119,6 +119,46 @@ copies of records the catalog has since renamed or merged. Do not update them
 alongside a catalog change — rewriting dead data only makes it look live. They
 are safe to delete whenever someone wants to.
 
+### The shopping list is worked out when it is opened
+
+Matt, 2026-10-11, after a few weeks of wrong lists: *"one side is what we
+have, one side is what we need"*, *"it shouldn't matter what order I do this
+in"*, and *"sometimes I just open the list because I just got to the store ...
+we don't reset things just because I've opened it twice."*
+
+`src/store/shoppingPlan.js` (pure, `tests/unit/shoppingPlan.spec.js`, and
+`tests/e2e/shopping-list-plan.spec.js` end to end). `generateShoppingListFromMeals`
+runs it on every open of the list (and the Refresh link, a draw, a schedule
+edit, a cook-app lesson):
+
+- **NEED** = every meal on the schedule from today on (`meal-<groceryId>`
+  rows) + **regulars** — catalog `staple` foods ("Staple" checkbox) predicted
+  to run out within a week by `usage.js`, or past their interval and not in
+  the house (`stock-<groceryId>` rows, `source: 'stock'`). Non-staples are
+  never added for running low, however low: being out of cocktail cherries
+  is not a reason to buy them.
+- **HAVE** = the fridge timers, subtracted at DISPLAY time by
+  `partitionStaples` / `rowCoverage`, so draw and talk-through can come in
+  either order.
+- **Idempotent.** Fixed ids, `withPreservedPurchases`, and only changed keys
+  are written — a second open writes nothing (asserted in both suites).
+- **Cleared:** stale meal rows (meal eaten), the old talk-through running-low
+  rows, and any non-meal row ticked on an EARLIER day (`purchasedOn`, stamped
+  by the tick). Unticked rows he added himself are never touched.
+
+The talk-through no longer adds rows; `recordTalkUsage` only logs counts. It
+keeps a regular he did not mention (`keepUnmentioned`) — *"sometimes I won't
+read every staple ... flour or sugar"* — while "we're out of flour" still
+removes it.
+
+**Counts are packages, and pieces are converted** (2026-10-11). "Six hot dog
+buns" used to be six BAGS. The Lambda's talk schema now returns `counted:
+'pieces' | 'packages'`, and `inPackages` divides pieces by `packageSize`, so
+timer quantities can be fractional (`formatCount` shows quarters). A count
+said for a food on several cards folds them onto the soonest-expiring one.
+Receipts top up the food's existing card (`topUpPlan`) instead of adding a
+second one.
+
 ### Drawing meals
 
 `src/store/draw.js` picks weighted by how OVERDUE a meal is, not flat random.
@@ -193,9 +233,10 @@ meal row's through `packageSize` (unknown without one). Why it matters, from
 Matt's first report: one count is never a rate, and without amounts every shop
 wiped out what the talk-throughs had learned. `scripts/backfill-usage-log.mjs`
 rebuilt the history from the fridge's change log and lists fridge names that
-match no catalog food — those can never learn a rate until the names agree. After a talk-through `recordTalkUsage` adds a `source: 'manual'` row
-carrying a STORED `runningLow` for anything due inside a week and not already
-listed.
+match no catalog food — those can never learn a rate until the names agree.
+Since 2026-10-11 the rate only acts for REGULARS, and only when the list is
+opened — see "The shopping list is worked out when it is opened". The two
+paragraphs below describe the talk-through era it replaced.
 
 **Add-only, except for its own guesses.** No rate means nothing happens, and
 `partitionStaples` never moves a `runningLow` row off the list — the fridge

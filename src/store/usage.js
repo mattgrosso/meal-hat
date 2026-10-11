@@ -346,7 +346,7 @@ export function readingsPatch (counts = {}, catalog = {}, now = new Date()) {
 export function packagesBought (row = {}, entry = {}) {
   const quantity = Number(row?.quantity);
   if (!Number.isFinite(quantity) || quantity <= 0) return null;
-  if (row.source === 'manual') return quantity;
+  if (row.source !== 'meal') return quantity;
   const size = Number(entry?.packageSize);
   return Number.isFinite(size) && size > 0 ? Math.ceil(quantity / size) : null;
 }
@@ -396,5 +396,6 @@ export function runningLowNote (runningLow) {
     return `running low — you use about one every ${Math.round(7 / perWeek)} days`;
   }
   if (runningLow.everyDays) return `running low — you buy it about every ${Math.round(runningLow.everyDays)} days`;
+  if (runningLow.neverBought) return 'regular — not bought yet';
   return 'running low';
 }

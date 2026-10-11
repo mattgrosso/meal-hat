@@ -39,7 +39,7 @@ export { isPerishable, PANTRY_THRESHOLD_DAYS, DEFAULT_PANTRY_DAYS } from './peri
  * arriving as "Pepper" is invisible unless the row can be read back against
  * what was actually said. Same job the receipt flow's `printedText` does.
  */
-export const buildTalkItem = (item, templates, now) => {
+export const buildTalkItem = (item, templates, now, packageSizes = new Map()) => {
   const template =
     findTemplate(item?.knownFoodMatch, templates) ||
     findTemplate(item?.name, templates)
@@ -82,13 +82,34 @@ export const buildTalkItem = (item, templates, now) => {
     // that is demonstrably in the house — but they are kept off the wall,
     // which exists to show what is about to go off.
     shelfStable: !perishable,
-    // How many packages he said there were. Absent means one, which is what a
-    // timer has always meant.
-    quantity: Number.isFinite(Number(item?.quantity)) && Number(item?.quantity) > 0
-      ? Number(item.quantity)
-      : null,
+    // How many PACKAGES there are. Absent means one, which is what a timer
+    // has always meant.
+    quantity: inPackages(item, name, packageSizes),
     startsAt: now
   }
+}
+
+// Packages, to two places: three loose buns of an eight-pack is 0.38 of one.
+const asCount = (n) => Math.max(0.01, Math.round(Number(n) * 100) / 100)
+
+/**
+ * A spoken count, in packages.
+ *
+ * "Six hot dog buns" and "six bags of hot dog buns" are different amounts,
+ * and both used to arrive as six PACKAGES — so a cupboard with six loose buns
+ * covered any meal and buns never reached the list (2026-10-11). The model
+ * now says what was counted (`counted: 'pieces'`), and pieces become packages
+ * through the catalog's `packageSize`, which for a food that comes several to
+ * a pack is in pieces already (Hamburger Buns 8). With no packageSize the
+ * count stands as it was said.
+ */
+export function inPackages (item, name, packageSizes = new Map()) {
+  const n = Number(item?.quantity)
+  if (!Number.isFinite(n) || n <= 0) return null
+  const size = Number(packageSizes.get(normalizeFoodName(name)) ||
+    packageSizes.get(normalizeFoodName(item?.knownFoodMatch)))
+  if (item?.counted === 'pieces' && size > 0) return Math.round((n / size) * 100) / 100
+  return n
 }
 
 /**
@@ -99,12 +120,17 @@ export const buildTalkItem = (item, templates, now) => {
  * trustworthy — the reconcile screen learned that from Matt's own report
  * ("so I can feel like it did see things").
  */
-export const buildTalkReview = (result, timers, templates, now) => {
+// `keepUnmentioned`: normalized names of the household's REGULARS (catalog
+// `staple`). The one exception to "if I don't list it, it isn't there", and
+// it is his too (2026-10-11): "it's possible that sometimes I won't read every
+// staple if it's like some flour or some sugar." So a regular he skipped stays
+// in the house and logs no count; one he says they're OUT of still goes.
+export const buildTalkReview = (result, timers, templates, now, { keepUnmentioned = new Set(), packageSizes = new Map() } = {}) => {
   const spoken = []
   const seen = new Map()
 
   ;(result?.items || []).forEach((item) => {
-    const row = buildTalkItem(item, templates, now)
+    const row = buildTalkItem(item, templates, now, packageSizes)
     if (!row.name) return
     const key = normalizeFoodName(row.name)
     const existing = seen.get(key)
@@ -137,11 +163,6 @@ export const buildTalkReview = (result, timers, templates, now) => {
   const spokenByKey = new Map(spoken.map((row) => [normalizeFoodName(row.name), row]))
   const tracked = (timers || []).filter((timer) => timer && timer.title)
   const trackedKeys = new Set(tracked.map((timer) => normalizeFoodName(timer.title)))
-  const timersPerKey = new Map()
-  tracked.forEach((timer) => {
-    const key = normalizeFoodName(timer.title)
-    timersPerKey.set(key, (timersPerKey.get(key) || 0) + 1)
-  })
 
   return {
     // Already tracked and he said it is there. Nothing to do — and crucially
@@ -160,12 +181,24 @@ export const buildTalkReview = (result, timers, templates, now) => {
         // how much), and only when this food has a single timer: the count is
         // for the food, and split across several cards there is no honest way
         // to say which one changed.
+        //
+        // SEVERAL CARDS FOR ONE FOOD (2026-10-11). The count used to be thrown
+        // away here, so premade fried rice on three cards never learned how
+        // many there were — and Matt: "I want the app to always know what we
+        // have in the house and how much we have." So a spoken count folds
+        // the food onto ONE card: the one going off soonest (erring early, as
+        // everything here does) carries the count, and the others go.
         const key = normalizeFoodName(timer.title)
         const said = spokenByKey.get(key)?.quantity
-        const had = Number(timer.quantity) > 0 ? Number(timer.quantity) : 1
-        const recount = Number.isFinite(said) && said > 0 && timersPerKey.get(key) === 1
-          ? Math.max(1, Math.round(said))
-          : null
+        const siblings = tracked
+          .filter((other) => normalizeFoodName(other.title) === key)
+          .sort((a, b) => new Date(a.expiryDate) - new Date(b.expiryDate))
+        const counted = Number.isFinite(said) && said > 0
+        if (counted && siblings.length > 1 && siblings[0] !== timer) {
+          return { id: timer.id, title: timer.title, mergedAway: true }
+        }
+        const had = siblings.reduce((sum, t) => sum + (Number(t.quantity) > 0 ? Number(t.quantity) : 1), 0)
+        const recount = counted ? asCount(said) : null
         // PAST ITS DATE BUT SAID TO BE HERE (2026-09-28). The expiry still
         // stands — see above, and the wall keeps showing it as past date so
         // somebody looks at it — but he has just said the food is in the
@@ -179,7 +212,7 @@ export const buildTalkReview = (result, timers, templates, now) => {
           title: timer.title,
           timeLeft,
           ...(timeLeft.expired ? { pastDate: true } : {}),
-          ...(recount !== null && recount !== had ? { had, quantity: recount } : {})
+          ...(recount !== null && (recount !== had || siblings.length > 1) ? { had, quantity: recount } : {})
         }
       }),
 
@@ -198,7 +231,7 @@ export const buildTalkReview = (result, timers, templates, now) => {
     notHeard: tracked
       .filter((timer) => {
         const key = normalizeFoodName(timer.title)
-        return outOf.has(key) || !spokenKeys.has(key)
+        return outOf.has(key) || (!spokenKeys.has(key) && !keepUnmentioned.has(key))
       })
       .map((timer) => ({
         id: timer.id,
@@ -218,7 +251,7 @@ export const buildTalkReview = (result, timers, templates, now) => {
     counts: Object.fromEntries([
       ...spoken.map((row) => [normalizeFoodName(row.name), row.quantity ?? 1]),
       ...tracked.map((timer) => normalizeFoodName(timer.title))
-        .filter((key) => !spokenKeys.has(key))
+        .filter((key) => !spokenKeys.has(key) && !keepUnmentioned.has(key))
         .map((key) => [key, 0]),
       ...[...outOf].map((key) => [key, 0])
     ]),
@@ -262,13 +295,13 @@ export const talkPayload = (review, now) => {
   const timers = included.map((item) => {
     const expiry = new Date((item.startsAt || now).getTime())
     expiry.setDate(expiry.getDate() + item.days)
-    const count = Math.max(1, Math.round(item.quantity ?? 1))
+    const count = asCount(item.quantity ?? 1)
     return {
       title: item.name,
       expiryDate: expiry.toISOString(),
       // Left off entirely at one, because that is what a bare timer has always
       // meant and writing `quantity: 1` on every record would say nothing.
-      ...(count > 1 ? { quantity: count } : {}),
+      ...(count !== 1 ? { quantity: count } : {}),
       // Off the wall, on the shopping list. The flag rather than a date
       // threshold, so the decision is made once, here, and every reader
       // agrees about it afterwards.
@@ -295,8 +328,12 @@ export const talkPayload = (review, now) => {
     // when, and `fridge/inHouse.js` counts a timer seen after it expired as
     // in the house. Nothing else about the timer changes.
     seen: (review?.confirmed || [])
-      .filter((row) => row.pastDate)
+      .filter((row) => row.pastDate && !row.mergedAway)
       .map((row) => ({ id: row.id, title: row.title })),
-    remove: (review?.notHeard || []).filter((row) => row.remove).map((row) => row.id)
+    remove: [
+      ...(review?.notHeard || []).filter((row) => row.remove).map((row) => row.id),
+      // Folded into the food's one remaining card — see `confirmed`.
+      ...(review?.confirmed || []).filter((row) => row.mergedAway).map((row) => row.id)
+    ]
   }
 }

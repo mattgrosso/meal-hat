@@ -91,7 +91,7 @@
           >
             <span>
               {{ item.title }}
-              <span v-if="item.quantity > 1" class="text-muted">×{{ item.quantity }}</span>
+              <span v-if="formatCount(item.quantity)" class="text-muted">{{ formatCount(item.quantity) }}</span>
             </span>
             <span class="badge" :class="badgeClass(item.status)">{{ item.label }}</span>
           </li>
@@ -102,7 +102,7 @@
 </template>
 
 <script>
-import { computeTimeLeft, timerStatus } from '@/store/fridge/timers'
+import { computeTimeLeft, timerStatus, formatCount } from '@/store/fridge/timers'
 import { normalizePairingCode } from '@/utils/fridge/pairing'
 import Header from '@/components/Header.vue'
 
@@ -159,6 +159,7 @@ export default {
     }
   },
   methods: {
+    formatCount,
     // The wall's four states in meal-hat's palette. Same information, same
     // ordering, read with the app's colours instead of Perishable's.
     badgeClass (status) {
