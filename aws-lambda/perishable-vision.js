@@ -682,3 +682,18 @@ exports.handler = async (event) => {
     return response(502, { error: 'Something went wrong. Try again.' });
   }
 };
+
+// Errors to Sentry (2026-10-11, house module sentryLambda.js): a thrown error
+// is reported and rethrown, console.error calls are reported once per shape,
+// and a timeout gets a warning just before it lands. That covers the three
+// failures that used to die in CloudWatch — a job that failed in runJob, the
+// 503 when the fridge key could not be checked, and the 502 catch-all — and
+// the async worker too, since it enters through this same handler. When the
+// key read lost its auth, this endpoint rejected every scan for days with
+// nothing but a CloudWatch line to show for it. Same project as the app,
+// tagged runtime=lambda, so Bug Desk files it under this repo.
+const { createReporter } = require('./sentryLambda.js');
+exports.handler = createReporter({
+  dsn: 'https://56557ae2c2dc79cd37050dc83719819b@o4504483013525504.ingest.us.sentry.io/4512218251198464',
+  functionName: 'perishable-vision'
+}).wrapHandler(exports.handler);

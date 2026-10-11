@@ -1113,7 +1113,16 @@ behind it, not before it has actually replaced anything.
 
 `aws-lambda/perishable-vision.js` (the file name is the Lambda's configured
 handler — renaming it breaks the function). Deployed with the **`personal`** AWS
-profile; `personal-deploy` has no Lambda permissions.
+profile; `personal-deploy` has no Lambda permissions. There is no
+`node_modules` in the repo's `aws-lambda/`: deploy by downloading the live
+zip, swapping in the changed `.js` files, and `update-function-code`.
+
+**Its failures reach Sentry** (2026-10-11): the handler is wrapped by the
+house module `sentryLambda.js` (byte-identical to Cinema Roll's — change it
+there and copy), reporting into Meal Hat's own Sentry project tagged
+`runtime=lambda`. A failed job in `runJob`, the 503 key-check failure and the
+502 catch-all are all `console.error`s, which the wrapper reports once per
+shape; it also warns just before the 300-second timeout.
 
 **Its key check reads the database, so that read must be authenticated.** It
 was a bare unauthenticated GET, which worked only while the node was open to
