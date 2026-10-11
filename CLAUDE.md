@@ -392,6 +392,15 @@ registers for its whole lifetime: the picked date range is in memory, and a
 reload between `applyDraw` and `generateShoppingListFromMeals` leaves a
 schedule with no shopping list behind it.
 
+**The kitchen wall is stricter** (2026-10-11, App.vue `isWallDisplay`). A
+Fully Kiosk tablet is never foregrounded or touched, and its sessionStorage
+lives for weeks, so "once per version" could strand it on an old build. On the
+wall: check every 2 minutes, reload at once (nothing to protect), retry the
+same version after 10 minutes (`retryAfterMs`), reload via `cacheBustedUrl`
+(adds `_v`, keeps `k`, the view pin and `#/fridge`), and reload in the 4am
+hour regardless. Verified live: an untouched headless wall moved to a new
+deploy about a minute after it landed.
+
 **The loop guard is `shouldAutoAttempt`:** one attempt per detected bundle,
 in sessionStorage. It replaced the old 30-second rate limit in
 `registerServiceWorker.js` and is strictly stronger, because each deploy
