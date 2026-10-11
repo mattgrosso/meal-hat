@@ -427,7 +427,7 @@ export default createStore({
       if (Object.keys(updates).length) {
         await context.dispatch('mergeDBValue', { path: 'shopping-list', value: updates });
       }
-      console.log('Shopping list planned:', Object.keys(updates).length, 'changes');
+      console.log('Shopping list worked out:', Object.keys(updates).length, 'changes,', Object.keys(rows).length, 'rows');
     },
 
     async login (context) {
