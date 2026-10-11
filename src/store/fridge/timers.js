@@ -81,3 +81,24 @@ export const formatCount = (quantity) => {
   if (whole === 1 && quarters % 4 === 0) return ''
   return `×${whole || ''}${QUARTERS[quarters % 4]}`
 }
+
+// What the WALL shows (2026-10-11). Matt: the timers "just sit there expired"
+// and the wall had "sort of gotten out of hand" — 53 cards, 17 past date,
+// frozen patties and mustard months out. The wall is an EAT-SOON board now:
+// perishables going off within WALL_HORIZON_DAYS, soonest first, at most
+// WALL_MAX_CARDS. Everything is still tracked (the phone and the shopping
+// list read all of it); it is just not on the wall until it matters.
+export const WALL_HORIZON_DAYS = 5
+export const WALL_MAX_CARDS = 8
+
+export const wallTimers = (timers = [], now = new Date()) => {
+  const horizon = now.getTime() + WALL_HORIZON_DAYS * 24 * 60 * 60 * 1000
+  return (timers || [])
+    .filter((timer) => timer && !timer.shelfStable)
+    .filter((timer) => {
+      const at = new Date(timer.expiryDate).getTime()
+      return !Number.isNaN(at) && at <= horizon
+    })
+    .sort((a, b) => new Date(a.expiryDate) - new Date(b.expiryDate))
+    .slice(0, WALL_MAX_CARDS)
+}

@@ -119,3 +119,24 @@ describe('formatCount', () => {
     expect(formatCount(1.75)).toBe('×1¾');
   });
 });
+
+describe('wallTimers — the eat-soon board', () => {
+  it('shows only perishables going off within five days, soonest first, at most eight', async () => {
+    const { wallTimers } = await import('../../../src/store/fridge/timers');
+    const now = new Date('2026-10-11T12:00:00Z');
+    const at = (d) => new Date(now.getTime() + d * 864e5).toISOString();
+    const cards = [
+      { id: 'far', title: 'Mustard', expiryDate: at(120) },
+      { id: 'pantry', title: 'Rice', expiryDate: at(1), shelfStable: true },
+      { id: 'soon', title: 'Milk', expiryDate: at(2) },
+      { id: 'past', title: 'Lettuce', expiryDate: at(-1) },
+      { id: 'edge', title: 'Eggs', expiryDate: at(5) },
+      ...Array.from({ length: 10 }, (_, i) => ({ id: `x${i}`, title: `Food ${i}`, expiryDate: at(4) }))
+    ];
+    const shown = wallTimers(cards, now);
+    expect(shown.length).toBe(8);
+    expect(shown.slice(0, 2).map((t) => t.id)).toEqual(['past', 'soon']);
+    expect(shown.map((t) => t.id)).not.toContain('far');
+    expect(shown.map((t) => t.id)).not.toContain('pantry');
+  });
+});

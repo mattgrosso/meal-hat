@@ -61,7 +61,7 @@
     <!-- The wall display -->
     <div v-else class="timers-grid">
       <CountdownTimer
-        v-for="timer in timers"
+        v-for="timer in wallCards"
         :key="timer.id"
         :timer="timer"
         @remove="removeTimer"
@@ -123,6 +123,7 @@ import { adoptFridgeKey, extractKey, storeFridgeKey, isValidKey, rememberKeyAlia
 import { generatePairingCode, urlWithKey } from '@/utils/fridge/pairing';
 import { resolveViewMode } from '@/utils/fridge/viewMode';
 import { buildStamp } from '@/utils/buildStamp';
+import { wallTimers } from '@/store/fridge/timers';
 
 export default {
   name: 'Fridge',
@@ -143,6 +144,8 @@ export default {
       showHistory: false,
       missingKey: false,
       viewMode: 'wall',
+      // The wall's clock for choosing cards; see wallCards.
+      wallNow: Date.now(),
       justAdded: '',
       pastedKey: '',
       // The code on the not-connected screen, and the listener behind it.
@@ -169,6 +172,11 @@ export default {
     },
     allTimers () {
       return this.$store.getters['fridge/allTimers'];
+    },
+    // Only what needs eating soon — see wallTimers. `wallNow` ticks so a card
+    // joins the wall as it comes within range on a screen left up for weeks.
+    wallCards () {
+      return wallTimers(this.timers, new Date(this.wallNow));
     },
     loading () {
       return this.$store.state.fridge.loading;
@@ -265,8 +273,10 @@ export default {
     if (this.viewMode === 'wall') document.body.classList.add('fridge-active');
 
     this.connect();
+    this.wallTick = setInterval(() => { this.wallNow = Date.now(); }, 5 * 60 * 1000);
   },
   beforeUnmount () {
+    clearInterval(this.wallTick);
     document.body.classList.remove('fridge-active');
     clearTimeout(this.justAddedTimer);
     this.stopPairing();

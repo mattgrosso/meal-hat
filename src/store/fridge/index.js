@@ -504,12 +504,14 @@ export default {
         }
       }
 
-      // Past its date and said to be here: the expiry stays, the sighting is
-      // recorded, and the shopping list counts it (fridge/inHouse.js).
+      // Past its date and said to be here: recorded as seen, and given a short
+      // fresh countdown (talkPayload's SEEN_GRACE_DAYS) so it shows as "eat
+      // soon" rather than sitting expired on the wall.
       for (const row of payload.seen || []) {
         try {
           await update(ref(db, `${timersPath(state.fridgeKey)}/${row.id}`), {
-            seenAt: new Date().toISOString()
+            seenAt: new Date().toISOString(),
+            ...(row.expiryDate ? { expiryDate: row.expiryDate } : {})
           })
         } catch (error) {
           console.error(`Failed to mark ${row.title} as seen:`, error)

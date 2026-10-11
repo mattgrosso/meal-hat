@@ -89,6 +89,14 @@ export const buildTalkItem = (item, templates, now, packageSizes = new Map()) =>
   }
 }
 
+// How long food that is past its date, but said to be here, gets.
+export const SEEN_GRACE_DAYS = 3
+const graceExpiry = (now) => {
+  const at = new Date((now || new Date()).getTime())
+  at.setDate(at.getDate() + SEEN_GRACE_DAYS)
+  return at.toISOString()
+}
+
 // Packages, to two places: three loose buns of an eight-pack is 0.38 of one.
 const asCount = (n) => Math.max(0.01, Math.round(Number(n) * 100) / 100)
 
@@ -327,9 +335,15 @@ export const talkPayload = (review, now) => {
     // Timers past their date that he has just said are here. Stamped with
     // when, and `fridge/inHouse.js` counts a timer seen after it expired as
     // in the house. Nothing else about the timer changes.
+    //
+    // AND IT GETS A SHORT FRESH COUNTDOWN (2026-10-11). Leaving the old date
+    // kept it red on the wall indefinitely — 13 of the 17 expired cards on
+    // the wall that day had been said to be here a week earlier. Now it comes
+    // back as "eat soon", and if nobody mentions it next time it goes, like
+    // anything else.
     seen: (review?.confirmed || [])
       .filter((row) => row.pastDate && !row.mergedAway)
-      .map((row) => ({ id: row.id, title: row.title })),
+      .map((row) => ({ id: row.id, title: row.title, expiryDate: graceExpiry(now) })),
     remove: [
       ...(review?.notHeard || []).filter((row) => row.remove).map((row) => row.id),
       // Folded into the food's one remaining card — see `confirmed`.

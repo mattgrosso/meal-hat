@@ -396,3 +396,12 @@ describe('pieces and packages (2026-10-11)', () => {
     expect(talkPayload({ ...review, newItems: review.newItems.map((i) => ({ ...i, included: true, days: 5 })) }, NOW).timers[0].quantity).toBe(0.75);
   });
 });
+
+describe('past its date but said to be here (2026-10-11)', () => {
+  it('gets a short fresh countdown instead of staying expired', () => {
+    const held = [timer('m', 'Milk', -11)];
+    const review = buildTalkReview({ items: [said({ name: 'Milk', knownFoodMatch: 'Milk' })] }, held, [], NOW);
+    const seen = talkPayload(review, NOW).seen;
+    expect(seen).toEqual([{ id: 'm', title: 'Milk', expiryDate: inDays(3) }]);
+  });
+});

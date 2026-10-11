@@ -561,6 +561,24 @@ the next kiosk restart reloads the start URL, and a valid-looking key in the
 URL wins over the stored one. If the wall keeps asking to pair after restarts,
 fix the one character in Fully's settings.
 
+### The wall is an eat-soon board (2026-10-11)
+
+Matt: the timers "just sit there expired" and the wall had "gotten out of
+hand" — 53 cards, 17 past date (13 of them kept alive by a talk-through
+`seenAt` that never moved the date), plus frozen patties and mustard months
+out. Now:
+
+- **The wall shows `wallTimers`**: perishables going off within 5 days,
+  soonest first, at most 8. Everything stays tracked; the phone and the
+  shopping list still read all of it. Fridge.vue ticks `wallNow` every 5
+  minutes so a card arrives as it comes into range.
+- **Mentioned while past date = a fresh 3-day countdown** (`SEEN_GRACE_DAYS`
+  in talkReview.js), not just `seenAt`. Unmentioned next time, it goes.
+- **A receipt never buries fresh food under an old date** (`topUpPlan`).
+- The card's own controls were already the resolve step: × is "gone",
+  double-tap gives +1 day / +1 week. Look unchanged, per the standing rule.
+- Matt said NO to putting meals on the wall: they live on the Magic Mirror.
+
 ### Two copies of a shelf life, and how they stay honest
 
 The catalog is authoritative. Templates are the wall-readable cache. But the
