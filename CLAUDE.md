@@ -1305,6 +1305,17 @@ templates and fails with an explanation if one appears. Grid breakpoints
 either write a media query in the component's own `<style>`, or re-enable
 responsive utilities and delete that test.
 
+### The page behind everything is navy
+
+Natalie, 2026-10-12: the banner "blurs into white" at the top of her iPhone.
+Safari 26 colours the strip behind the clock from the BODY's background and
+no longer honours `theme-color`, and the body was Bootstrap's white. So `body`
+is the header's `#274C77` (App.vue), the `.meal-hat` root paints each screen
+white at full height, and `theme-color` is the same navy. The wall keeps its
+black: `body.fridge-active` beats it, the root goes transparent there, and
+Fridge.vue swaps `theme-color` to black while the wall is up. Desktop browsers
+cannot show that strip, so check it on a phone.
+
 ## Toolchain
 
 **Node is pinned to 22.22.3** (`.tool-versions`), raised from 18.4.0 on

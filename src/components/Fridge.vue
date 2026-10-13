@@ -270,7 +270,12 @@ export default {
     // standing rule, and this is the change that makes the rule cheap to keep:
     // the two surfaces are now styled apart on purpose rather than by
     // accident.
-    if (this.viewMode === 'wall') document.body.classList.add('fridge-active');
+    if (this.viewMode === 'wall') {
+      document.body.classList.add('fridge-active');
+      // The rest of the app's theme colour is the header's navy; the wall's
+      // browser chrome stays black.
+      this.setThemeColor('#000000');
+    }
 
     this.connect();
     this.wallTick = setInterval(() => { this.wallNow = Date.now(); }, 5 * 60 * 1000);
@@ -278,10 +283,14 @@ export default {
   beforeUnmount () {
     clearInterval(this.wallTick);
     document.body.classList.remove('fridge-active');
+    if (this.viewMode === 'wall') this.setThemeColor('#274C77');
     clearTimeout(this.justAddedTimer);
     this.stopPairing();
   },
   methods: {
+    setThemeColor (color) {
+      document.querySelector('meta[name="theme-color"]')?.setAttribute('content', color);
+    },
     // Two doors to the same fridge. The kiosk arrives holding the key in its
     // URL; a signed-in phone has no key in the address bar and looks up the
     // hat's pointer instead, so the secret never has to be pasted onto a

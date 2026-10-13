@@ -266,6 +266,28 @@ body {
   touch-action: manipulation;
 }
 
+/* The strip behind the iPhone's clock is the BODY's colour (2026-10-13).
+   Safari 26 tints that strip from the page background and no longer honours
+   theme-color, so with Bootstrap's white body the navy header seemed to fade
+   into white at the very top. The body is the header's navy, and the app's
+   own root paints every screen white below it, so nothing else changes.
+   `html body` outweighs the reboot's plain `body` whatever order the sheets
+   load in, and still loses to the wall's `body.fridge-active` black. */
+html body {
+  background-color: #274C77;
+}
+
+.meal-hat {
+  background-color: #fff;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+/* The wall's black has to show through the white root. */
+body.fridge-active .meal-hat {
+  background-color: transparent;
+}
+
 #app {
   font-family: "Mulish", sans-serif;
 
