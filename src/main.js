@@ -12,6 +12,10 @@ import "bootstrap";
 // and Show Meals ever render a date picker. Those two pull it in themselves, as
 // an async component.
 import './registerServiceWorker'
+import { trackUsage } from './utils/usage.js'
+
+// One anonymous ping per open → Bug Desk's Visitors tab (house module).
+trackUsage('meal-hat')
 
 const app = createApp(App);
 

@@ -49,6 +49,7 @@
 
 <script>
 import { v4 as uuidv4 } from 'uuid';
+import { trackEvent } from '@/utils/usage.js';
 // Shepherd is loaded ON DEMAND, inside startTour().
 //
 // It was a static import here and in five other components, so the tour library
@@ -204,6 +205,7 @@ export default {
       return resolved;
     },
     async submitMeal () {
+      trackEvent(this.mealId ? 'meal-edited' : 'meal-added');
       const meal = {
         name: this.name,
         minDaysBetween: this.minDaysBetween,

@@ -38,10 +38,10 @@ export function isConsoleCapture (event) {
 }
 
 function describe (event, hint) {
-  return event?.message
-    || hint?.originalException?.message
-    || event?.exception?.values?.[0]?.value
-    || '';
+  return event?.message ||
+    hint?.originalException?.message ||
+    event?.exception?.values?.[0]?.value ||
+    '';
 }
 
 /**

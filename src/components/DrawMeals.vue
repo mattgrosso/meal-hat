@@ -37,6 +37,7 @@ import Header from '@/components/Header.vue';
 import { todayISO, fromISODate, datesInRange } from '@/store/schedule';
 import { eligibleMeals, pickWeightedMeal, perishablesOnHand, onHandBoost, onHandFoodsFor } from '@/store/draw';
 import { markBusy, clearBusy } from '@/utils/appUpdate';
+import { trackEvent } from '@/utils/usage.js';
 
 // The reason string this screen registers with the auto-update machinery.
 const BUSY_REASON = 'draw-meals';
@@ -149,6 +150,7 @@ export default {
   },
   methods: {
     async drawMeals () {
+      trackEvent('meals-drawn');
       const assignments = [];
       const unfilled = [];
       // What the fridge holds, read once for the whole draw. Each food boosts

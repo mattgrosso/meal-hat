@@ -15,7 +15,7 @@ import { getAuth, onAuthStateChanged, connectAuthEmulator } from "firebase/auth"
 
 export const firebaseConfig = {
   apiKey: process.env.VUE_APP_GOOGLE_API_KEY,
-    // mealhat.com, not meal-hat.firebaseapp.com (2026-10-08): the sign-in popup lands on
+  // mealhat.com, not meal-hat.firebaseapp.com (2026-10-08): the sign-in popup lands on
   // /__/auth/handler, and served from another site iOS Safari's storage
   // partitioning could strip it of its session state ("missing initial
   // state"). CloudFront proxies /__/auth/* to the Firebase handler, so the

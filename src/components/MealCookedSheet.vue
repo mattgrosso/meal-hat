@@ -65,6 +65,7 @@
 // that gets applied (see store/fridge/consume.js), so what you agreed to and
 // what happens cannot drift apart.
 import AppModal from '@/components/Modal.vue';
+import { trackEvent } from '@/utils/usage.js';
 import { planMealConsumption } from '@/store/fridge/consume';
 import { todayISO } from '@/store/schedule';
 
@@ -89,6 +90,7 @@ export default {
   },
   methods: {
     async confirm () {
+      trackEvent('meal-cooked');
       this.working = true;
       try {
         await this.$store.dispatch('fridge/applyConsumption', {
