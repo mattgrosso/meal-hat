@@ -3,6 +3,7 @@ import {
   daysSincePurchase,
   stapleIsDue,
   partitionStaples,
+  partlyCoveredText,
   DEFAULT_STAPLE_INTERVAL_DAYS
 } from '../../src/store/staples.js';
 
@@ -314,5 +315,27 @@ describe('partitionStaples — anything the house already holds', () => {
     const { list, cupboard } = partitionStaples([row('g1', { quantity: 10 })], catalog, NOW, {}, {});
     expect(list.length).toBe(1);
     expect(cupboard).toEqual([]);
+  });
+});
+
+describe('partlyCoveredText', () => {
+  it('asks for the shortfall, not the whole amount (the two bags of mozzarella)', () => {
+    // 2026-10-18, live: one Mozzarella card holding 2 bags, 2 cups a bag, and
+    // orzo salad + baked ziti + pizza ahead wanting 5 cups.
+    const catalog = { g1: { id: 'g1', name: 'Mozzarella', packageSize: 2 } };
+    const fridge = { t1: { title: 'Mozzarella', quantity: 2, expiryDate: new Date(2026, 7, 25).toISOString() } };
+    const { list } = partitionStaples(
+      [row('g1', { quantity: 5, units: 'cups' })], catalog, NOW, {}, fridge
+    );
+    expect(partlyCoveredText(list[0])).toEqual({
+      amount: '1 more package',
+      note: 'you have 2 packages (4 cups), meals need 5 cups'
+    });
+  });
+
+  it('keeps the whole amount when the shortfall cannot be worked out', () => {
+    const text = partlyCoveredText({ partlyOnHand: 1, partlyShort: null, quantity: 3, units: 'cups' });
+    expect(text.amount).toBeNull();
+    expect(text.note).toBe('you have 1 package, meals need 3 cups');
   });
 });

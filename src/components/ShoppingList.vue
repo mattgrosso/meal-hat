@@ -121,10 +121,13 @@
                          avoid — but saying what is already here stops it
                          reading as "buy the whole amount again". -->
                     <span v-else-if="ingredient.partlyOnHand" class="staple-due-note">
-                      {{ partlyNote(ingredient) }}
+                      {{ partlyText(ingredient).note }}
                     </span>
                   </span>
-                  <span>{{ ingredient.quantity }} {{ pluralizedUnits(ingredient) }}</span>
+                  <!-- Partly covered: the amount still to buy, not the whole
+                       of what the meals need — the note carries the sum. -->
+                  <span v-if="ingredient.partlyOnHand && partlyText(ingredient).amount" class="text-nowrap ms-2">{{ partlyText(ingredient).amount }}</span>
+                  <span v-else>{{ ingredient.quantity }} {{ pluralizedUnits(ingredient) }}</span>
                 </div>
                 <!-- Second line: Aisle input and location selector -->
                 <div class="d-flex align-items-center gap-2 mb-2">
@@ -364,7 +367,7 @@ import Header from '@/components/Header.vue';
 // Aliased: `Modal` in this file is already Bootstrap's, used by the quick-add
 // dialog. This one is the app's own hand-rolled component.
 import AppModal from '@/components/Modal.vue';
-import { partitionStaples, DEFAULT_STAPLE_INTERVAL_DAYS } from '@/store/staples';
+import { partitionStaples, partlyCoveredText, formatPackages, DEFAULT_STAPLE_INTERVAL_DAYS } from '@/store/staples';
 import { normalizeName } from '@/store/ingredients';
 import { todayISO } from '@/store/schedule';
 import { runningLowNote, packagesBought } from '@/store/usage';
@@ -1177,30 +1180,12 @@ export default {
       return pluralize(ingredient.units, ingredient.quantity);
     },
 
-    // Packages, in the only unit a person actually pictures: whole things,
-    // and halves when it really is a half. 1.5 blocks of cheddar is "1½"; a
-    // computed 0.6667 is not something to read out loud, so it rounds.
-    formatPackages (count) {
-      const n = Number(count);
-      if (!Number.isFinite(n) || n <= 0) return 'none';
-      const whole = Math.floor(n + 1e-6);
-      const rest = n - whole;
-      const half = rest > 0.25 && rest < 0.75;
-      if (whole === 0) return half ? 'half a package' : 'less than a package';
-      const label = `${whole}${half ? '½' : ''}`;
-      return `${label} package${whole > 1 || half ? 's' : ''}`;
-    },
+    formatPackages,
 
-    // "you have 1 package (2 cups) — buy 1 more". The amount in the recipe's
-    // own unit is what lets a wrong package size or a miscounted fridge be
-    // spotted at a glance, against the quantity printed beside it.
-    partlyNote (ingredient) {
-      const held = this.formatPackages(ingredient.partlyOnHand);
-      const amount = Number(ingredient.partlyAmount) > 0
-        ? ` (${Math.round(ingredient.partlyAmount * 10) / 10}${ingredient.units ? ` ${pluralize(ingredient.units, ingredient.partlyAmount)}` : ''})`
-        : '';
-      const short = Number(ingredient.partlyShort) > 0 ? `buy ${ingredient.partlyShort} more` : 'not enough';
-      return `you have ${held}${amount} — ${short}`;
+    // "1 more package", with "you have 2 packages (4 cups), meals need 5 cups"
+    // under the name — see partlyCoveredText.
+    partlyText (ingredient) {
+      return partlyCoveredText(ingredient);
     },
 
     // Which evidence is keeping this row off the list, in the order of how

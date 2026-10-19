@@ -181,4 +181,50 @@ test.describe('the shopping list, worked out on open', () => {
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
     expect(overflow, 'the page must not scroll sideways').toBe(false);
   });
+
+  // Matt, 2026-10-18: "I clearly say two bags of shredded mozzarella, and
+  // every week you add mozzarella to the list." The bags were counted; the
+  // meals ahead wanted more than two 2-cup bags hold, and the row said the
+  // whole 5 cups. It says what is still to buy now, and shows the sum.
+  test('partly in the house: the row asks for the shortfall, at phone width', async ({ page, request }) => {
+    await page.setViewportSize({ width: 402, height: 874 });
+    await setupAuthAndDisableTutorial(page);
+    await navigateDirectly(page, '/');
+    await page.waitForSelector('.drawn-meals-schedule', { timeout: 15000 });
+
+    await put(request, `${HAT}/grocery-catalog`, {
+      mozz: { id: 'mozz', name: 'Mozzarella', defaultUnits: 'cups', defaultAisle: 3, defaultLocation: 'downstairs', packageSize: 2 }
+    });
+    await put(request, `${HAT}/meals`, {
+      ziti: { id: 'ziti', name: 'Baked ziti', minDaysBetween: 14, ingredients: [{ groceryItemId: 'mozz', quantity: 2 }] },
+      pizza: { id: 'pizza', name: 'Homemade Pizza', minDaysBetween: 14, ingredients: [{ groceryItemId: 'mozz', quantity: 3 }] }
+    });
+    await put(request, `${HAT}/drawnMeals`, {
+      a: { id: 'a', mealId: 'ziti', assignedDate: isoIn(2) },
+      b: { id: 'b', mealId: 'pizza', assignedDate: isoIn(4) }
+    });
+    await put(request, `${HAT}/usage-log`, null);
+    await put(request, `${HAT}/shopping-list`, null);
+    await put(request, `${HAT}/fridgeKey`, JSON.stringify(FRIDGE));
+    await put(request, `fridge/${FRIDGE}/timers`, {
+      t1: { title: 'Mozzarella', quantity: 2, expiryDate: at(5), createdAt: at(-1) }
+    });
+
+    await navigateDirectly(page, '/shopping-list');
+    await page.locator('.shepherd-cancel-icon').click({ timeout: 2000 }).catch(() => {});
+    await expect(page.locator('.planned-line')).toContainText('Worked out at', { timeout: 15000 });
+
+    const mozz = page.locator('.list-group[data-step="2"] > li').filter({ hasText: 'Mozzarella' });
+    await expect(mozz).toContainText('1 more package');
+    await expect(mozz).toContainText('you have 2 packages (4 cups), meals need 5 cups');
+    // The amount on the right is the shortfall, not the meals' whole 5 cups.
+    await expect(mozz.locator('.justify-content-between').first().locator(':scope > span').last()).toHaveText('1 more package');
+
+    await mozz.screenshot({ path: 'test-results/shopping-list-partly.png' });
+    const fits = await mozz.evaluate((li) => [li, ...li.querySelectorAll('*')]
+      .every((el) => el.scrollWidth <= Math.ceil(el.getBoundingClientRect().width) + 1 || getComputedStyle(el).overflow !== 'visible'));
+    expect(fits, 'nothing in the row overflows').toBe(true);
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
+    expect(overflow, 'the page must not scroll sideways').toBe(false);
+  });
 });

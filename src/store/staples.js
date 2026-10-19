@@ -1,4 +1,5 @@
 import { toISODate, fromISODate, todayISO } from './schedule';
+import pluralize from 'pluralize';
 import { rowCoverage } from './fridge/inHouse';
 
 // Pantry staples — things you reliably already have, so they should not clutter
@@ -198,4 +199,44 @@ export function partitionStaples (rows, catalog = {}, now = new Date(), onHandUn
   });
 
   return { list, cupboard };
+}
+
+// Packages, in the only unit a person actually pictures: whole things,
+// and halves when it really is a half. 1.5 blocks of cheddar is "1½"; a
+// computed 0.6667 is not something to read out loud, so it rounds.
+export function formatPackages (count) {
+  const n = Number(count);
+  if (!Number.isFinite(n) || n <= 0) return 'none';
+  const whole = Math.floor(n + 1e-6);
+  const rest = n - whole;
+  const half = rest > 0.25 && rest < 0.75;
+  if (whole === 0) return half ? 'half a package' : 'less than a package';
+  const label = `${whole}${half ? '½' : ''}`;
+  return `${label} package${whole > 1 || half ? 's' : ''}`;
+}
+
+const round1 = (n) => Math.round(Number(n) * 10) / 10;
+const withUnits = (n, units) => `${round1(n)}${units ? ` ${pluralize(units, n)}` : ''}`;
+
+/**
+ * What a partly-covered row says: how much MORE to buy, and the sum behind it.
+ *
+ * Matt, 2026-10-18: "I clearly say two bags of shredded mozzarella, and every
+ * week you add mozzarella to the list." The two bags were heard and counted
+ * every time. The meals ahead wanted 5 cups against 4 on the shelf, so the row
+ * stayed — correctly — but it read "5 cups", the whole amount, with the two
+ * bags tucked in a grey note. It looked exactly like the bags had been missed.
+ * So the amount is the shortfall, and the note shows the subtraction, which is
+ * also what makes a wrong package size visible ("you have 2 packages (4 cups)"
+ * beside bags that are plainly bigger than that).
+ */
+export function partlyCoveredText (row = {}) {
+  const short = Number(row.partlyShort);
+  const held = formatPackages(row.partlyOnHand);
+  const heldAmount = Number(row.partlyAmount) > 0 ? ` (${withUnits(row.partlyAmount, row.units)})` : '';
+  const wanted = Number(row.quantity) > 0 ? withUnits(row.quantity, row.units) : null;
+  return {
+    amount: short > 0 ? `${short} more package${short > 1 ? 's' : ''}` : null,
+    note: `you have ${held}${heldAmount}${wanted ? `, meals need ${wanted}` : ' — not enough'}`
+  };
 }

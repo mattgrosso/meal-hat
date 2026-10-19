@@ -879,6 +879,13 @@ one 2-cup block is NOT**, and that row stays on the list carrying
 `partlyOnHand` so it can say "you have some — 1 package, not enough". Suppressing
 a partly-covered row is the one mistake that leaves a meal short.
 
+**A partly-covered row asks for the SHORTFALL** (2026-10-18): the amount on the
+right is "1 more package", and the note under the name shows the sum ("you
+have 2 packages (4 cups), meals need 5 cups"). It used to show the meals' whole
+amount, and Matt read two counted bags of mozzarella as two bags the app had
+missed, week after week. When a food keeps landing on the list despite being
+counted, check its `packageSize` first: Mozzarella's 2 cups was a guess.
+
 The direction rule is unchanged: the fridge may only ever say YOU HAVE IT. No
 timer means nobody has described that food, not that you are out of it, and an
 **expired timer does not suppress** — it argues for buying more.
