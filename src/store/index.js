@@ -6,7 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 import router from '@/router';
 import { analyzeDuplicates, findSimilar, remapMealIngredients } from './ingredients';
 import { withDrawnDate, compareByDate, isUpcoming, toISODate, isoDaysAgo } from './schedule';
-import { readingsPatch, receiptPatch, prunePatch, mealUsage } from './usage';
+import { readingsPatch, unreadingPatch, receiptPatch, prunePatch, mealUsage } from './usage';
 import { planShoppingList } from './shoppingPlan';
 import { onHandUntilFrom } from './fridge/inHouse';
 import { buildMirrorFeed } from '../assets/javascript/mirrorFeed';
@@ -315,6 +315,19 @@ export default createStore({
         }
       } catch (error) {
         console.error('Failed to learn from the talk-through:', error);
+      }
+    },
+
+    // "We have it" after a talk-through: the zero it logged was wrong, and
+    // there is no number to replace it with. See unreadingPatch.
+    async forgetTalkReading (context, { name } = {}) {
+      if (!context.state.databaseTopKey || !name) return;
+      const patch = unreadingPatch(name, context.state.groceryCatalog || {}, new Date());
+      if (!Object.keys(patch).length) return;
+      try {
+        await context.dispatch('mergeDBValue', { path: 'usage-log', value: patch });
+      } catch (error) {
+        console.error('Failed to forget the talk-through reading:', error);
       }
     },
 

@@ -5,6 +5,7 @@ import {
   buildTalkReview,
   talkReviewReady,
   talkPayload,
+  restoredTimer,
   asCatalogName
 } from '../../../src/store/fridge/talkReview';
 
@@ -446,5 +447,36 @@ describe('the form is not the food (2026-10-11)', () => {
       [timer('c', 'Cheddar Cheese', 5)], [], NOW, { catalogNames: catalog }
     );
     expect(review.notHeard[0]).toMatchObject({ id: 'c', saidOutOf: true });
+  });
+});
+
+describe('restoredTimer — "We have it" on the Removed list', () => {
+  it('writes back the stored record exactly, minus the id it is keyed by', () => {
+    const timer = {
+      id: 'abc',
+      title: 'Rice',
+      expiryDate: '2027-01-01T00:00:00.000Z',
+      createdAt: '2026-10-01T00:00:00.000Z',
+      quantity: 2,
+      shelfStable: true
+    };
+    expect(restoredTimer(timer)).toEqual({
+      title: 'Rice',
+      expiryDate: '2027-01-01T00:00:00.000Z',
+      createdAt: '2026-10-01T00:00:00.000Z',
+      quantity: 2,
+      shelfStable: true
+    });
+  });
+
+  it('does not restart the date or mark it seen', () => {
+    const record = restoredTimer({ id: 'x', title: 'Milk', expiryDate: '2026-10-01T00:00:00.000Z' });
+    expect(record.expiryDate).toBe('2026-10-01T00:00:00.000Z');
+    expect(record.seenAt).toBeUndefined();
+  });
+
+  it('has nothing to restore for a timer it never saw', () => {
+    expect(restoredTimer(undefined)).toBeNull();
+    expect(restoredTimer({ id: 'x' })).toBeNull();
   });
 });

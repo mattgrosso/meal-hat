@@ -376,3 +376,17 @@ export const talkPayload = (review, now) => {
     ]
   }
 }
+
+/**
+ * A removed timer, as it should be written back by "We have it".
+ *
+ * Exactly the stored record — same date, same count, same pantry flag — minus
+ * the `id`, which is the key it goes back under rather than a field. Restoring
+ * is an undo, not a sighting: it does not restart the date or stamp `seenAt`,
+ * for the same reason a match never restarts a timer.
+ */
+export function restoredTimer (timer) {
+  if (!timer || !timer.title) return null
+  const { id, ...record } = timer
+  return record
+}

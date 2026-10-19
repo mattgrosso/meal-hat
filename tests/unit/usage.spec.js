@@ -5,6 +5,7 @@ import {
   predictRunOut,
   runningLowFoods,
   readingsPatch,
+  unreadingPatch,
   prunePatch,
   runningLowNote,
   receiptPatch,
@@ -378,5 +379,22 @@ describe('staleRunningLowRows', () => {
     expect(staleRunningLowRows(list, log, catalog, NOW)).toEqual([]);
     const mealUse = { mozz: [{ date: '2026-09-22', packages: 1.5 }] };
     expect(staleRunningLowRows(list, log, catalog, NOW, undefined, mealUse).map((r) => r.id)).toEqual(['r1']);
+  });
+});
+
+describe('unreadingPatch — "We have it" takes back a talk-through zero', () => {
+  const catalog = { g1: { name: 'Diet Coke' } };
+  const now = new Date(2026, 9, 18, 10);
+
+  it("deletes today's count for the food, and nothing else", () => {
+    expect(unreadingPatch('diet coke', catalog, now)).toEqual({ 'g1/2026-10-18/count': null });
+  });
+
+  it('matches the way the readings do (case and a trailing s)', () => {
+    expect(unreadingPatch('Diet Cokes', catalog, now)).toEqual({ 'g1/2026-10-18/count': null });
+  });
+
+  it('writes nothing for a food the catalog does not know', () => {
+    expect(unreadingPatch('Leftover pizza', catalog, now)).toEqual({});
   });
 });

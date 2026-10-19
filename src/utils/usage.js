@@ -59,7 +59,7 @@ const send = (app, { first = false } = {}) => {
 
 let currentApp = ''
 
-export function trackUsage(app) {
+export function trackUsage (app) {
   if (!app || skip()) return
   currentApp = app
   const { first } = deviceId()
@@ -74,7 +74,7 @@ export function trackUsage(app) {
 // An action this app finds interesting ('date-started', 'recipe-cooked'):
 // a plain counter per day in the Visitors tab. Lowercase letters, digits
 // and dashes. Nothing about who; just that it happened.
-export function trackEvent(name) {
+export function trackEvent (name) {
   if (!currentApp || !/^[a-z0-9-]{1,40}$/.test(name || '')) return
   const body = JSON.stringify({ app: currentApp, event: name })
   try {

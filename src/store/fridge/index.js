@@ -306,6 +306,16 @@ export default {
       }
     },
 
+    // "We have it" on a talk-through's Removed list. Written back under its
+    // OLD id, with its old record, so it is the same card rather than a new
+    // one — a fresh add would restart the date. Unlike addTimer this throws,
+    // so the button can say it did not save.
+    async restoreTimer ({ state, dispatch }, { id, record, source = 'talk' }) {
+      if (!state.fridgeKey || !id || !record) throw new Error('Nothing to restore')
+      await set(ref(db, `${timersPath(state.fridgeKey)}/${id}`), record)
+      dispatch('recordHistory', { action: 'restored', title: record.title, source })
+    },
+
     // `addedDays` is what the edit actually changed, passed through so the log
     // can say "+1 week" rather than just "changed".
     async updateTimer ({ commit, state, dispatch }, { id, timer, source = 'edit', addedDays = 0 }) {

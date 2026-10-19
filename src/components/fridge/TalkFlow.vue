@@ -116,14 +116,27 @@
         <template v-if="report.removed.length">
           <h3 class="pile-head danger">Removed ({{ report.removed.length }})</h3>
           <p class="pile-note">
-            You didn't mention these, so they're gone. Say them next time and
-            they'll come straight back.
+            You didn't mention these, so they're gone. Still have one? Tap
+            We have it and it goes back exactly as it was.
           </p>
+          <!-- Matt, 2026-10-18: "if I could tap one and say we have that".
+               Puts the same card back — same date, same count — rather than
+               waiting for next week's read-through to re-add it. -->
           <ul class="seen-list">
-            <li v-for="row in report.removed" :key="row.id" class="seen-row">
-              <span class="seen-tick gone">−</span>
-              <span class="seen-title">{{ row.title }}</span>
-              <span class="seen-left">{{ row.saidOutOf ? 'you said you\u2019re out' : '' }}</span>
+            <li v-for="row in report.removed" :key="row.id" class="seen-row removed-row">
+              <span class="seen-tick" :class="{ gone: !kept[row.id] }">{{ kept[row.id] ? '✓' : '−' }}</span>
+              <span class="seen-title">
+                {{ row.title }}
+                <span v-if="row.saidOutOf && !kept[row.id]" class="seen-left">you said you’re out</span>
+                <span v-if="restoreFailed[row.id]" class="seen-left fail">didn’t save — try again</span>
+              </span>
+              <span v-if="kept[row.id]" class="seen-left">kept</span>
+              <button
+                v-else-if="row.record"
+                class="keep-btn"
+                :disabled="restoring[row.id]"
+                @click="keep(row)"
+              >{{ restoring[row.id] ? 'Saving…' : 'We have it' }}</button>
             </li>
           </ul>
         </template>
@@ -160,7 +173,7 @@
 
 import { submitTranscript, awaitScan, ScanError } from '@/utils/fridge/scan'
 import { ensureSession } from '@/firebase'
-import { buildTalkReview, talkPayload } from '@/store/fridge/talkReview'
+import { buildTalkReview, talkPayload, restoredTimer } from '@/store/fridge/talkReview'
 import { computeTimeLeft, formatDaySpan } from '@/store/fridge/timers'
 import { saveDraft, readDraft, clearDraft } from '@/utils/fridge/talkDraft'
 import { rememberJob, readPendingJob, clearPendingJob } from '@/utils/fridge/pendingJob'
@@ -191,6 +204,10 @@ export default {
       savedAt: null,
       errorMessage: '',
       applied: null,
+      // Removed rows put back with "We have it", by timer id.
+      kept: {},
+      restoring: {},
+      restoreFailed: {},
       elapsed: 0,
       ticker: null,
       placeholder: 'Okay, fridge — there\'s a half gallon of milk, couple of eggs left maybe four, the cheddar\'s open but fine, lettuce is starting to go…'
@@ -430,6 +447,10 @@ export default {
         .map((entry) => entry && entry.name)
         .filter(Boolean)
       const review = buildTalkReview(result, this.timers, this.templates, now, { keepUnmentioned, packageSizes, catalogNames })
+      // Each removed card's record, taken NOW — once the removals land it is
+      // gone from the fridge, and "We have it" needs it to put the card back.
+      const byId = new Map(this.timers.map((timer) => [timer.id, timer]))
+      const removed = review.notHeard.map((row) => ({ ...row, record: restoredTimer(byId.get(row.id)) }))
       const applied = await this.$store.dispatch('fridge/applyTalk', {
         payload: talkPayload(review, now)
       })
@@ -441,7 +462,7 @@ export default {
       this.report = {
         added: review.newItems,
         confirmed: review.confirmed.filter((row) => !row.mergedAway),
-        removed: review.notHeard,
+        removed,
         unclear: review.unclear,
         spoken: Object.entries(review.counts || {}).filter(([, n]) => n > 0).map(([key]) => key)
       }
@@ -451,6 +472,25 @@ export default {
       this.stage = 'done'
       // Only fires if he is looking elsewhere — see notify.js.
       notifyDone('Fridge updated', this.doneMessage)
+    },
+
+    // "We have it": the card goes back as it was, and the zero this
+    // talk-through logged for it is taken back out of the usage log.
+    async keep (row) {
+      if (this.restoring[row.id] || this.kept[row.id] || !row.record) return
+      this.restoring = { ...this.restoring, [row.id]: true }
+      this.restoreFailed = { ...this.restoreFailed, [row.id]: false }
+      try {
+        await this.$store.dispatch('fridge/restoreTimer', { id: row.id, record: row.record })
+        this.kept = { ...this.kept, [row.id]: true }
+        // Only a signed-in phone has a usage log; the store action checks.
+        await this.$store.dispatch('forgetTalkReading', { name: row.title })
+      } catch (error) {
+        console.error(`Failed to put ${row.title} back:`, error)
+        this.restoreFailed = { ...this.restoreFailed, [row.id]: true }
+      } finally {
+        this.restoring = { ...this.restoring, [row.id]: false }
+      }
     },
 
     formatDays (days) {
@@ -755,6 +795,41 @@ export default {
 .seen-left {
   font-size: 0.8rem;
   color: var(--fr-faint);
+}
+
+.removed-row {
+  align-items: center;
+
+  // The button must never be pushed off a 402px phone by a long name.
+  .seen-title {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .seen-title .seen-left {
+    display: block;
+
+    &.fail {
+      color: var(--fr-danger);
+    }
+  }
+}
+
+.keep-btn {
+  flex: none;
+  background: transparent;
+  color: var(--fr-accent);
+  border: 1px solid var(--fr-accent);
+  border-radius: 6px;
+  padding: 0.3rem 0.6rem;
+  font-size: 0.85rem;
+  font-family: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.6;
+  }
 }
 
 .review-row {

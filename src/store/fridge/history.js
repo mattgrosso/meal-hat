@@ -25,7 +25,9 @@ const ACTION_VERBS = {
   'used up': 'Used up',
   'used some': 'Used some',
   // A talk-through saying there are more (or fewer) than the fridge held.
-  recounted: 'Recounted'
+  recounted: 'Recounted',
+  // "We have it" on a talk-through's Removed list: the card put back as it was.
+  restored: 'Put back'
 }
 
 // Where the change came from. Worth saying out loud: "removed by hand" and

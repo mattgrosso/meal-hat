@@ -336,6 +336,19 @@ export function readingsPatch (counts = {}, catalog = {}, now = new Date()) {
 }
 
 /**
+ * Undo one food's talk-through reading for today.
+ *
+ * A food he did not mention is logged as a count of ZERO. Tapping "We have it"
+ * says that zero was wrong, but gives no number to put in its place, so the
+ * reading is deleted rather than replaced: a made-up count would teach a
+ * rate as surely as the false zero would. Anything bought that day stays.
+ */
+export function unreadingPatch (name, catalog = {}, now = new Date()) {
+  const id = catalogIdsByName(catalog)[normalizeFoodName(name)];
+  return id ? { [`${id}/${todayISO(now)}/count`]: null } : {};
+}
+
+/**
  * How many PACKAGES a ticked-off shopping row bought, or null.
  *
  * A row he added himself is in his own units ("1 Case"), which are the units
