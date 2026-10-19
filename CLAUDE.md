@@ -703,7 +703,7 @@ across real meals those quantities are not one kind of thing:
 So a timer cannot just hold "quantity" and have meals subtract from it — buying
 one can of tomato sauce and subtracting 28 would clear a can that was exactly
 right. `packageSize` says how much of a food comes in one package, in whatever
-unit that food's recipes already use (Tomato Sauce 28, Mozzarella 2, Ricotta
+unit that food's recipes already use (Tomato Sauce 28, Mozzarella 4, Ricotta
 15, a Box of orzo 1). Timers then hold PACKAGES, and every comparison happens
 inside one food's own unit. No meal had to be re-recorded.
 
@@ -884,7 +884,8 @@ right is "1 more package", and the note under the name shows the sum ("you
 have 2 packages (4 cups), meals need 5 cups"). It used to show the meals' whole
 amount, and Matt read two counted bags of mozzarella as two bags the app had
 missed, week after week. When a food keeps landing on the list despite being
-counted, check its `packageSize` first: Mozzarella's 2 cups was a guess.
+counted, check its `packageSize` first: Mozzarella's 2 cups was a guess, and
+his bags are a pound (4 cups, set live 2026-10-19).
 
 The direction rule is unchanged: the fridge may only ever say YOU HAVE IT. No
 timer means nobody has described that food, not that you are out of it, and an

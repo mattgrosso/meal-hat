@@ -81,7 +81,7 @@ const PACKAGE_SIZES = {
   'Hot Dog Buns': 8,
   'Hot Dogs': 8,
   'Lettuce (not iceberg)': 15,       // leaves off a head
-  Mozzarella: 2,                     // cups in an 8 oz bag
+  Mozzarella: 4,                     // cups in a 1 lb bag (Matt, 2026-10-19; was a guessed 8 oz)
   Ricotta: 15,                       // oz container
   'Sandwich Bread': 20,              // slices in a loaf
   Tortilla: 10,
