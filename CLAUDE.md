@@ -59,6 +59,16 @@ imports. The `/* webpackChunkName */` hints are inert — Rollup names lazy
 chunks after their module, so `js/Home.<hash>.js` rather than
 `js/home.<hash>.js`. Nothing reads those names.
 
+**Launch splash (2026-10-20, same as Cinema Roll's).** `index.html` paints
+white inline and carries a `.launch-splash` (icon + "Meal Hat") INSIDE
+`#app`, which Vue's mount replaces — no script removes it. iOS gets
+`apple-touch-startup-image`s from `public/img/launch/`, drawn by
+`scripts/generate-launch-images.mjs` to the same layout (re-run it if the
+icon, name or colours change). White, not the header navy, because the icon
+is an opaque square with white corners and the app's root is white.
+`tests/unit/launchSplash.spec.js` guards it. Neither the icon nor the launch
+images are precached (the precache stays exactly index.html, see below).
+
 ## The E2E suite runs against the Firebase EMULATORS
 
 Since 2026-08-27. `playwright.config.js` starts the Auth + Database emulators
