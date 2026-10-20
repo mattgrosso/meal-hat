@@ -34,6 +34,10 @@ const fridgeExists = async (key) => {
   }
 }
 
+// The detach functions for whatever `subscribe` attached. Kept outside state
+// because they are functions, not data, and nothing renders them.
+let listeners = []
+
 export default {
   namespaced: true,
 
@@ -162,7 +166,7 @@ export default {
       commit('SET_FRIDGE_KEY', key)
       commit('SET_SUBSCRIBED_TO', key)
 
-      onValue(ref(db, timersPath(key)), (snapshot) => {
+      listeners.push(onValue(ref(db, timersPath(key)), (snapshot) => {
         commit('SET_TIMERS', snapshot.val())
         commit('SET_ERROR', null)
         commit('SET_LOADING', false)
@@ -170,21 +174,37 @@ export default {
         console.error('Failed to load fridge timers:', error)
         commit('SET_ERROR', 'unauthorized')
         commit('SET_LOADING', false)
-      })
+      }))
 
-      onValue(ref(db, templatesPath(key)), (snapshot) => {
+      listeners.push(onValue(ref(db, templatesPath(key)), (snapshot) => {
         commit('SET_TEMPLATES', snapshot.val())
       }, (error) => {
         console.error('Failed to load fridge templates:', error)
-      })
+      }))
 
       // Bounded, and its failure is swallowed on purpose: the timers are the
       // app, the change log is a convenience.
-      onValue(query(ref(db, historyPath(key)), limitToLast(HISTORY_LIMIT)), (snapshot) => {
+      listeners.push(onValue(query(ref(db, historyPath(key)), limitToLast(HISTORY_LIMIT)), (snapshot) => {
         commit('SET_HISTORY', snapshot.val())
       }, (error) => {
         console.error('Failed to load fridge history:', error)
-      })
+      }))
+    },
+
+    // Detach everything `subscribe` attached and forget the fridge.
+    //
+    // Sign-out calls this BEFORE ending the Firebase session. The rules want
+    // `auth != null`, so a listener still open at sign-out is revoked by the
+    // server — a permission error in the console and in Sentry — and,
+    // worse, `subscribedTo` stayed set, so signing back in without a reload
+    // hit the guard above and never reattached: a fridge frozen at whatever
+    // it last held, and a shopping list reading stale timers.
+    unsubscribe ({ commit }) {
+      listeners.forEach((detach) => detach())
+      listeners = []
+      commit('CLEAR')
+      commit('SET_FRIDGE_KEY', null)
+      commit('SET_LOADING', false)
     },
 
     // The phone's half of pairing a wall display: publish this hat's key under

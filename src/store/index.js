@@ -32,6 +32,14 @@ const DRAWN_MEALS_SCHEMA = 'iso';
 // ensureHat below; once a hat has answered, it is not asked again.
 const hatChecks = new Map();
 
+// Detach for the hat's `fridgeKey` pointer listener. Sign-out closes it before
+// the session ends (the rules would revoke it), and switching hats replaces it.
+let fridgeKeyPointerOff = null;
+const detachFridgeKeyPointer = () => {
+  if (fridgeKeyPointerOff) fridgeKeyPointerOff();
+  fridgeKeyPointerOff = null;
+};
+
 const removeNaNAndUndefined = (obj) => {
   for (const key in obj) {
     if (Object.prototype.hasOwnProperty.call(obj, key)) {
@@ -493,6 +501,14 @@ export default createStore({
       }
     },
     logout (context) {
+      // Close the listeners that need a signed-in user before the session
+      // ends, or the server revokes them (see fridge/unsubscribe), and reset
+      // the pointer flag so the next sign-in attaches them again.
+      detachFridgeKeyPointer();
+      context.commit('setFridgeKeyForHat', null);
+      context.commit('setFridgeKeySubscribedFor', null);
+      context.dispatch('fridge/unsubscribe');
+
       context.commit('setUserEmail', null);
       context.commit('setDatabaseTopKey', null);
       context.commit('setMostRecentDatabase', null);
@@ -778,7 +794,8 @@ export default createStore({
       // the key in its URL instead.
       if (context.state.fridgeKeySubscribedFor !== context.state.databaseTopKey) {
         context.commit('setFridgeKeySubscribedFor', context.state.databaseTopKey);
-        onValue(ref(db, `${context.state.databaseTopKey}/fridgeKey`), (snapshot) => {
+        detachFridgeKeyPointer();
+        fridgeKeyPointerOff = onValue(ref(db, `${context.state.databaseTopKey}/fridgeKey`), (snapshot) => {
           const key = snapshot.val();
           context.commit('setFridgeKeyForHat', key);
 
