@@ -100,6 +100,16 @@ threw and the create was unreachable. Invisible until now because every
 existing hat was backfilled with members before the rules shipped. The fix
 probes with the WRITE (allowed when `!data.exists()`, refused when the hat
 exists and you're not a member — which is exactly the invite-link case).
+
+**The existence check reads `<hat>/members/<uid>`, never the whole hat**
+(2026-10-20). It used to `get` the entire hat — draw history, catalog,
+usage log, dead split-model nodes — on every navigation, and every
+subscription queued behind it; Matt's schedule took ten seconds to appear.
+The rules answer the small read exactly as they did the big one (members
+only), which `src/test/emulated/hatProbe.test.js` pins. It runs once per hat
+per session, and the drawnMeals date-migration check no longer blocks the
+other subscriptions. `tests/unit/no-root-database-reads.spec.js` fails on any
+store read that names a hat with no path below it.
 - `yarn deploy` — build + ship to AWS (see Deploy)
 
 ## Architecture

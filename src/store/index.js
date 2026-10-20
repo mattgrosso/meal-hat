@@ -25,6 +25,13 @@ const DRAWN_MEALS_WINDOW_DAYS = 400;
 // Kept per-hat, since hats are shared and migrate independently.
 const DRAWN_MEALS_SCHEMA = 'iso';
 
+// Hats this session has already confirmed it belongs to (topKey -> promise).
+//
+// The router dispatches initializeDB on EVERY guarded navigation, and the
+// existence check used to run each time — as a read of the whole hat. See
+// ensureHat below; once a hat has answered, it is not asked again.
+const hatChecks = new Map();
+
 const removeNaNAndUndefined = (obj) => {
   for (const key in obj) {
     if (Object.prototype.hasOwnProperty.call(obj, key)) {
@@ -595,24 +602,51 @@ export default createStore({
         });
       };
 
-      try {
-        const snapshot = await get(ref(db, context.state.databaseTopKey));
-        if (!snapshot.exists()) {
-          await createHat();
-        }
-      } catch (readError) {
-        // Permission denied: either the hat doesn't exist (create is allowed)
-        // or it exists and this user isn't a member (create will be refused
-        // too, which is itself the answer).
+      // The probe reads ONLY this user's own member record, a few bytes. It
+      // used to read the whole hat — every meal ever drawn, the catalog, the
+      // usage log, the dead split-model nodes — just to ask "does it exist?",
+      // and every other read waited behind it. On 2026-10-20 the schedule
+      // took ten seconds to appear on Matt's phone.
+      //
+      // The answer is the same as the whole-hat read gave: the rules let a
+      // member read anything in the hat (members/<uid> included), and refuse
+      // a non-member or a hat that does not exist — the two cases the catch
+      // below has always handled.
+      const topKey = context.state.databaseTopKey;
+      const ensureHat = async () => {
         try {
-          await createHat();
-        } catch (createError) {
-          console.warn(
-            `Hat "${context.state.databaseTopKey}" exists and this account is not a member - an invite link is needed.`,
-            readError.message
-          );
+          const snapshot = await get(ref(db, `${topKey}/members/${authUser.uid}`));
+          if (!snapshot.exists()) {
+            await createHat();
+          }
+          return true;
+        } catch (readError) {
+          // Permission denied: either the hat doesn't exist (create is allowed)
+          // or it exists and this user isn't a member (create will be refused
+          // too, which is itself the answer).
+          try {
+            await createHat();
+            return true;
+          } catch (createError) {
+            console.warn(
+              `Hat "${topKey}" exists and this account is not a member - an invite link is needed.`,
+              readError.message
+            );
+            return false;
+          }
         }
+      };
+
+      // Once per hat per session. A failed check is forgotten so the next
+      // navigation asks again, as it always did.
+      const checkKey = `${authUser.uid}:${topKey}`;
+      if (!hatChecks.has(checkKey)) {
+        hatChecks.set(checkKey, ensureHat().then((ok) => {
+          if (!ok) hatChecks.delete(checkKey);
+          return ok;
+        }));
       }
+      await hatChecks.get(checkKey);
 
       // If there are no meals in the state, fetch them from the database.
       if (!context.state.meals) {
@@ -641,33 +675,40 @@ export default createStore({
         // Only safe once assignedDate is ISO everywhere in this hat, because the
         // query orders by the stored string. If the migration hasn't run (or
         // failed), fall back to the unfiltered read.
-        const migrated = await context.dispatch('migrateDrawnMealDates');
-        const drawnMealsRef = ref(db, `${context.state.databaseTopKey}/drawnMeals`);
-        const source = migrated
-          ? query(drawnMealsRef, orderByChild('assignedDate'), startAt(isoDaysAgo(DRAWN_MEALS_WINDOW_DAYS)))
-          : drawnMealsRef;
+        //
+        // NOT awaited: the migration check is its own round trip, and every
+        // subscription below (meals, catalog, shopping list...) used to queue
+        // behind it. They are independent of it, so they now attach at once.
+        const subscribeDrawnMeals = async () => {
+          const migrated = await context.dispatch('migrateDrawnMealDates');
+          const drawnMealsRef = ref(db, `${topKey}/drawnMeals`);
+          const source = migrated
+            ? query(drawnMealsRef, orderByChild('assignedDate'), startAt(isoDaysAgo(DRAWN_MEALS_WINDOW_DAYS)))
+            : drawnMealsRef;
 
-        onValue(source, (snapshot) => {
-          const data = snapshot.val();
+          onValue(source, (snapshot) => {
+            const data = snapshot.val();
 
-          let sortedByDate = [];
-          let futureDates = [];
+            let sortedByDate = [];
+            let futureDates = [];
 
-          // If data exists and it's an object, convert it to an array and sort it by date.
-          if (data && typeof data === 'object') {
-            sortedByDate = Object.values(data).sort(compareByDate);
+            // If data exists and it's an object, convert it to an array and sort it by date.
+            if (data && typeof data === 'object') {
+              sortedByDate = Object.values(data).sort(compareByDate);
 
-            // Only meals still to come. This used to subtract raw timestamps and
-            // compare against -86400000, which meant "within the last 24 hours"
-            // rather than "today or later" — so whether yesterday's dinner still
-            // counted depended on what time of day you looked.
-            futureDates = sortedByDate.filter((meal) => isUpcoming(meal.assignedDate));
-          }
+              // Only meals still to come. This used to subtract raw timestamps and
+              // compare against -86400000, which meant "within the last 24 hours"
+              // rather than "today or later" — so whether yesterday's dinner still
+              // counted depended on what time of day you looked.
+              futureDates = sortedByDate.filter((meal) => isUpcoming(meal.assignedDate));
+            }
 
-          // Commit the fetched drawnMealsWithHistory and drawnMeals to the state.
-          context.commit('setDrawnMealsWithHistory', sortedByDate);
-          context.commit('setDrawnMeals', futureDates);
-        });
+            // Commit the fetched drawnMealsWithHistory and drawnMeals to the state.
+            context.commit('setDrawnMealsWithHistory', sortedByDate);
+            context.commit('setDrawnMeals', futureDates);
+          });
+        };
+        subscribeDrawnMeals();
       }
 
       // The cooking course (mealhat.com/cook/) writes lesson nights straight
@@ -1142,8 +1183,13 @@ export default createStore({
     async hatExists (context, hatName) {
       if (!hatName) return false;
 
+      // Own member record, not the whole hat: the rules give the same answer
+      // for both (readable only to a member), and this one is a few bytes.
+      const uid = auth.currentUser?.uid;
+      if (!uid) return false;
+
       try {
-        const snapshot = await get(ref(db, hatName));
+        const snapshot = await get(ref(db, `${hatName}/members/${uid}`));
         return snapshot.exists();
       } catch (error) {
         console.error('Could not check whether the hat exists:', error);

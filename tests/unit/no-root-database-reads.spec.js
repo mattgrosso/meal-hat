@@ -54,3 +54,27 @@ describe('the store never reads the database root', () => {
     expect(code).not.toContain('allHatsList');
   });
 });
+
+// One level down, the same mistake costs speed instead of privacy. initializeDB
+// checked that the hat existed by reading the WHOLE hat — every meal ever
+// drawn, the catalog, the usage log — and nothing else loaded until it
+// finished. On 2026-10-20 the schedule took ten seconds to appear on a phone.
+// Every read must name something inside the hat.
+describe('the store never reads a whole hat', () => {
+  const code = withoutComments(storeSource);
+  const reads = [...code.matchAll(/\b(?:onValue|get)\(\s*(?:query\(\s*)?ref\(\s*db\s*,\s*([^)]*)\)/g)]
+    .map((match) => match[1].trim());
+
+  it('finds the reads it is checking', () => {
+    expect(reads.length).toBeGreaterThan(5);
+  });
+
+  it('gives every read a path below the hat', () => {
+    const wholeHat = reads.filter((path) => !path.includes('/'));
+    expect(wholeHat).toEqual([]);
+  });
+
+  it('checks a hat exists by reading only the member record', () => {
+    expect(code).toMatch(/get\(ref\(db, `\$\{topKey\}\/members\/\$\{authUser\.uid\}`\)\)/);
+  });
+});
