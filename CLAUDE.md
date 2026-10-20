@@ -440,8 +440,10 @@ comes out byte-identical every time. Silent: the app looks healthy and deploys
 simply never arrive. The one-entry manifest is now
 `workbox.globPatterns: ['index.html']` in `vite.config.mjs` (it was workbox's
 inverse, `exclude: [/^(?!index\.html$).*/]`, under Vue CLI); do not widen it and
-do not empty it. After any build, check the worker: `precacheAndRoute()` must
-list exactly one URL, `/index.html`, **with** a non-null revision.
+do not empty it. `precacheAndRoute()` must list exactly one URL, `/index.html`,
+**with** a non-null revision — `scripts/check-build.mjs` checks that (plus the
+`service-worker.js` name and the `js/app.<hex>.js` entry) on every `yarn deploy`
+and stops the upload if any fails; `yarn check-build` runs it by hand.
 
 The worker's filename is also load-bearing: `service-worker.js`, never the
 vite-plugin-pwa default `sw.js`. It is what `registerServiceWorker.js`
@@ -1352,8 +1354,14 @@ that crash on the next clean install.
 
 ## Deploy (AWS S3 + CloudFront)
 
-`yarn deploy` builds, then `aws s3 sync dist/ s3://meal-hat` and invalidates
-CloudFront, all via the **`personal-deploy`** AWS profile. Infra (account
+`yarn deploy` runs the unit tests (`scripts/preflight.mjs`, before the version
+bump so a red run uses up no version; `SKIP_CHECKS=1` skips them for a hotfix),
+builds, checks the build (`scripts/check-build.mjs`, see the service worker
+section), then `aws s3 sync dist/ s3://meal-hat` and invalidates CloudFront,
+all via the **`personal-deploy`** AWS profile. It calls `~/aws-cli/aws` by path:
+the `aws` on yarn's PATH is an Intel binary that fails with "Bad CPU type"
+after the build, so the upload silently never happened. The Playwright and
+emulator suites stay manual (they need Java and the emulators). Infra (account
 `298682183644`):
 
 - S3 static-website bucket **`meal-hat`** (us-east-1)
