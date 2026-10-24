@@ -16,11 +16,14 @@
 import * as Sentry from '@sentry/vue';
 import { scrubBreadcrumb, scrubEvent } from './utils/scrubUrl';
 import { handledErrorFilter } from './utils/sentryHandled.js';
+import { isTestBrowser } from './utils/testBrowser.js';
 
 const DSN = 'https://56557ae2c2dc79cd37050dc83719819b@o4504483013525504.ingest.us.sentry.io/4512218251198464';
 
 export function setupSentry (app, { router } = {}) {
   if (!import.meta.env.PROD) return;
+  // Robots and local previews are not users (utils/testBrowser.js).
+  if (isTestBrowser()) return;
   // VUE_APP_VERSION is defined at build time (vite.config.mjs), the same
   // number the build stamp shows, so an error names the deploy it came from.
   const version = process.env.VUE_APP_VERSION;
