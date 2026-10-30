@@ -102,12 +102,15 @@ export function planMealConsumption ({ meal, catalog = {}, timers = {} } = {}) {
 
       uses.push({
         timerId: timer.id,
+        // So the sheet can fill in a missing packageSize on the food itself.
+        groceryId: entry.id,
         name: timer.title,
         before: held,
         after,
         taken: tidy(taken),
         clears: after <= 0,
         assumedPackageSize: packageSize === null,
+        needed,
         units: entry.defaultUnits || ''
       });
 

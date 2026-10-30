@@ -789,7 +789,11 @@ Err large. Too big means a timer survives a meal that should have cleared it,
 which costs a glance; too small deletes a timer on food that is still there.
 
 **A new grocery ships with no packageSize**, so anything added since needs one
-before it consumes correctly. There is no UI for the field yet.
+before it consumes correctly. Two places set it: "One package contains" in
+the shopping list's pencil editor, and (2026-10-30) a field under any guessed
+row in the "Made it" sheet, which saves only `packageSize` on the food and
+re-plans as the number is typed — so each meal cooked fills in what it found
+missing, at the moment the guess is on screen.
 
 ### Starting the fridge over
 

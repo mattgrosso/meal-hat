@@ -107,6 +107,28 @@ describe('planMealConsumption', () => {
     expect(plan.assuming).toBe(1);
   });
 
+  it('names the food and the amount on each row, so the sheet can fill in the size', () => {
+    // "Made it" offers a package-size field under a guessed row. It saves to
+    // the catalog entry, so the row has to say which one, and the hint quotes
+    // what the meal asks for.
+    const catalog = { g1: { id: 'g1', name: 'Cottage cheese', defaultUnits: 'oz' } };
+    const plan = planMealConsumption({
+      meal: meal({ groceryItemId: 'g1', quantity: 24 }),
+      catalog,
+      timers: timers(timer('t1', 'Cottage cheese', '2026-09-10', 2))
+    });
+    expect(plan.uses[0]).toMatchObject({ groceryId: 'g1', needed: 24, units: 'oz', after: 1 });
+
+    // Fill the number in and the same meal now takes three quarters of a tub.
+    const sized = planMealConsumption({
+      meal: meal({ groceryItemId: 'g1', quantity: 24 }),
+      catalog: { g1: { ...catalog.g1, packageSize: 32 } },
+      timers: timers(timer('t1', 'Cottage cheese', '2026-09-10', 2))
+    });
+    expect(sized.uses[0]).toMatchObject({ after: 1.25, assumedPackageSize: false });
+    expect(sized.assuming).toBe(0);
+  });
+
   it('treats a timer with no quantity as holding one package', () => {
     // Every one of the 42 timers migrated from Perishable is in this state.
     const plan = planMealConsumption({
