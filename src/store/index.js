@@ -11,6 +11,7 @@ import { planShoppingList } from './shoppingPlan';
 import { onHandUntilFrom } from './fridge/inHouse';
 import { buildMirrorFeed } from '../assets/javascript/mirrorFeed';
 import fridge from './fridge';
+import { checkHatAccess, hatToFallBackTo } from './hatAccess';
 
 // How far back drawnMeals is loaded.
 //
@@ -38,6 +39,22 @@ let fridgeKeyPointerOff = null;
 const detachFridgeKeyPointer = () => {
   if (fridgeKeyPointerOff) fridgeKeyPointerOff();
   fridgeKeyPointerOff = null;
+};
+
+// Detaches for every other hat listener initializeDB attaches. Sign-out closes
+// them all before the session ends: the rules want a signed-in user, so a
+// listener left open is revoked by the server with a permission error (one
+// Sentry event each), and its guard in initializeDB would never re-attach it.
+// Attaching is refused with no user at all — drawnMeals attaches after an
+// await, and a sign-out in that gap must not leave a fresh one behind.
+let hatListeners = [];
+const listenToHat = (node, callback) => {
+  if (!auth.currentUser) return;
+  hatListeners.push(onValue(node, callback));
+};
+const detachHatListeners = () => {
+  hatListeners.forEach((detach) => detach());
+  hatListeners = [];
 };
 
 const removeNaNAndUndefined = (obj) => {
@@ -106,7 +123,11 @@ export default createStore({
     // A newer build is live. Set by App.vue's bundle comparison (the primary
     // signal) and by registerServiceWorker's updated() hook (the secondary
     // one); App.vue watches it and applies the update at a safe moment.
-    updateAvailable: false
+    updateAvailable: false,
+
+    // A hat this account was refused (exists, not a member), so Home can say
+    // so instead of showing an empty app. Cleared once that hat opens.
+    deniedHat: null
   },
   getters: {
     getMeal: (state) => (id) => {
@@ -225,6 +246,9 @@ export default createStore({
     },
     setFridgeKeySubscribedFor (state, hat) {
       state.fridgeKeySubscribedFor = hat || null;
+    },
+    setDeniedHat (state, hat) {
+      state.deniedHat = hat || null;
     },
     clearState (state) {
       state.meals = null;
@@ -508,6 +532,12 @@ export default createStore({
       context.commit('setFridgeKeyForHat', null);
       context.commit('setFridgeKeySubscribedFor', null);
       context.dispatch('fridge/unsubscribe');
+      detachHatListeners();
+      context.commit('setWatchingShoppingListStale', null);
+      context.commit('setMirrorFeedKey', null);
+      context.commit('setMirrorFeedSubscribedFor', null);
+      hatChecks.clear();
+      context.commit('setDeniedHat', null);
 
       context.commit('setUserEmail', null);
       context.commit('setDatabaseTopKey', null);
@@ -626,47 +656,53 @@ export default createStore({
       //
       // The answer is the same as the whole-hat read gave: the rules let a
       // member read anything in the hat (members/<uid> included), and refuse
-      // a non-member or a hat that does not exist — the two cases the catch
-      // below has always handled.
+      // a non-member or a hat that does not exist — the two cases
+      // checkHatAccess (hatAccess.js) tells apart by trying the create.
       const topKey = context.state.databaseTopKey;
-      const ensureHat = async () => {
-        try {
-          const snapshot = await get(ref(db, `${topKey}/members/${authUser.uid}`));
-          if (!snapshot.exists()) {
-            await createHat();
-          }
-          return true;
-        } catch (readError) {
-          // Permission denied: either the hat doesn't exist (create is allowed)
-          // or it exists and this user isn't a member (create will be refused
-          // too, which is itself the answer).
-          try {
-            await createHat();
-            return true;
-          } catch (createError) {
-            console.warn(
-              `Hat "${topKey}" exists and this account is not a member - an invite link is needed.`,
-              readError.message
-            );
-            return false;
-          }
-        }
-      };
+      const ensureHat = () => checkHatAccess({
+        readOwnMember: async () => (await get(ref(db, `${topKey}/members/${authUser.uid}`))).exists(),
+        createHat,
+        onDenied: (readError) => console.warn(
+          `Hat "${topKey}" exists and this account is not a member - an invite link is needed.`,
+          readError.message
+        )
+      });
 
-      // Once per hat per session. A failed check is forgotten so the next
+      // Once per hat per session. A refused check is forgotten so the next
       // navigation asks again, as it always did.
       const checkKey = `${authUser.uid}:${topKey}`;
       if (!hatChecks.has(checkKey)) {
-        hatChecks.set(checkKey, ensureHat().then((ok) => {
-          if (!ok) hatChecks.delete(checkKey);
-          return ok;
+        hatChecks.set(checkKey, ensureHat().then((access) => {
+          if (access === 'denied') hatChecks.delete(checkKey);
+          return access;
         }));
       }
-      await hatChecks.get(checkKey);
+      const access = await hatChecks.get(checkKey);
+
+      // Not a member: STOP. Every listener below would be refused, and the
+      // person would see an empty app with nothing to say why. Remember which
+      // hat said no, so Home can explain, and go back to their own hat if this
+      // was someone else's. The topKey check keeps two navigations awaiting
+      // the same probe from both switching.
+      if (access === 'denied') {
+        if (context.state.databaseTopKey !== topKey) return;
+        context.commit('setDeniedHat', topKey);
+        const fallBack = hatToFallBackTo({ deniedHat: topKey, primaryHat: context.getters.primaryDatabaseTopKey });
+        // Not switchDatabase: it writes most-recent-database into the own hat
+        // straight away, and for an account whose hat does not exist yet that
+        // write would create it with no members - locked out of its own hat.
+        // Here the switch re-enters initializeDB, which creates it properly.
+        if (fallBack) {
+          context.commit('clearState');
+          context.dispatch('updateDatabaseTopKey', fallBack);
+        }
+        return;
+      }
+      if (context.state.deniedHat === topKey) context.commit('setDeniedHat', null);
 
       // If there are no meals in the state, fetch them from the database.
       if (!context.state.meals) {
-        onValue(ref(db, `${context.state.databaseTopKey}/meals`), (snapshot) => {
+        listenToHat(ref(db, `${context.state.databaseTopKey}/meals`), (snapshot) => {
           const data = snapshot.val();
 
           let mealsArray = [];
@@ -702,7 +738,7 @@ export default createStore({
             ? query(drawnMealsRef, orderByChild('assignedDate'), startAt(isoDaysAgo(DRAWN_MEALS_WINDOW_DAYS)))
             : drawnMealsRef;
 
-          onValue(source, (snapshot) => {
+          listenToHat(source, (snapshot) => {
             const data = snapshot.val();
 
             let sortedByDate = [];
@@ -734,14 +770,14 @@ export default createStore({
       // the same way a drawn meal's do.
       if (context.state.watchingShoppingListStale !== context.state.databaseTopKey) {
         context.commit('setWatchingShoppingListStale', context.state.databaseTopKey);
-        onValue(ref(db, `${context.state.databaseTopKey}/schema/shoppingListStale`), (snapshot) => {
+        listenToHat(ref(db, `${context.state.databaseTopKey}/schema/shoppingListStale`), (snapshot) => {
           if (snapshot.val()) context.dispatch('rebuildStaleShoppingList');
         });
       }
 
       // If there's no mealHatsList in the state, fetch it from the database.
       if (!context.state.mealHatsList && context.getters.primaryDatabaseTopKey) {
-        onValue(ref(db, `${context.getters.primaryDatabaseTopKey}/meal-hats-list`), (snapshot) => {
+        listenToHat(ref(db, `${context.getters.primaryDatabaseTopKey}/meal-hats-list`), (snapshot) => {
           const data = snapshot.val();
 
           // Commit the fetched mealHatsList to the state.
@@ -751,7 +787,7 @@ export default createStore({
 
       // If there's no mostRecentDatabase in the state, fetch it from the database.
       if (!context.state.mostRecentDatabase) {
-        onValue(ref(db, `${context.state.databaseTopKey}/most-recent-database`), (snapshot) => {
+        listenToHat(ref(db, `${context.state.databaseTopKey}/most-recent-database`), (snapshot) => {
           const data = snapshot.val();
 
           // Commit the fetched mealHatsList to the state.
@@ -761,7 +797,7 @@ export default createStore({
 
       // If there's no showTutorial in the state, fetch it from the database.
       if (context.state.showTutorial === null) {
-        onValue(ref(db, `${context.state.databaseTopKey}/show-tutorial`), (snapshot) => {
+        listenToHat(ref(db, `${context.state.databaseTopKey}/show-tutorial`), (snapshot) => {
           const data = snapshot.val();
 
           // Commit the fetched showTutorial to the state.
@@ -775,7 +811,7 @@ export default createStore({
 
       // Load the unified grocery catalog.
       if (Object.keys(context.state.groceryCatalog).length === 0) {
-        onValue(ref(db, `${context.state.databaseTopKey}/grocery-catalog`), (snapshot) => {
+        listenToHat(ref(db, `${context.state.databaseTopKey}/grocery-catalog`), (snapshot) => {
           context.commit('setGroceryCatalog', snapshot.val());
         });
       }
@@ -815,7 +851,7 @@ export default createStore({
 
       // Initialize unified shopping list
       if (Object.keys(context.state.shoppingList).length === 0) {
-        onValue(ref(db, `${context.state.databaseTopKey}/shopping-list`), (snapshot) => {
+        listenToHat(ref(db, `${context.state.databaseTopKey}/shopping-list`), (snapshot) => {
           const data = snapshot.val();
           context.commit('setShoppingList', data || {});
         });
@@ -826,7 +862,7 @@ export default createStore({
       // is what tells the MealHats screen which half of the panel to render.
       if (context.state.mirrorFeedSubscribedFor !== context.state.databaseTopKey) {
         context.commit('setMirrorFeedSubscribedFor', context.state.databaseTopKey);
-        onValue(ref(db, `${context.state.databaseTopKey}/mirrorFeedKey`), (snapshot) => {
+        listenToHat(ref(db, `${context.state.databaseTopKey}/mirrorFeedKey`), (snapshot) => {
           context.commit('setMirrorFeedKey', snapshot.val());
           context.dispatch('publishMirrorFeedIfStale');
         });
@@ -1024,7 +1060,7 @@ export default createStore({
     async publishMirrorFeed (context) {
       const topKey = context.state.databaseTopKey;
       const secret = context.state.mirrorFeedKey;
-      if (!topKey || !secret) return;
+      if (!topKey || !secret || !auth.currentUser) return;
 
       // Publish from what the database holds, not from this device's state.
       // state.drawnMeals is a trailing WINDOW already filtered to upcoming
@@ -1046,6 +1082,10 @@ export default createStore({
       }
 
       const feed = buildMirrorFeed(drawnMeals, meals);
+
+      // Signed out while the schedule was being read (Sentry, 2026-10-20):
+      // the publish would only be refused, and the refusal is an error event.
+      if (!auth.currentUser || context.state.databaseTopKey !== topKey) return;
 
       try {
         await set(ref(db, `mirrorFeed/${topKey}/${secret}`), feed);

@@ -366,6 +366,17 @@ a hat you are alone in would destroy access permanently, recoverable only by a
 CLI write. Because self-removal is impossible, the last member can never be
 removed either.
 
+**A refused hat stops startup** (2026-11-01, from Sentry: someone opened a
+hat they were not in and got an empty app). `checkHatAccess`
+(`src/store/hatAccess.js`) answers member / created / denied; on denied,
+`initializeDB` returns before attaching a single listener, records
+`deniedHat`, and, if it was not their own hat, goes back to their own one.
+Home explains what happened. The switch deliberately avoids `switchDatabase`,
+which writes `most-recent-database` into the own hat BEFORE the existence
+check. For an account whose hat does not exist yet, that write creates it
+with no members and locks them out (the E2E test `refused-hat.spec.js` caught
+it).
+
 `scripts/backfill-hat-membership.mjs` grandfathered every existing hat before
 the rule was deployed; re-run it (dry by default) if membership ever needs
 repairing.

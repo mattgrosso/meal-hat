@@ -2,6 +2,27 @@
   <div class="home">
     <Header headerText="Meal Hat" data-step="5"/>
     <div class="home-body p-3">
+      <!-- A hat that refused this account (exists, not a member). initializeDB
+           stops instead of loading an empty app, and has already moved them
+           back to their own hat when it can - this says what happened. -->
+      <div v-if="deniedHat" class="card denied-hat mb-3 text-start">
+        <div class="card-body">
+          <p class="mb-2">
+            <strong>{{ deniedHat }}</strong> is a hat this account isn't a member of,
+            so it can't be opened. You're signed in as <strong>{{ userEmail }}</strong>.
+          </p>
+          <p class="mb-2">
+            To join it, ask someone in that hat to send you its share link.
+          </p>
+          <p v-if="!onDeniedHat" class="mb-2">You're on your own hat now.</p>
+          <button v-if="onDeniedHat" type="button" class="btn btn-sm btn-primary" @click="signInAgain">
+            Sign in with a different account
+          </button>
+          <button v-else type="button" class="btn btn-sm btn-secondary" @click="dismissDenied">
+            OK
+          </button>
+        </div>
+      </div>
       <div class="btn-group" role="group" aria-label="Button group with nested dropdown">
         <router-link
           to="/add-meal"
@@ -96,9 +117,27 @@ export default {
     // normal answer — most hats have no fridge.
     hasFridge () {
       return Boolean(this.$store.state.fridgeKeyForHat);
+    },
+    deniedHat () {
+      return this.$store.state.deniedHat;
+    },
+    userEmail () {
+      return this.$store.state.userEmail;
+    },
+    // Still on the hat that refused - only when it is their own, which the
+    // app cannot fix from here.
+    onDeniedHat () {
+      return this.deniedHat === this.$store.state.databaseTopKey;
     }
   },
   methods: {
+    dismissDenied () {
+      this.$store.commit('setDeniedHat', null);
+    },
+    signInAgain () {
+      this.$store.dispatch('logout');
+      this.$router.push('/login');
+    },
     async startTour () {
       const [{ default: Shepherd }] = await Promise.all([
         import(/* webpackChunkName: "tour" */ 'shepherd.js'),
@@ -317,6 +356,10 @@ export default {
     .home-body {
       margin: 0 auto;
       max-width: 600px;
+
+      .denied-hat {
+        overflow-wrap: anywhere;
+      }
 
       .btn-group {
         width: 100%;
