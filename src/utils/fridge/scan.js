@@ -146,7 +146,9 @@ export const scanPhoto = async (photo, options) =>
  * for text is not ceremony: a five-minute ramble is a lot to read, and API
  * Gateway's integration timeout is a hard 30 seconds whatever the input is.
  */
-export const submitTranscript = async (transcript, { url = SCAN_URL, householdKey, idToken, knownFoods = [], fetchImpl = fetch } = {}) => {
+// `lessons`: the household's recent corrections, as text — see talkRuns.js.
+// Sent only when there are some, so a reader without the field still works.
+export const submitTranscript = async (transcript, { url = SCAN_URL, householdKey, idToken, knownFoods = [], lessons = [], fetchImpl = fetch } = {}) => {
   const response = await fetchImpl(url, {
     method: 'POST',
     headers: {
@@ -156,7 +158,7 @@ export const submitTranscript = async (transcript, { url = SCAN_URL, householdKe
       // verified by a READ of the fridge, and that read requires a session.
       'X-Firebase-Token': idToken || ''
     },
-    body: JSON.stringify({ transcript, knownFoods })
+    body: JSON.stringify({ transcript, knownFoods, ...(lessons.length ? { lessons } : {}) })
   })
 
   const body = await readBody(response)

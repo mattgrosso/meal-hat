@@ -52,7 +52,8 @@
     <PhoneView
       v-else-if="isPhone"
       :just-added="justAdded"
-      @talk="showTalk = true"
+      @talk="talkRun = null; showTalk = true"
+      @reopen-talk="talkRun = $event; showTalk = true"
       @scan="showScan = true"
       @add="showAddForm = true"
       @history="showHistory = true"
@@ -90,7 +91,8 @@
       v-if="showTalk"
       :household-key="fridgeKey"
       :timers="allTimers"
-      @close="showTalk = false"
+      :reopen="talkRun"
+      @close="showTalk = false; talkRun = null"
       @applied="onTalkApplied"
     />
 
@@ -141,6 +143,8 @@ export default {
       showAddForm: false,
       showScan: false,
       showTalk: false,
+      // A kept read-through being looked over again — see talkRuns.js.
+      talkRun: null,
       showHistory: false,
       missingKey: false,
       viewMode: 'wall',

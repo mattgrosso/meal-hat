@@ -364,6 +364,21 @@ const knownFoodsError = (knownFoods) => {
 
 const MAX_TRANSCRIPT_LENGTH = 20000;
 
+// The household's corrections to earlier readings (2026-11-01). Matt: "you
+// seem to miss the same things". Each "Not right" or "You missed..." in the
+// app becomes a short line, and the newest ride along with every read-through.
+// Bounded like knownFoods, so the prompt cannot be stuffed.
+const MAX_LESSONS = 40;
+const MAX_LESSON_LENGTH = 400;
+
+const lessonsError = (lessons) => {
+  if (lessons === undefined) return null;
+  const ok = Array.isArray(lessons) &&
+    lessons.length <= MAX_LESSONS &&
+    lessons.every((l) => typeof l === 'string' && l.length > 0 && l.length <= MAX_LESSON_LENGTH);
+  return ok ? null : { status: 400, error: 'lessons must be a short list of short notes' };
+};
+
 const TRANSCRIPT_SCHEMA = {
   type: 'object',
   properties: {
@@ -439,7 +454,10 @@ const TRANSCRIPT_SCHEMA = {
   additionalProperties: false
 };
 
-const buildTranscriptPrompt = (knownFoods) => {
+const buildTranscriptPrompt = (knownFoods, lessons) => {
+  const corrections = (lessons || []).length
+    ? `\nTHIS HOUSEHOLD HAS CORRECTED EARLIER READINGS. Each line below is a mistake an earlier reading of one of their transcripts made, and what they meant. Learn from them: they are how this household talks and the foods it keeps, and they are the mistakes most worth not repeating. They describe PAST transcripts — nothing in them says what is in the house today. Only the transcript below does.\n${lessons.map((l) => `- ${l}`).join('\n')}\n`
+    : '';
   const known = (knownFoods || []).length
     ? `\nThis household already tracks these foods, in its own words:\n${knownFoods.map((f) => `- ${f}`).join('\n')}\n\nWhen the speaker names one of these foods, put that EXACT name in "knownFoodMatch" and use it as "name" too — "cheddar" spoken and "Cheddar Cheese" on this list are the same food. Structural matches count (singular/plural, brand vs. generic, an everyday word for a formal one); genuinely different foods do not.\n`
     : '';
@@ -447,7 +465,7 @@ const buildTranscriptPrompt = (knownFoods) => {
   return `Below is a transcript of somebody walking around their kitchen — opening the fridge, the freezer and the cupboards — and saying out loud what they see, so it can be turned into a list of what the house actually holds.
 
 It is dictated speech, not writing. Expect it to be messy: false starts, repetition, self-correction, thinking out loud, asides that are not about food at all, and transcription errors on food names. Read it the way a person would.
-${known}
+${known}${corrections}
 YOUR JOB IS TO SEPARATE THREE KINDS OF STATEMENT.
 
 1. "items" — food they say IS THERE. This is the main list.
@@ -511,7 +529,7 @@ const readStructured = async (params, tooMuchMessage) => {
   return JSON.parse(text);
 };
 
-const readTranscript = async ({ transcript, knownFoods }) => {
+const readTranscript = async ({ transcript, knownFoods, lessons }) => {
   const parsed = await readStructured({
     thinking: { type: 'adaptive' },
     output_config: { format: { type: 'json_schema', schema: TRANSCRIPT_SCHEMA } },
@@ -519,7 +537,7 @@ const readTranscript = async ({ transcript, knownFoods }) => {
       {
         role: 'user',
         content: [
-          { type: 'text', text: buildTranscriptPrompt(knownFoods) },
+          { type: 'text', text: buildTranscriptPrompt(knownFoods, lessons) },
           { type: 'text', text: `\n\nHere is the transcript:\n\n<transcript>\n${transcript}\n</transcript>` }
         ]
       }
@@ -534,7 +552,7 @@ const readTranscript = async ({ transcript, knownFoods }) => {
   };
 };
 
-const validationError = ({ image, mediaType, knownFoods, transcript }) => {
+const validationError = ({ image, mediaType, knownFoods, transcript, lessons }) => {
   // A transcript submission carries no image, and vice versa. Which one it is
   // decides everything downstream, so it is settled once, here.
   if (transcript !== undefined) {
@@ -544,7 +562,7 @@ const validationError = ({ image, mediaType, knownFoods, transcript }) => {
     if (transcript.length > MAX_TRANSCRIPT_LENGTH) {
       return { status: 413, error: 'That is more than one go can hold. Try it in two.' };
     }
-    return knownFoodsError(knownFoods);
+    return knownFoodsError(knownFoods) || lessonsError(lessons);
   }
 
   if (!image) return { status: 400, error: 'An image is required' };

@@ -1,5 +1,5 @@
 import { createStore } from 'vuex';
-import { onValue, ref, set, get, update, query, orderByChild, startAt, runTransaction } from "firebase/database";
+import { onValue, ref, set, get, update, push, query, orderByChild, orderByKey, limitToLast, startAt, runTransaction } from "firebase/database";
 import { GoogleAuthProvider, signInWithPopup, signOut } from "firebase/auth";
 import { db, auth, authReady, firebaseConfig } from '@/firebase';
 import { v4 as uuidv4 } from 'uuid';
@@ -367,6 +367,70 @@ export default createStore({
         await context.dispatch('mergeDBValue', { path: 'usage-log', value: patch });
       } catch (error) {
         console.error('Failed to forget the talk-through reading:', error);
+      }
+    },
+
+    // Each talk-through is KEPT now (2026-11-01): his words, what the reader
+    // returned, and what changed — so it can be reopened and corrected, and so
+    // a miss can be traced to the reader or to Meal Hat's own name matching.
+    // See store/fridge/talkRuns.js. Hat-only: the wall tablet has no hat, and
+    // returns null rather than failing the read-through that already landed.
+    async saveTalkRun (context, { run } = {}) {
+      const hat = context.state.databaseTopKey;
+      if (!hat || !run) return null;
+      try {
+        const runRef = push(ref(db, `${hat}/talk-runs`));
+        await set(runRef, removeNaNAndUndefined(run));
+        return runRef.key;
+      } catch (error) {
+        console.error('Failed to keep the talk-through:', error);
+        return null;
+      }
+    },
+
+    // A field-scoped change to a kept run — a correction's report, a flag.
+    async updateTalkRun (context, { id, patch } = {}) {
+      if (!context.state.databaseTopKey || !id || !patch) return;
+      try {
+        await context.dispatch('mergeDBValue', { path: `talk-runs/${id}`, value: patch });
+      } catch (error) {
+        console.error('Failed to update the kept talk-through:', error);
+      }
+    },
+
+    // The newest kept run, for "Last read-through" on the fridge screen. A
+    // limited query, never the whole node: every run carries a transcript.
+    async loadLastTalkRun (context) {
+      const hat = context.state.databaseTopKey;
+      if (!hat) return null;
+      const snapshot = await get(query(ref(db, `${hat}/talk-runs`), orderByKey(), limitToLast(1)));
+      const runs = snapshot.val() || {};
+      const [id] = Object.keys(runs);
+      return id ? { id, run: runs[id] } : null;
+    },
+
+    // "Not right" and "You missed..." each leave one of these. Thrown on
+    // failure, so the screen can say the correction did not save.
+    async saveTalkLesson (context, { lesson } = {}) {
+      const hat = context.state.databaseTopKey;
+      if (!hat || !lesson) return null;
+      const lessonRef = push(ref(db, `${hat}/talk-lessons`));
+      await set(lessonRef, removeNaNAndUndefined(lesson));
+      return lessonRef.key;
+    },
+
+    // The newest corrections, which ride along with every read-through so the
+    // reader stops making the same mistake. Best effort: no lessons is just
+    // how every read-through worked before.
+    async loadTalkLessons (context, { limit = 30 } = {}) {
+      const hat = context.state.databaseTopKey;
+      if (!hat) return [];
+      try {
+        const snapshot = await get(query(ref(db, `${hat}/talk-lessons`), orderByKey(), limitToLast(limit)));
+        return Object.values(snapshot.val() || {});
+      } catch (error) {
+        console.error('Failed to read the talk-through lessons:', error);
+        return [];
       }
     },
 

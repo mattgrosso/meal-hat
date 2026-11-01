@@ -872,6 +872,33 @@ not review. The number is shown, labelled `estimate`, and editable on the row.
 no photo could ever provide it.** "The lettuce is starting to go" comes back as
 2 days, not 10. The prompt asks for it explicitly.
 
+### Every talk-through is kept, and can be corrected (2026-11-01)
+
+Matt: it *"seems to miss the same things, and strange things get missed and
+I'm not sure why"*. Nothing was kept — the draft was cleared on apply and the
+reader's answer dropped — so a miss could not be traced to the READER (never
+heard it) or to MEAL HAT (heard it, and the name match lost it).
+
+`store/fridge/talkRuns.js` (pure, `tests/unit/fridge/talkRuns.spec.js`,
+`tests/e2e/talk-run-review.spec.js`). Each run goes to `<hat>/talk-runs/<id>`:
+his words, the reader's raw answer, and the report. "Look over the last
+read-through" on the fridge screen reopens the newest; every row quotes what
+he said, and "What I said" shows the whole text.
+
+Corrections go to `<hat>/talk-lessons/<id>`, and the newest 30, as short
+sentences, ride along with every read-through as `lessons` (the Lambda caps
+them at 40 x 400 characters and tells the model they describe PAST
+transcripts, never what is in the house today). "Not right" on an Added row
+also takes that card off; anything he types there, or in "Did it miss
+something?", is read straight away and applied as **additions only**
+(`correctionReview`): a correction is not a walk round the kitchen, so
+nothing goes for being unmentioned — only for "we're out of".
+
+`yarn talk-runs` (`--last`, `--run <id>`, `--lessons`) reads them via the
+Firebase CLI. Its "LOST BY MEAL HAT" column is the reader's items that never
+reached the report — a matching bug, not a hearing one. Repeat misses belong
+in `buildTranscriptPrompt`, not in an ever-growing lesson list.
+
 ### Pantry stores are tracked, and kept off the wall
 
 *"We don't need to list that I have a can of beans that's gonna last for years

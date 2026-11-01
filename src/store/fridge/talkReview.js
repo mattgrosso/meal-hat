@@ -243,6 +243,10 @@ export const buildTalkReview = (result, timers, templates, now, { keepUnmentione
         return {
           id: timer.id,
           title: timer.title,
+          // His words for it, so the report can be read back against what he
+          // said — and "Not right" has something to quote. See talkRuns.js.
+          heard: spokenByKey.get(key)?.heard || '',
+          expiryDate: timer.expiryDate,
           timeLeft,
           ...(timeLeft.expired ? { pastDate: true } : {}),
           ...(recount !== null && (recount !== had || siblings.length > 1) ? { had, quantity: recount } : {})

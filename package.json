@@ -18,6 +18,7 @@
     "test:report": "playwright show-report",
     "fetch-bug-reports": "node scripts/fetch-bug-reports.mjs",
     "resolve-bug-report": "node scripts/resolve-bug-report.mjs",
+    "talk-runs": "node scripts/talk-runs.mjs",
     "test:emulated": "PATH=\"/opt/homebrew/opt/openjdk/bin:$PATH\" firebase emulators:exec --only database \"yarn vitest run --config vitest.integration.config.js\""
   },
   "dependencies": {

@@ -281,6 +281,15 @@ describe('submitTranscript', () => {
     expect(body.transcript).toBe('there is milk and some cheddar')
     expect(body.image).toBeUndefined()
     expect(body.knownFoods).toEqual(['Cheddar Cheese'])
+    // No corrections yet: the field is left off, not sent empty.
+    expect(body.lessons).toBeUndefined()
+  })
+
+  it('carries the household\'s corrections when there are some', async () => {
+    const fetchImpl = vi.fn(async () => reply(202, { jobId: 'abc', status: 'pending' }))
+    await submitTranscript('milk', options(fetchImpl, { lessons: ['An earlier reading missed this: hummus'] }))
+    const body = JSON.parse(fetchImpl.mock.calls[0][1].body)
+    expect(body.lessons).toEqual(['An earlier reading missed this: hummus'])
   })
 
   // THE TRAP THAT STOPPED EVERY SCAN WORKING ON 2026-09-11: the endpoint

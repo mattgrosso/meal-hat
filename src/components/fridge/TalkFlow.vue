@@ -69,13 +69,41 @@
           <button class="done-btn" @click="$emit('close')">Done</button>
         </div>
 
+        <p v-if="reopen && runAt" class="pile-note run-when">From {{ runWhen }}.</p>
+
+        <!-- Matt, 2026-11-01: look over what it did, and say what it got
+             wrong, "so that we can learn from our mistakes". Each row quotes
+             what he said, so a misreading shows; "Not right" and the box at
+             the bottom each leave a lesson the reader is given next time.
+             See store/fridge/talkRuns.js. Only with a hat to keep them in. -->
+        <p v-if="canCorrect" class="pile-note">
+          Tap <strong>Not right</strong> on anything it got wrong, or tell it
+          what it missed at the bottom. It learns from both.
+        </p>
+
         <template v-if="report.added.length">
           <h3 class="pile-head">Added ({{ report.added.length }})</h3>
           <ul class="seen-list">
             <li v-for="(row, i) in report.added" :key="'a' + i" class="seen-row">
-              <span class="seen-tick">+</span>
+              <span class="seen-tick" :class="{ gone: flagged[rowKey('added', row)] }">+</span>
               <span class="seen-title">
                 {{ row.name }}<span v-if="row.quantity > 1"> ×{{ row.quantity }}</span>
+                <span v-if="row.heard || canCorrect" class="seen-heard">
+                  <template v-if="row.heard">“{{ row.heard }}”</template>
+                  <template v-if="row.readAs"> — heard as {{ row.readAs }}</template>
+                  <template v-if="canCorrect">
+                    <span v-if="flagged[rowKey('added', row)]" class="flag-done">noted, taken off</span>
+                    <button v-else-if="flagging !== rowKey('added', row)" class="flag-btn" @click="startFlag('added', row)">Not right</button>
+                  </template>
+                </span>
+                <span v-if="flagging === rowKey('added', row)" class="flag-form">
+                  <span class="flag-help">It comes off the fridge. What was it really? Leave it blank if it was nothing.</span>
+                  <input v-model="flagText" class="flag-input" type="text" placeholder="e.g. pepper jack, one block" @keyup.enter="saveFlag('added', row)">
+                  <span class="flag-actions">
+                    <button class="keep-btn" :disabled="flagSaving" @click="saveFlag('added', row)">{{ flagSaving ? 'Saving…' : 'Save' }}</button>
+                    <button class="link-btn" @click="flagging = ''">Cancel</button>
+                  </span>
+                </span>
               </span>
               <span class="seen-left">{{ row.shelfStable ? 'pantry' : formatDays(row.days) }}</span>
             </li>
@@ -87,7 +115,24 @@
           <ul class="seen-list">
             <li v-for="row in report.confirmed" :key="row.id" class="seen-row">
               <span class="seen-tick">✓</span>
-              <span class="seen-title">{{ row.title }}</span>
+              <span class="seen-title">
+                {{ row.title }}
+                <span v-if="row.heard || canCorrect" class="seen-heard">
+                  <template v-if="row.heard">“{{ row.heard }}”</template>
+                  <template v-if="canCorrect">
+                    <span v-if="flagged[rowKey('confirmed', row)]" class="flag-done">noted</span>
+                    <button v-else-if="flagging !== rowKey('confirmed', row)" class="flag-btn" @click="startFlag('confirmed', row)">Not right</button>
+                  </template>
+                </span>
+                <span v-if="flagging === rowKey('confirmed', row)" class="flag-form">
+                  <span class="flag-help">What did you actually mean? Anything you name here gets added.</span>
+                  <input v-model="flagText" class="flag-input" type="text" placeholder="e.g. that was the pepper jack" @keyup.enter="saveFlag('confirmed', row)">
+                  <span class="flag-actions">
+                    <button class="keep-btn" :disabled="flagSaving" @click="saveFlag('confirmed', row)">{{ flagSaving ? 'Saving…' : 'Save' }}</button>
+                    <button class="link-btn" @click="flagging = ''">Cancel</button>
+                  </span>
+                </span>
+              </span>
               <span class="seen-left">{{ row.quantity ? `now ${row.quantity}, ` : '' }}{{ leftLabel(row) }}</span>
             </li>
           </ul>
@@ -150,6 +195,33 @@
           </ul>
         </template>
 
+        <!-- The other half of a correction: what it never heard at all. Read
+             straight away and ADDED (never removes anything unless he says
+             they're out of it), and kept as a lesson. -->
+        <div v-if="canCorrect" class="missed-box">
+          <h3 class="pile-head">Did it miss something?</h3>
+          <textarea
+            v-model="missedText"
+            class="talk-box missed-input"
+            rows="3"
+            placeholder="e.g. you missed the hummus, and there are two bags of hot dog buns"
+            :disabled="correcting"
+          ></textarea>
+          <button class="talk-btn" :disabled="correcting || !missedText.trim()" @click="saveMissed">
+            {{ correcting ? 'Reading that…' : 'Add what it missed' }}
+          </button>
+        </div>
+        <p v-if="correctionMessage" class="pile-note correction-note">{{ correctionMessage }}</p>
+        <p v-if="flagError" class="talk-error">{{ flagError }}</p>
+
+        <!-- His own words, exactly as sent. The check on everything above. -->
+        <template v-if="savedTranscript">
+          <button class="said-toggle" @click="showSaid = !showSaid">
+            {{ showSaid ? '▾' : '▸' }} What I said
+          </button>
+          <p v-if="showSaid" class="said-text">{{ savedTranscript }}</p>
+        </template>
+
       </div>
 
     </div>
@@ -172,6 +244,10 @@
 // The endpoint, the auth and the job pipeline are the scan flow's, unchanged.
 
 import { submitTranscript, awaitScan, ScanError } from '@/utils/fridge/scan'
+import {
+  buildTalkRun, storableReport, buildLesson, lessonsForReader,
+  correctionReview, correctionCounts, addedTimerFor
+} from '@/store/fridge/talkRuns'
 import { ensureSession } from '@/firebase'
 import { buildTalkReview, talkPayload, restoredTimer } from '@/store/fridge/talkReview'
 import { computeTimeLeft, formatDaySpan } from '@/store/fridge/timers'
@@ -190,7 +266,10 @@ export default {
     // goes, so it cannot be handed the wall's filtered view. A pantry item
     // missing from this list would be silently exempt from removal and would
     // then never leave the fridge record at all.
-    timers: { type: Array, default: () => [] }
+    timers: { type: Array, default: () => [] },
+    // A kept read-through to look over again (talkRuns.js readTalkRun). Opens
+    // straight on the report, with corrections still possible.
+    reopen: { type: Object, default: null }
   },
   emits: ['close', 'applied'],
   data () {
@@ -208,6 +287,19 @@ export default {
       kept: {},
       restoring: {},
       restoreFailed: {},
+      // The kept copy of this read-through, and the corrections made to it.
+      runId: null,
+      runAt: null,
+      savedTranscript: '',
+      showSaid: false,
+      flagged: {},
+      flagging: '',
+      flagText: '',
+      flagSaving: false,
+      flagError: '',
+      missedText: '',
+      correcting: false,
+      correctionMessage: '',
       elapsed: 0,
       ticker: null,
       placeholder: 'Okay, fridge — there\'s a half gallon of milk, couple of eggs left maybe four, the cheddar\'s open but fine, lettuce is starting to go…'
@@ -215,6 +307,7 @@ export default {
   },
   computed: {
     title () {
+      if (this.reopen) return 'Last read-through'
       if (this.stage === 'done') return 'What I heard'
       return 'Say what\'s in the house'
     },
@@ -267,6 +360,17 @@ export default {
     templates () {
       return this.$store.getters['fridge/templates']
     },
+    // Corrections need somewhere to be kept: a signed-in phone, a hat, and
+    // this read-through saved in it. The wall tablet has none of those.
+    canCorrect () {
+      return Boolean(this.runId && this.$store.state.databaseTopKey)
+    },
+    runWhen () {
+      if (!this.runAt) return ''
+      return new Date(this.runAt).toLocaleString(undefined, {
+        weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'
+      })
+    },
 
     // Every shopping-list row for a food he just mentioned, and what the list
     // made of it — the same partition the shopping list itself renders, so
@@ -314,6 +418,18 @@ export default {
     }
   },
   mounted () {
+    if (this.reopen) {
+      this.runId = this.reopen.id
+      this.runAt = this.reopen.at
+      this.savedTranscript = this.reopen.transcript
+      this.report = this.reopen.report
+      this.applied = this.reopen.applied
+      this.flagged = { ...this.reopen.flagged }
+      this.kept = { ...this.reopen.kept }
+      this.stage = 'done'
+      return
+    }
+
     // A read-through that was still being worked on when the app went away.
     // Collecting it is the whole reason leaving is safe: the model has already
     // finished and the answer is sitting in S3, so this usually resolves in
@@ -404,7 +520,8 @@ export default {
         // answer lands in S3 whether or not this page is still alive to
         // collect it — so the id is the receipt, and it is written down before
         // there is any chance of the page going away. See pendingJob.js.
-        const jobId = await submitTranscript(this.transcript, { ...auth, knownFoods: this.knownFoods })
+        const lessons = lessonsForReader(await this.$store.dispatch('loadTalkLessons'))
+        const jobId = await submitTranscript(this.transcript, { ...auth, knownFoods: this.knownFoods, lessons })
         rememberJob({ id: jobId, kind: 'talk' })
 
         const result = await awaitScan(jobId, auth)
@@ -432,21 +549,28 @@ export default {
     //
     // Shared by a fresh submit and by a job resumed after the app was closed,
     // so both land in exactly the same place.
+    reviewOptions () {
+      const catalog = Object.values(this.$store.state.groceryCatalog || {})
+      return {
+        // Regulars he didn't mention stay — see buildTalkReview.
+        keepUnmentioned: new Set(catalog
+          .filter((entry) => entry && entry.staple)
+          .map((entry) => normalizeFoodName(entry.name))),
+        // "Six buns" -> packages, through each food's packageSize — see inPackages.
+        packageSizes: new Map(catalog
+          .filter((entry) => entry && Number(entry.packageSize) > 0)
+          .map((entry) => [normalizeFoodName(entry.name), Number(entry.packageSize)])),
+        // "Shredded cheddar" -> the catalog's Cheddar Cheese — see asCatalogName.
+        catalogNames: catalog.map((entry) => entry && entry.name).filter(Boolean)
+      }
+    },
+
     async applyResult (result) {
       const now = new Date()
-      // Regulars he didn't mention stay — see buildTalkReview.
-      const keepUnmentioned = new Set(Object.values(this.$store.state.groceryCatalog || {})
-        .filter((entry) => entry && entry.staple)
-        .map((entry) => normalizeFoodName(entry.name)))
-      // "Six buns" -> packages, through each food's packageSize — see inPackages.
-      const packageSizes = new Map(Object.values(this.$store.state.groceryCatalog || {})
-        .filter((entry) => entry && Number(entry.packageSize) > 0)
-        .map((entry) => [normalizeFoodName(entry.name), Number(entry.packageSize)]))
-      // "Shredded cheddar" -> the catalog's Cheddar Cheese — see asCatalogName.
-      const catalogNames = Object.values(this.$store.state.groceryCatalog || {})
-        .map((entry) => entry && entry.name)
-        .filter(Boolean)
-      const review = buildTalkReview(result, this.timers, this.templates, now, { keepUnmentioned, packageSizes, catalogNames })
+      // His words, from the box or (after a resume) from the saved draft —
+      // taken before the draft is cleared below.
+      const words = this.transcript || readDraft()?.text || ''
+      const review = buildTalkReview(result, this.timers, this.templates, now, this.reviewOptions())
       // Each removed card's record, taken NOW — once the removals land it is
       // gone from the fridge, and "We have it" needs it to put the card back.
       const byId = new Map(this.timers.map((timer) => [timer.id, timer]))
@@ -470,6 +594,13 @@ export default {
       clearPendingJob()
       this.$emit('applied', applied)
       this.stage = 'done'
+      this.savedTranscript = words
+      this.runAt = now.toISOString()
+      // Kept, so it can be looked over and corrected — see talkRuns.js. Not
+      // awaited before the report shows; corrections appear once it lands.
+      this.$store.dispatch('saveTalkRun', {
+        run: buildTalkRun({ transcript: words, result, report: this.report, applied, now })
+      }).then((id) => { this.runId = id })
       // Only fires if he is looking elsewhere — see notify.js.
       notifyDone('Fridge updated', this.doneMessage)
     },
@@ -483,6 +614,9 @@ export default {
       try {
         await this.$store.dispatch('fridge/restoreTimer', { id: row.id, record: row.record })
         this.kept = { ...this.kept, [row.id]: true }
+        if (this.runId) {
+          this.$store.dispatch('updateTalkRun', { id: this.runId, patch: { [`kept/${row.id}`]: true } })
+        }
         // Only a signed-in phone has a usage log; the store action checks.
         await this.$store.dispatch('forgetTalkReading', { name: row.title })
       } catch (error) {
@@ -490,6 +624,143 @@ export default {
         this.restoreFailed = { ...this.restoreFailed, [row.id]: true }
       } finally {
         this.restoring = { ...this.restoring, [row.id]: false }
+      }
+    },
+
+    // A Firebase-safe key for a row, stable across reopening.
+    rowKey (section, row) {
+      const raw = section === 'added' ? `a-${normalizeFoodName(row.name)}` : `c-${row.id}`
+      return raw.replace(/[.$#[\]/\s]+/g, '-')
+    },
+
+    startFlag (section, row) {
+      this.flagging = this.rowKey(section, row)
+      this.flagText = ''
+      this.flagError = ''
+    },
+
+    // "Not right": keep the lesson FIRST — it is the part that makes next
+    // time better, and it must not depend on the re-read below succeeding.
+    // A wrong Added row comes off the fridge; whatever he says it really was
+    // is read and added like anything missed.
+    async saveFlag (section, row) {
+      if (this.flagSaving) return
+      const key = this.rowKey(section, row)
+      const said = this.flagText.trim()
+      this.flagSaving = true
+      this.flagError = ''
+      try {
+        await this.$store.dispatch('saveTalkLesson', {
+          lesson: buildLesson({
+            kind: 'wrong',
+            heard: row.heard,
+            readAs: section === 'added' ? (row.readAs || row.name) : row.title,
+            said,
+            runId: this.runId
+          })
+        })
+      } catch (error) {
+        console.error('Failed to save the correction:', error)
+        this.flagError = 'That correction didn’t save. Try again.'
+        this.flagSaving = false
+        return
+      }
+      this.flagged = { ...this.flagged, [key]: true }
+      this.flagging = ''
+      this.flagSaving = false
+      this.$store.dispatch('updateTalkRun', { id: this.runId, patch: { [`flagged/${key}`]: true } })
+
+      if (section === 'added') {
+        const timer = addedTimerFor(row, this.timers, this.runAt)
+        if (timer) await this.$store.dispatch('fridge/removeTimer', { id: timer.id, source: 'talk' })
+      }
+      if (said) {
+        // His original words ride along, so "one bag, not six" has a food to
+        // attach to. The last word wins in the reader's rules.
+        await this.readCorrection(row.heard ? `I said "${row.heard}". ${said}` : said)
+      } else {
+        this.correctionMessage = section === 'added'
+          ? `Took ${row.name} off, and noted it for next time.`
+          : 'Noted for next time.'
+      }
+    },
+
+    async saveMissed () {
+      const said = this.missedText.trim()
+      if (!said || this.correcting) return
+      this.flagError = ''
+      try {
+        await this.$store.dispatch('saveTalkLesson', {
+          lesson: buildLesson({ kind: 'missed', said, runId: this.runId })
+        })
+      } catch (error) {
+        console.error('Failed to save the correction:', error)
+        this.flagError = 'That didn’t save. Try again.'
+        return
+      }
+      this.missedText = ''
+      await this.readCorrection(said)
+    },
+
+    // A few words, read the same way as a whole talk-through, and applied as
+    // ADDITIONS only — see correctionReview. Folded into this report and the
+    // kept copy, so reopening shows what the correction did too.
+    async readCorrection (said) {
+      this.correcting = true
+      this.correctionMessage = ''
+      try {
+        const user = await ensureSession()
+        const idToken = user ? await user.getIdToken() : ''
+        const auth = { householdKey: this.householdKey, idToken }
+        const lessons = lessonsForReader(await this.$store.dispatch('loadTalkLessons'))
+        const jobId = await submitTranscript(said, { ...auth, knownFoods: this.knownFoods, lessons })
+        const result = await awaitScan(jobId, auth)
+
+        const now = new Date()
+        const review = buildTalkReview(result, this.timers, this.templates, now, this.reviewOptions())
+        const fixed = correctionReview(review)
+        const byId = new Map(this.timers.map((timer) => [timer.id, timer]))
+        const removed = fixed.notHeard.map((row) => ({ ...row, record: restoredTimer(byId.get(row.id)) }))
+        const applied = await this.$store.dispatch('fridge/applyTalk', { payload: talkPayload(fixed, now) })
+        await this.$store.dispatch('recordTalkUsage', { counts: correctionCounts(review) })
+
+        const confirmed = fixed.confirmed.filter((row) => !row.mergedAway)
+        const confirmedIds = new Set(confirmed.map((row) => row.id))
+        this.report = {
+          added: [...this.report.added, ...fixed.newItems],
+          confirmed: [...this.report.confirmed.filter((row) => !confirmedIds.has(row.id)), ...confirmed],
+          removed: [...this.report.removed, ...removed],
+          unclear: [...this.report.unclear, ...fixed.unclear],
+          spoken: [...new Set([...this.report.spoken, ...Object.keys(correctionCounts(review)).filter((key) => review.counts[key] > 0)])]
+        }
+        const total = this.applied || { added: 0, removed: 0, failed: 0 }
+        this.applied = {
+          added: total.added + applied.added,
+          removed: total.removed + applied.removed,
+          failed: total.failed + applied.failed
+        }
+        if (this.runId) {
+          this.$store.dispatch('updateTalkRun', {
+            id: this.runId,
+            patch: { report: storableReport(this.report), applied: this.applied }
+          })
+        }
+        this.$emit('applied', applied)
+
+        const parts = []
+        if (fixed.newItems.length) parts.push(`Added ${fixed.newItems.map((row) => row.name).join(', ')}.`)
+        if (confirmed.length) parts.push(`Already had ${confirmed.map((row) => row.title).join(', ')}${confirmed.some((row) => row.quantity) ? ' — count updated' : ''}.`)
+        if (removed.length) parts.push(`Took off ${removed.map((row) => row.title).join(', ')}.`)
+        if (applied.failed) parts.push(`${applied.failed} didn't save.`)
+        this.correctionMessage = parts.length
+          ? `${parts.join(' ')} Noted for next time.`
+          : 'Noted for next time — there was nothing in that to add.'
+      } catch (error) {
+        this.correctionMessage = error instanceof ScanError
+          ? `Noted for next time, but it couldn’t add it: ${error.message}`
+          : 'Noted for next time, but it couldn’t add it. Try again, or add it by hand.'
+      } finally {
+        this.correcting = false
       }
     },
 
@@ -935,6 +1206,104 @@ export default {
 .gone-meta {
   font-size: 0.78rem;
   color: var(--fr-faint);
+}
+
+.seen-heard {
+  display: block;
+  font-size: 0.8rem;
+  font-style: italic;
+  color: var(--fr-faint);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.flag-btn {
+  background: none;
+  border: 0;
+  padding: 0 0 0 0.35rem;
+  font: inherit;
+  font-style: normal;
+  color: var(--fr-accent);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.flag-done {
+  font-style: normal;
+  padding-left: 0.35rem;
+}
+
+.flag-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-top: 0.4rem;
+}
+
+.flag-help {
+  font-size: 0.8rem;
+  color: var(--fr-muted);
+}
+
+.flag-input {
+  width: 100%;
+  min-width: 0;
+  background: var(--fr-field);
+  border: 1px solid var(--fr-line);
+  border-radius: 6px;
+  color: var(--fr-text);
+  padding: 0.45rem 0.6rem;
+  /* 16px or iOS zooms the page on focus. */
+  font-size: 1rem;
+  font-family: inherit;
+}
+
+.flag-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.seen-title {
+  min-width: 0;
+}
+
+.missed-box {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 1.25rem;
+}
+
+.missed-input {
+  min-height: 0;
+}
+
+.correction-note {
+  margin-top: 0.5rem;
+}
+
+.run-when {
+  margin-top: 0.5rem;
+}
+
+.said-toggle {
+  display: block;
+  margin-top: 1.25rem;
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--fr-accent);
+  cursor: pointer;
+}
+
+.said-text {
+  margin: 0.5rem 0 1rem;
+  white-space: pre-wrap;
+  font-size: 0.9rem;
+  color: var(--fr-muted);
+  line-height: 1.5;
 }
 
 .unclear-list {

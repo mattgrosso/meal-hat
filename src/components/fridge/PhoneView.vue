@@ -25,6 +25,15 @@
         <span class="talk-icon">🎤</span>
         <span>Talk through the kitchen</span>
       </button>
+      <!-- Look over the last one and say what it got wrong (2026-11-01) —
+           see store/fridge/talkRuns.js. Kept in the hat, so signed-in only. -->
+      <button
+        v-if="signedIn"
+        class="btn btn-link w-100 last-talk"
+        :disabled="loadingLastTalk"
+        @click="openLastTalk"
+      >{{ loadingLastTalk ? 'Opening…' : 'Look over the last read-through' }}</button>
+      <p v-if="lastTalkMessage" class="text-muted small text-center mb-0">{{ lastTalkMessage }}</p>
 
       <div class="btn-group w-100 mt-2" role="group">
         <!-- Receipts survived the camera's retirement because a receipt is
@@ -104,6 +113,7 @@
 <script>
 import { computeTimeLeft, timerStatus, formatCount } from '@/store/fridge/timers'
 import { normalizePairingCode } from '@/utils/fridge/pairing'
+import { readTalkRun } from '@/store/fridge/talkRuns'
 import Header from '@/components/Header.vue'
 
 // The phone. A capture surface first — see utils/fridge/viewMode.js — with a
@@ -114,7 +124,7 @@ export default {
   props: {
     justAdded: { type: String, default: '' }
   },
-  emits: ['talk', 'scan', 'add', 'history'],
+  emits: ['talk', 'reopen-talk', 'scan', 'add', 'history'],
   data () {
     return {
       // Collapsed by default. The camera is why this screen exists; a list
@@ -123,7 +133,9 @@ export default {
       showPair: false,
       pairCode: '',
       pairing: false,
-      pairMessage: ''
+      pairMessage: '',
+      loadingLastTalk: false,
+      lastTalkMessage: ''
     }
   },
   computed: {
@@ -159,6 +171,22 @@ export default {
     }
   },
   methods: {
+    async openLastTalk () {
+      this.loadingLastTalk = true
+      this.lastTalkMessage = ''
+      try {
+        const last = await this.$store.dispatch('loadLastTalkRun')
+        const run = last && readTalkRun(last.id, last.run)
+        if (run) this.$emit('reopen-talk', run)
+        else this.lastTalkMessage = 'No read-through kept yet — the next one will be.'
+      } catch (error) {
+        console.error('Failed to open the last read-through:', error)
+        this.lastTalkMessage = 'Couldn’t open it. Try again.'
+      } finally {
+        this.loadingLastTalk = false
+      }
+    },
+
     formatCount,
     // The wall's four states in meal-hat's palette. Same information, same
     // ordering, read with the app's colours instead of Perishable's.
@@ -212,6 +240,10 @@ export default {
 .talk-icon {
   font-size: 1.6rem;
   line-height: 1;
+}
+
+.last-talk {
+  font-size: 0.9rem;
 }
 
 .on-hand-toggle {
