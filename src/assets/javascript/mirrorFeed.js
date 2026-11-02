@@ -93,3 +93,13 @@ export function buildMirrorFeed (drawnMeals, meals, { now = Date.now(), windowDa
 
   return { updatedAt: now, upcoming };
 }
+
+/**
+ * What the mirror would actually SHOW from a feed: its dated meal names, and
+ * nothing else. Two feeds with the same signature look identical on the wall,
+ * so there is no reason to publish the second — `updatedAt` is deliberately
+ * left out, since the mirror never reads it.
+ */
+export function feedSignature (feed) {
+  return JSON.stringify((feed?.upcoming || []).map((row) => [row?.assignedDate, row?.meal?.name]));
+}

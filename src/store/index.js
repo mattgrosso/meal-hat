@@ -5,11 +5,11 @@ import { db, auth, authReady, firebaseConfig } from '@/firebase';
 import { v4 as uuidv4 } from 'uuid';
 import router from '@/router';
 import { analyzeDuplicates, findSimilar, remapMealIngredients } from './ingredients';
-import { withDrawnDate, compareByDate, isUpcoming, toISODate, isoDaysAgo } from './schedule';
+import { withDrawnDate, compareByDate, isUpcoming, toISODate, isoDaysAgo, todayISO } from './schedule';
 import { readingsPatch, unreadingPatch, receiptPatch, prunePatch, mealUsage } from './usage';
 import { planShoppingList } from './shoppingPlan';
 import { onHandUntilFrom } from './fridge/inHouse';
-import { buildMirrorFeed } from '../assets/javascript/mirrorFeed';
+import { buildMirrorFeed, feedSignature } from '../assets/javascript/mirrorFeed';
 import fridge from './fridge';
 import { checkHatAccess, hatToFallBackTo } from './hatAccess';
 
@@ -108,6 +108,11 @@ export default createStore({
     // a fresh listener on every initializeDB, and the router dispatches that on
     // every guarded navigation.
     mirrorFeedSubscribedFor: null,
+
+    // What the mirror was last checked against, as feedSignature() of the
+    // upcoming schedule this device holds. Lets every drawnMeals snapshot ask
+    // "did the mirror's three weeks change?" without a database read.
+    mirrorFeedCheckedSignature: null,
 
     // This hat's fridge key, or null if the hat has no fridge. Per-hat, so
     // clearState drops it, and paired with its own subscribed-for marker for
@@ -240,6 +245,9 @@ export default createStore({
     setMirrorFeedSubscribedFor (state, hat) {
       state.mirrorFeedSubscribedFor = hat || null;
     },
+    setMirrorFeedCheckedSignature (state, signature) {
+      state.mirrorFeedCheckedSignature = signature || null;
+    },
     setFridgeKeyForHat (state, key) {
       state.fridgeKeyForHat = key || null;
       state.fridgeKeyLoaded = true;
@@ -259,6 +267,7 @@ export default createStore({
       state.mealHatsList = null;
       state.mirrorFeedKey = null;
       state.mirrorFeedSubscribedFor = null;
+      state.mirrorFeedCheckedSignature = null;
       state.fridgeKeyForHat = null;
       state.fridgeKeySubscribedFor = null;
       state.fridgeKeyLoaded = false;
@@ -778,6 +787,8 @@ export default createStore({
 
           // Commit the fetched meals to the state.
           context.commit('setMeals', mealsArray);
+          // A renamed meal reads differently on the mirror too.
+          context.dispatch('mirrorScheduleChanged');
         });
       }
 
@@ -822,6 +833,7 @@ export default createStore({
             // Commit the fetched drawnMealsWithHistory and drawnMeals to the state.
             context.commit('setDrawnMealsWithHistory', sortedByDate);
             context.commit('setDrawnMeals', futureDates);
+            context.dispatch('mirrorScheduleChanged');
           });
         };
         subscribeDrawnMeals();
@@ -929,6 +941,7 @@ export default createStore({
         listenToHat(ref(db, `${context.state.databaseTopKey}/mirrorFeedKey`), (snapshot) => {
           context.commit('setMirrorFeedKey', snapshot.val());
           context.dispatch('publishMirrorFeedIfStale');
+          context.dispatch('mirrorScheduleChanged');
         });
       }
     },
@@ -950,6 +963,25 @@ export default createStore({
       // failing (rules, offline, a half-open socket) would otherwise retry on
       // every snapshot callback for the whole session.
       window.localStorage.setItem(stamp, String(Date.now()));
+      await context.dispatch('publishMirrorFeed');
+    },
+    // Bug report (2026-11-02, Matt): the mirror said pesto pasta tonight while
+    // the app said tortellini soup. Only a draw and a hand-placed meal used to
+    // republish, so a swap or delete on the schedule — or Enjoy Cooking moving
+    // a night for a lesson, or another phone doing any of those — left the
+    // mirror on the old plan for up to six hours, or until the next draw.
+    //
+    // So every drawnMeals (and meals) snapshot lands here, whoever wrote it.
+    // It costs nothing unless the next three weeks as THIS device holds them
+    // differ from the last ones checked; then publishMirrorFeed compares with
+    // the live feed and writes only if the mirror would show something else.
+    async mirrorScheduleChanged (context) {
+      if (!context.state.mirrorFeedKey || !context.state.meals || !context.state.drawnMeals) return;
+
+      const signature = feedSignature(buildMirrorFeed(context.state.drawnMeals, context.state.meals));
+      if (signature === context.state.mirrorFeedCheckedSignature) return;
+
+      context.commit('setMirrorFeedCheckedSignature', signature);
       await context.dispatch('publishMirrorFeed');
     },
     async setDBValue (context, dbEntry) {
@@ -1126,20 +1158,34 @@ export default createStore({
       const secret = context.state.mirrorFeedKey;
       if (!topKey || !secret || !auth.currentUser) return;
 
-      // Publish from what the database holds, not from this device's state.
-      // state.drawnMeals is a trailing WINDOW already filtered to upcoming
-      // entries, and a draw that just landed may not have echoed back through
-      // onValue yet — either would publish a schedule shorter than the real one.
+      // Publish from what the database holds, not from this device's state:
+      // a draw that just landed may not have echoed back through onValue yet,
+      // which would publish a schedule shorter than the real one.
+      //
+      // Today onward only. The feed never carries the past, and this now runs
+      // on every schedule change rather than only on a draw, so reading every
+      // night ever drawn would be paying for history nobody shows. The range
+      // query needs ISO dates, so an unmigrated hat is still read whole.
+      const feedRef = ref(db, `mirrorFeed/${topKey}/${secret}`);
       let drawnMeals = null;
       let meals = null;
+      let published = null;
 
       try {
-        const [drawnSnapshot, mealsSnapshot] = await Promise.all([
-          get(ref(db, `${topKey}/drawnMeals`)),
-          get(ref(db, `${topKey}/meals`))
+        const drawnRef = ref(db, `${topKey}/drawnMeals`);
+        const marker = await get(ref(db, `${topKey}/schema/drawnMealsDateFormat`));
+        const drawnSource = marker.val() === DRAWN_MEALS_SCHEMA
+          ? query(drawnRef, orderByChild('assignedDate'), startAt(todayISO()))
+          : drawnRef;
+
+        const [drawnSnapshot, mealsSnapshot, feedSnapshot] = await Promise.all([
+          get(drawnSource),
+          get(ref(db, `${topKey}/meals`)),
+          get(feedRef).catch(() => null)
         ]);
         drawnMeals = drawnSnapshot.val();
         meals = mealsSnapshot.val();
+        published = feedSnapshot ? feedSnapshot.val() : null;
       } catch (error) {
         console.error('Could not read the schedule to publish the mirror feed: ', error);
         return;
@@ -1147,12 +1193,15 @@ export default createStore({
 
       const feed = buildMirrorFeed(drawnMeals, meals);
 
+      // The mirror already shows exactly this — nothing to send.
+      if (published && feedSignature(published) === feedSignature(feed)) return;
+
       // Signed out while the schedule was being read (Sentry, 2026-10-20):
       // the publish would only be refused, and the refusal is an error event.
       if (!auth.currentUser || context.state.databaseTopKey !== topKey) return;
 
       try {
-        await set(ref(db, `mirrorFeed/${topKey}/${secret}`), feed);
+        await set(feedRef, feed);
       } catch (error) {
         // A mirror showing a stale schedule is not worth interrupting
         // anyone's draw over.
@@ -1283,6 +1332,11 @@ export default createStore({
       if (!Object.keys(updates).length) return;
 
       await update(ref(db, context.state.databaseTopKey), updates);
+
+      // A swap or a delete changes what is for dinner just as a draw does, and
+      // the mirror must hear about it straight away (the 2026-11-02 report was
+      // a swap the mirror never saw). No-ops unless the hat has a feed key.
+      await context.dispatch('publishMirrorFeed');
     },
 
     // Does a hat with this name already exist?

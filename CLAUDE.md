@@ -550,6 +550,15 @@ Three things that are deliberate:
 - **`publishMirrorFeed` re-reads the database** instead of using
   `state.drawnMeals`, which is a trailing window already filtered to upcoming
   entries and may not have echoed back a just-landed draw.
+- **Every schedule change republishes, from wherever it came** (2026-11-02:
+  the mirror said pesto pasta while the app said tortellini soup, after a
+  swap). `reassignDrawnMeals` (swap, delete) publishes like a draw does, and
+  every drawnMeals / meals snapshot runs `mirrorScheduleChanged`, so Enjoy
+  Cooking's moves and other phones' edits reach the mirror too. It is cheap
+  on purpose: nothing happens unless the three weeks this device holds
+  changed (`feedSignature`), the publish reads drawnMeals from today onward
+  only, and it writes nothing when the live feed already shows the same.
+  `tests/e2e/mirror-feed-refresh.spec.js`.
 - **The six-hour throttle stamp is written BEFORE the publish, not after.**
   A hat whose publish keeps failing would otherwise retry on every snapshot
   callback for the rest of the session.

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildMirrorFeed, FEED_WINDOW_DAYS } from '../../src/assets/javascript/mirrorFeed.js';
+import { buildMirrorFeed, feedSignature, FEED_WINDOW_DAYS } from '../../src/assets/javascript/mirrorFeed.js';
 
 // Local noon, so nothing here is one timezone away from testing a different day
 // than it reads as.
@@ -205,5 +205,30 @@ describe('hand-placed one-off meals', () => {
     );
 
     expect(feed.upcoming).toEqual([]);
+  });
+});
+
+describe('feedSignature', () => {
+  const now = at('2026-08-24');
+
+  it('changes when two nights swap — what the mirror shows changed', () => {
+    const before = buildMirrorFeed([drawn('d1', 'm1', '2026-08-24'), drawn('d2', 'm2', '2026-08-25')], MEALS, { now });
+    const after = buildMirrorFeed([drawn('d1', 'm2', '2026-08-24'), drawn('d2', 'm1', '2026-08-25')], MEALS, { now });
+
+    expect(feedSignature(after)).not.toBe(feedSignature(before));
+  });
+
+  it('changes when a night is deleted', () => {
+    const before = buildMirrorFeed([drawn('d1', 'm1', '2026-08-24'), drawn('d2', 'm2', '2026-08-25')], MEALS, { now });
+    const after = buildMirrorFeed([drawn('d2', 'm2', '2026-08-25')], MEALS, { now });
+
+    expect(feedSignature(after)).not.toBe(feedSignature(before));
+  });
+
+  it('ignores updatedAt and row ids, which the mirror never shows', () => {
+    const before = buildMirrorFeed([drawn('d1', 'm1', '2026-08-24')], MEALS, { now });
+    const after = buildMirrorFeed([drawn('other', 'm1', '2026-08-24')], MEALS, { now: now + 1000 });
+
+    expect(feedSignature(after)).toBe(feedSignature(before));
   });
 });
