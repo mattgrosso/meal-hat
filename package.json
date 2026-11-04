@@ -42,7 +42,7 @@
     "@babel/core": "^7.12.16",
     "@babel/eslint-parser": "^7.12.16",
     "@firebase/rules-unit-testing": "^5.0.2",
-    "@playwright/test": "^1.55.0",
+    "@playwright/test": "^1.64.1",
     "@vitejs/plugin-vue": "6.0.9",
     "@vue/eslint-config-standard": "^6.1.0",
     "autoprefixer": "^10.4.20",
