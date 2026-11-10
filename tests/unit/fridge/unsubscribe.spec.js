@@ -2,7 +2,7 @@ import {
   describe, it, expect, vi, beforeEach
 } from 'vitest';
 
-// Sentry, 2026-10-20: signing out left the fridge's three listeners open, so
+// Sentry, 2026-10-20: signing out left the fridge's listeners open (three then, four now with ideas), so
 // the server revoked them with permission errors, and `subscribedTo` stayed
 // set, so signing back in without a reload never reattached them.
 
@@ -47,7 +47,7 @@ describe('fridge/unsubscribe', () => {
   it('detaches every listener subscribe attached and forgets the fridge', async () => {
     const context = makeContext();
     await fridge.actions.subscribe(context, KEY);
-    expect(attached).toHaveLength(3);
+    expect(attached).toHaveLength(4);
 
     fridge.actions.unsubscribe(context);
     expect(detached.sort()).toEqual([...attached].sort());
@@ -63,7 +63,7 @@ describe('fridge/unsubscribe', () => {
     attached.length = 0;
 
     await fridge.actions.subscribe(context, KEY);
-    expect(attached).toHaveLength(3);
+    expect(attached).toHaveLength(4);
     expect(context.state.subscribedTo).toBe(KEY);
   });
 
@@ -72,6 +72,6 @@ describe('fridge/unsubscribe', () => {
     await fridge.actions.subscribe(context, KEY);
     fridge.actions.unsubscribe(context);
     fridge.actions.unsubscribe(context);
-    expect(detached).toHaveLength(3);
+    expect(detached).toHaveLength(4);
   });
 });

@@ -12,7 +12,9 @@ import { db, ensureSession } from '@/firebase'
 import { sortTimers, spanInDays, formatDaySpan } from './timers'
 import { foldObservation } from './shelfLife'
 import { sortHistory, HISTORY_LIMIT } from './history'
-import { timersPath, templatesPath, historyPath, templateKey } from './paths'
+import { timersPath, templatesPath, historyPath, ideasPath, templateKey } from './paths'
+import { ideaDay, tallyForIdea, recentIdeaNames, shouldAskForIdea, ideaDaysToDrop } from './idea'
+import { requestIdea } from '@/utils/fridge/idea'
 import { reconcileShelfLives, fridgeFoodId } from './reconcile'
 import { onHandUntilFrom, topUpPlan } from './inHouse'
 import { pairingPath, isFreshPairing } from '@/utils/fridge/pairing'
@@ -38,6 +40,10 @@ const fridgeExists = async (key) => {
 // because they are functions, not data, and nothing renders them.
 let listeners = []
 
+// Today's idea is asked for at most once at a time, and a failed ask waits
+// (shouldAskForIdea). Module-level for the same reason as `listeners`.
+let ideaAsk = { asking: false, lastTriedAt: 0 }
+
 export default {
   namespaced: true,
 
@@ -46,6 +52,10 @@ export default {
     timers: {},
     templates: {},
     history: {},
+    // Day (YYYY-MM-DD) -> that day's idea. `ideasLoaded` is what tells "none
+    // yet today" from "not heard from the database yet".
+    ideas: {},
+    ideasLoaded: false,
     loading: false,
     subscribedTo: null,
 
@@ -109,11 +119,17 @@ export default {
     SET_TIMERS (state, timers) { state.timers = timers || {} },
     SET_TEMPLATES (state, templates) { state.templates = templates || {} },
     SET_HISTORY (state, history) { state.history = history || {} },
+    SET_IDEAS (state, ideas) {
+      state.ideas = ideas || {}
+      state.ideasLoaded = true
+    },
     SET_SUBSCRIBED_TO (state, key) { state.subscribedTo = key || null },
     CLEAR (state) {
       state.timers = {}
       state.templates = {}
       state.history = {}
+      state.ideas = {}
+      state.ideasLoaded = false
       state.error = null
       state.subscribedTo = null
     }
@@ -189,6 +205,63 @@ export default {
       }, (error) => {
         console.error('Failed to load fridge history:', error)
       }))
+
+      // Today's idea and the last month's. Small (one short recipe a day), and
+      // like the history its failure is not the fridge's failure.
+      listeners.push(onValue(ref(db, ideasPath(key)), (snapshot) => {
+        commit('SET_IDEAS', snapshot.val())
+      }, (error) => {
+        console.error('Failed to load the ideas:', error)
+      }))
+    },
+
+    // Make sure today has an idea, asking for one if it does not.
+    //
+    // Nobody presses anything: the wall calls this on its five-minute tick
+    // and the phone when the fridge is opened, and whichever gets there
+    // first writes the idea where every device reads it. The endpoint hands
+    // two askers the same job and stops at three tries a day, so calling
+    // this too often is harmless; calling it at all is gated by the screen
+    // (resolveIdeaFlag), not here.
+    //
+    // Quiet on failure. An idea is a nicety, and "no idea today" is a normal
+    // answer when nothing honest can be made from the tally.
+    async ensureIdea ({ state, getters }) {
+      const key = state.fridgeKey
+      const day = ideaDay()
+      const tally = tallyForIdea(getters.allTimers)
+      if (!key || !shouldAskForIdea({
+        loaded: state.ideasLoaded,
+        ideas: state.ideas,
+        day,
+        tallyCount: tally.length,
+        asking: ideaAsk.asking,
+        lastTriedAt: ideaAsk.lastTriedAt
+      })) return false
+
+      ideaAsk = { asking: true, lastTriedAt: Date.now() }
+      try {
+        const user = await ensureSession()
+        const idToken = user ? await user.getIdToken() : ''
+        const idea = await requestIdea(
+          { tally, recent: recentIdeaNames(state.ideas) },
+          { householdKey: key, idToken }
+        )
+        // The fridge may have been left (sign-out) while this was away.
+        if (state.fridgeKey !== key) return false
+        await set(ref(db, `${ideasPath(key)}/${day}`), { ...idea, day, madeAt: new Date().toISOString() })
+        for (const old of ideaDaysToDrop(state.ideas, day)) {
+          await remove(ref(db, `${ideasPath(key)}/${old}`))
+        }
+        return true
+      } catch (error) {
+        // Not console.error: that goes to Sentry, and a day without an idea is
+        // not a fault anyone needs paging about.
+        console.warn('No idea today:', error?.message || error)
+        return false
+      } finally {
+        ideaAsk.asking = false
+      }
     },
 
     // Detach everything `subscribe` attached and forget the fridge.

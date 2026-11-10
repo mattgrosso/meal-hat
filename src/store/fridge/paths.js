@@ -12,6 +12,10 @@ export const fridgeRoot = (key) => `fridge/${key}`
 export const timersPath = (key) => `${fridgeRoot(key)}/timers`
 export const templatesPath = (key) => `${fridgeRoot(key)}/templates`
 export const historyPath = (key) => `${fridgeRoot(key)}/history`
+// One idea a day for what to cook, keyed by the day (YYYY-MM-DD): see idea.js.
+// Under the fridge and not the hat because the wall tablet writes it, and the
+// wall is a member of no hat.
+export const ideasPath = (key) => `${fridgeRoot(key)}/ideas`
 
 // The pointer that lets a SIGNED-IN phone find its own fridge without being
 // handed the secret in a URL. Readable only by the hat's members, so the

@@ -29,6 +29,9 @@ const Anthropic = require('@anthropic-ai/sdk');
 const crypto = require('crypto');
 const { S3Client, GetObjectCommand, PutObjectCommand } = require('@aws-sdk/client-s3');
 const { LambdaClient, InvokeCommand } = require('@aws-sdk/client-lambda');
+// Today's idea: a third kind of job beside the photo and the talk-through.
+// What it is and why is at the top of idea.js.
+const { MAX_TRIES_PER_DAY, ideaDay, ideaRequestError, readIdea } = require('./idea.js');
 
 const client = new Anthropic();
 const s3 = new S3Client({});
@@ -517,6 +520,9 @@ const MAX_TOKENS = 32000;
 // json_schema format is not parsed by the stream helper, so this does it.
 const readStructured = async (params, tooMuchMessage) => {
   const message = await client.messages.stream({ ...params, model: MODEL, max_tokens: MAX_TOKENS }).finalMessage();
+  // What each read cost, in the log (the idea runs every day unattended, so
+  // its price should be something that can be looked up, not guessed).
+  console.log('usage', JSON.stringify({ input: message?.usage?.input_tokens, output: message?.usage?.output_tokens }));
 
   if (message?.stop_reason === 'max_tokens') {
     const error = new Error(tooMuchMessage);
@@ -552,7 +558,10 @@ const readTranscript = async ({ transcript, knownFoods, lessons }) => {
   };
 };
 
-const validationError = ({ image, mediaType, knownFoods, transcript, lessons }) => {
+const validationError = ({ image, mediaType, knownFoods, transcript, lessons, idea }) => {
+  // An idea request carries the tally and nothing else.
+  if (idea !== undefined) return ideaRequestError(idea);
+
   // A transcript submission carries no image, and vice versa. Which one it is
   // decides everything downstream, so it is settled once, here.
   if (transcript !== undefined) {
@@ -607,9 +616,11 @@ const runJob = async ({ jobId }) => {
     input = await getInput(jobId);
     // A transcript and a photo are told apart by what was submitted, decided
     // once in validationError and re-read the same way here.
-    const result = input.transcript !== undefined
-      ? await readTranscript(input)
-      : await readGroceries(input);
+    const result = input.idea !== undefined
+      ? await readIdea(input, { readStructured })
+      : input.transcript !== undefined
+        ? await readTranscript(input)
+        : await readGroceries(input);
     await putJob(jobId, { status: 'done', result, finishedAt: Date.now() });
   } catch (error) {
     console.error(`Job ${jobId} failed`, error);
@@ -617,9 +628,11 @@ const runJob = async ({ jobId }) => {
       status: 'failed',
       error: error?.userFacing
         ? error.message
-        : (input?.transcript !== undefined
-            ? 'Could not make sense of that. Try again.'
-            : 'Could not read that photo. Try again.'),
+        : (input?.idea !== undefined
+            ? 'Could not come up with one just now.'
+            : input?.transcript !== undefined
+              ? 'Could not make sense of that. Try again.'
+              : 'Could not read that photo. Try again.'),
       finishedAt: Date.now()
     });
   }
@@ -637,7 +650,38 @@ const submitJob = async (event, auth) => {
   const problem = validationError(payload);
   if (problem) return response(problem.status, { error: problem.error });
 
+  // ONE IDEA A DAY PER FRIDGE, and this is where that is kept.
+  //
+  // Nobody presses a button for an idea: the wall asks by itself when the day
+  // has none, and so does any phone that opens the fridge. So the limit cannot
+  // live in the app. A marker for (fridge, day) holds the job that is writing
+  // today's; a second asker the same day is handed that same job, and only a
+  // FAILED one is tried again, MAX_TRIES_PER_DAY times in all. A wall stuck in
+  // a loop therefore costs three reads a day at the very worst. The marker
+  // lives under jobs/ (the only prefix this role may touch) and its name is a
+  // hash, so the fridge key is not written into an object name; the bucket's
+  // one-day expiry clears it, a day after it stopped mattering.
+  let ideaMarker = null;
+  if (payload.idea !== undefined) {
+    const day = ideaDay();
+    const markerId = `idea-${crypto.createHash('sha256').update(auth.key).digest('hex').slice(0, 40)}-${day}`;
+    const marker = await getJob(markerId);
+    if (marker?.jobId) {
+      const earlier = await getJob(marker.jobId);
+      if (earlier && earlier.status !== 'failed') {
+        return response(202, { jobId: marker.jobId, status: 'pending', day });
+      }
+      if ((marker.tries || 0) >= MAX_TRIES_PER_DAY) {
+        return response(429, { error: 'No idea today. There will be one tomorrow.', day });
+      }
+    }
+    ideaMarker = { id: markerId, tries: (marker?.tries || 0) + 1 };
+  }
+
   const jobId = crypto.randomUUID();
+  // The marker before anything is spent, so two askers a moment apart are
+  // more likely to share one job than to start two.
+  if (ideaMarker) await putJob(ideaMarker.id, { jobId, tries: ideaMarker.tries, startedAt: Date.now() });
   // Photo first, then the marker: a pending job whose input is missing would
   // be a job that can only ever fail.
   await putInput(jobId, payload);

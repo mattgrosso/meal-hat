@@ -4,6 +4,7 @@ import {
   timersPath,
   templatesPath,
   historyPath,
+  ideasPath,
   fridgeKeyPointer,
   templateKey
 } from '../../../src/store/fridge/paths'
@@ -19,6 +20,7 @@ describe('fridge paths', () => {
     expect(timersPath(KEY)).toBe(`fridge/${KEY}/timers`)
     expect(templatesPath(KEY)).toBe(`fridge/${KEY}/templates`)
     expect(historyPath(KEY)).toBe(`fridge/${KEY}/history`)
+    expect(ideasPath(KEY)).toBe(`fridge/${KEY}/ideas`)
   })
 
   it('keeps the hat pointer inside the hat, where only members can read it', () => {

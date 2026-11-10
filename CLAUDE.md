@@ -655,6 +655,55 @@ out. Now:
 - The card's own controls were already the resolve step: × is "gone",
   double-tap gives +1 day / +1 week. Look unchanged, per the standing rule.
 - Matt said NO to putting meals on the wall: they live on the Magic Mirror.
+  (The scheduled meals, that is. Today's idea, below, is the one exception and
+  he asked for it.)
+
+### Today's idea (2026-11-09, behind a flag)
+
+Carrie's idea, Matt's rules: the wall shows **one** meal suggestion a day,
+quietly, made **only from food the tally says is in the house**. A comfortable
+spice rack, salt, pepper and water are assumed; oil, butter, flour and the like
+are NOT (they have to be in the tally). **No photos, generated or otherwise**:
+Matt said no twice. It has to look good with type and colour alone.
+
+**It is off by default** (`IDEA_ON_BY_DEFAULT` in `utils/fridge/idea.js`).
+`?idea=1` turns it on for that device and sticks (localStorage `fridge.idea`);
+`?idea=0` turns it off. With it off the wall is exactly the eat-soon board.
+Do not flip the default until Matt has said yes to the look.
+
+- **The day** turns over at 4am Eastern (`ideaDay`, written twice: the Lambda's
+  `aws-lambda/idea.js` and the app's `store/fridge/idea.js`; a test checks they
+  agree hour by hour). One idea per fridge per day, kept at
+  `fridge/<key>/ideas/<YYYY-MM-DD>`, pruned after 30 days. Yesterday's stays up
+  until today's arrives.
+- **Who asks:** Fridge.vue (`askForIdea`, on load and on the 5-minute tick) for
+  wall and phone alike, through the store's `ensureIdea`. The scan Lambda
+  writes it: `kind: 'idea'` on the same submit/poll endpoint, with the tally
+  (title, packages, days left) and the last fortnight's names so it doesn't
+  repeat itself.
+- **The house rule is checked in code, not trusted** (`checkIdea`): every
+  ingredient marked `house` must name a row of the tally, at least two of them,
+  and no step may mention a staple (oil, butter, flour...) that isn't an
+  ingredient. One retry with the reasons; after that it's "no idea today" and
+  the wall stays the eat-soon board.
+- **Spending is capped on the server:** a marker in the jobs bucket
+  (`jobs/idea-<hash of key>-<day>.json`) makes simultaneous askers share one
+  job and stops at `MAX_TRIES_PER_DAY` (3) with a 429. Measured 2026-11-09:
+  about 3,300 tokens in, 1,800 out, 24 seconds, **about 6 cents an idea**
+  (so about $2 a month) on the Lambda's own key.
+- **The wall** (`IdeaWall` > `IdeaPoster`): the dish name huge, one line about
+  it, the minutes on the day's flat swatch (`swatchFor(day)`), and what it
+  uses, with food about to go off underlined. Tap for the recipe (type shrinks
+  itself to fit, `fitHow`; nothing scrolls on the wall). The bottom strip is
+  "Eat soon"; tapping it opens the timers grid unchanged, with a way back, and
+  it returns by itself after 3 minutes. No animation: it's a wall.
+- **The phone** gets `IdeaCard` under the buttons, closed until tapped.
+- It does **not** know what's planned for the week (the wall can't read the
+  schedule), so it may use something bought for a scheduled meal.
+- **Deploying the Lambda now means two files**: `perishable-vision.js` and
+  `idea.js` both go in the zip.
+- Local look: emulators + `yarn serve`, seed a fridge and an idea, open
+  `/?k=<key>&view=wall&idea=1#/fridge`.
 
 ### Two copies of a shelf life, and how they stay honest
 

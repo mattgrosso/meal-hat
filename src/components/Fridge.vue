@@ -52,6 +52,7 @@
     <PhoneView
       v-else-if="isPhone"
       :just-added="justAdded"
+      :idea="ideaShown"
       @talk="talkRun = null; showTalk = true"
       @reopen-talk="talkRun = $event; showTalk = true"
       @scan="showScan = true"
@@ -59,8 +60,24 @@
       @history="showHistory = true"
     />
 
+    <!-- The wall with today's idea on it (2026-11-09; see IdeaWall.vue).
+         Only where the idea is switched on, and only when there is one:
+         otherwise the wall is the timers, as it always was. -->
+    <IdeaWall
+      v-else-if="showIdeaWall"
+      :shown="ideaShown"
+      :timers="allTimers"
+      :soon="wallCards"
+      :now="wallNow"
+      @timers="openTimers"
+    />
+
     <!-- The wall display -->
     <div v-else class="timers-grid">
+      <!-- Reached from the idea's "Eat soon" line, so there is a way back. -->
+      <button v-if="ideaShown" type="button" class="idea-return" @click="closeTimers">
+        ‹ {{ ideaShown.today ? "Today's idea" : "Yesterday's idea" }}<span class="idea-return-name">{{ ideaShown.idea.name }}</span>
+      </button>
       <CountdownTimer
         v-for="timer in wallCards"
         :key="timer.id"
@@ -121,11 +138,18 @@ import ScanFlow from './fridge/ScanFlow.vue';
 import TalkFlow from './fridge/TalkFlow.vue';
 import PhoneView from './fridge/PhoneView.vue';
 import HistorySheet from './fridge/HistorySheet.vue';
+import IdeaWall from './fridge/IdeaWall.vue';
 import { adoptFridgeKey, extractKey, storeFridgeKey, isValidKey, rememberKeyAlias } from '@/utils/fridge/fridgeKey';
 import { generatePairingCode, urlWithKey } from '@/utils/fridge/pairing';
 import { resolveViewMode } from '@/utils/fridge/viewMode';
 import { buildStamp } from '@/utils/buildStamp';
 import { wallTimers } from '@/store/fridge/timers';
+import { ideaDay, ideaToShow } from '@/store/fridge/idea';
+import { resolveIdeaFlag } from '@/utils/fridge/idea';
+
+// How long the timers stay up after the idea's "Eat soon" line is tapped
+// before the wall goes back to the idea by itself.
+const TIMERS_STAY_MS = 3 * 60 * 1000;
 
 export default {
   name: 'Fridge',
@@ -136,7 +160,8 @@ export default {
     ScanFlow,
     TalkFlow,
     PhoneView,
-    HistorySheet
+    HistorySheet,
+    IdeaWall
   },
   data () {
     return {
@@ -148,6 +173,10 @@ export default {
       showHistory: false,
       missingKey: false,
       viewMode: 'wall',
+      // Today's idea: whether this device shows it at all (resolveIdeaFlag),
+      // and whether the wall is on the idea or on the timers behind it.
+      ideaOn: false,
+      wallView: 'idea',
       // The wall's clock for choosing cards; see wallCards.
       wallNow: Date.now(),
       justAdded: '',
@@ -184,6 +213,21 @@ export default {
     },
     loading () {
       return this.$store.state.fridge.loading;
+    },
+    // { day, idea, today } or null. `wallNow` is in it so the day turns over
+    // on a screen that is never reloaded.
+    ideaShown () {
+      if (!this.ideaOn) return null;
+      return ideaToShow(this.$store.state.fridge.ideas, ideaDay(new Date(this.wallNow)));
+    },
+    showIdeaWall () {
+      return Boolean(this.ideaShown) && this.wallView === 'idea';
+    },
+    // The timers and the ideas have both arrived, so "there is no idea for
+    // today" is known and not just not-loaded-yet.
+    ideaReady () {
+      return this.ideaOn && !this.loading && !this.notConnected &&
+        this.$store.state.fridge.ideasLoaded;
     },
     error () {
       const error = this.$store.state.fridge.error;
@@ -241,6 +285,12 @@ export default {
         else this.stopPairing();
       }
     },
+    ideaReady: {
+      immediate: true,
+      handler () {
+        this.askForIdea();
+      }
+    },
     // The hat's pointer landing after mount is the NORMAL cold-load order.
     // connect() ran once already and found nothing; run it again now.
     '$store.state.fridgeKeyForHat' (key) {
@@ -281,11 +331,17 @@ export default {
       this.setThemeColor('#000000');
     }
 
+    this.ideaOn = resolveIdeaFlag();
     this.connect();
-    this.wallTick = setInterval(() => { this.wallNow = Date.now(); }, 5 * 60 * 1000);
+    this.wallTick = setInterval(() => {
+      this.wallNow = Date.now();
+      // The wall is never reloaded, so this is what asks each morning.
+      this.askForIdea();
+    }, 5 * 60 * 1000);
   },
   beforeUnmount () {
     clearInterval(this.wallTick);
+    clearTimeout(this.timersStay);
     document.body.classList.remove('fridge-active');
     if (this.viewMode === 'wall') this.setThemeColor('#274C77');
     clearTimeout(this.justAddedTimer);
@@ -294,6 +350,30 @@ export default {
   methods: {
     setThemeColor (color) {
       document.querySelector('meta[name="theme-color"]')?.setAttribute('content', color);
+    },
+    // Ask for today's idea if there isn't one. The store decides whether
+    // that is needed (shouldAskForIdea) and the endpoint keeps it to one a
+    // day, so calling this often is free.
+    askForIdea () {
+      if (this.ideaReady) this.$store.dispatch('fridge/ensureIdea');
+    },
+    openTimers () {
+      this.wallView = 'timers';
+      this.stayOnTimers();
+    },
+    closeTimers () {
+      clearTimeout(this.timersStay);
+      this.wallView = 'idea';
+    },
+    // Back to the idea after a few minutes, but never out from under
+    // somebody who is halfway through adding something.
+    stayOnTimers () {
+      clearTimeout(this.timersStay);
+      this.timersStay = setTimeout(() => {
+        const busy = this.showAddForm || this.showScan || this.showTalk || this.showHistory;
+        if (busy) this.stayOnTimers();
+        else this.wallView = 'idea';
+      }, TIMERS_STAY_MS);
     },
     // Two doors to the same fridge. The kiosk arrives holding the key in its
     // URL; a signed-in phone has no key in the address bar and looks up the
@@ -513,6 +593,33 @@ body.fridge-active {
     grid-template-columns: repeat(2, 1fr);
     gap: 12px;
     align-content: start;
+  }
+
+  /* The way back to the idea from the timers. Only there when the idea is
+   * switched on; the timers wall without it is exactly as it was. */
+  .idea-return {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: baseline;
+    gap: 1.2em;
+    padding: 6px 8px 10px;
+    background: none;
+    border: 0;
+    color: #fff;
+    font-family: var(--fr-mono);
+    font-size: 0.95rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    text-align: left;
+    cursor: pointer;
+    opacity: 0.6;
+  }
+
+  .idea-return-name {
+    font-family: var(--fr-font);
+    font-size: 1.15rem;
+    letter-spacing: 0;
+    text-transform: none;
   }
 
   .loading, .error {

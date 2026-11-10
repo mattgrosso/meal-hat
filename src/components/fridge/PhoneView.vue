@@ -79,6 +79,16 @@
         <p v-if="pairMessage" class="form-text">{{ pairMessage }}</p>
       </form>
 
+      <!-- Today's idea, the same one the wall is showing. Under the buttons:
+           this screen is still for capture first. -->
+      <IdeaCard
+        v-if="idea"
+        :idea="idea.idea"
+        :day="idea.day"
+        :today="idea.today"
+        :timers="allTimers"
+      />
+
       <!-- What's on hand.
            Perishable's phone deliberately showed no timers: the wall was three
            steps away and doing that job. Inside meal-hat the phone is also
@@ -115,14 +125,18 @@ import { computeTimeLeft, timerStatus, formatCount } from '@/store/fridge/timers
 import { normalizePairingCode } from '@/utils/fridge/pairing'
 import { readTalkRun } from '@/store/fridge/talkRuns'
 import Header from '@/components/Header.vue'
+import IdeaCard from './IdeaCard.vue'
 
 // The phone. A capture surface first — see utils/fridge/viewMode.js — with a
 // collapsed on-hand list underneath for the grocery store.
 export default {
   name: 'PhoneView',
-  components: { Header },
+  components: { Header, IdeaCard },
   props: {
-    justAdded: { type: String, default: '' }
+    justAdded: { type: String, default: '' },
+    // { day, idea, today } when there is an idea to show (and this device
+    // has it switched on), else null.
+    idea: { type: Object, default: null }
   },
   emits: ['talk', 'reopen-talk', 'scan', 'add', 'history'],
   data () {
@@ -144,6 +158,10 @@ export default {
     },
     signedIn () {
       return Boolean(this.$store.state.userEmail)
+    },
+    // Pantry included: the idea cooks from the whole house.
+    allTimers () {
+      return this.$store.getters['fridge/allTimers']
     },
     pairCodeValid () {
       return Boolean(normalizePairingCode(this.pairCode))
