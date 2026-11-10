@@ -343,10 +343,10 @@ describe('whether this device shows the idea', () => {
     return { getItem: (k) => (k in map ? map[k] : null), setItem: (k, v) => { map[k] = v }, map }
   }
 
-  it('is off until Matt says the wall may change', () => {
-    // Flip this with IDEA_ON_BY_DEFAULT, on purpose, when he does.
-    expect(IDEA_ON_BY_DEFAULT).toBe(false)
-    expect(resolveIdeaFlag({ location: { search: '' }, storage: storage() })).toBe(false)
+  it('is on unless a device has turned it off (Matt said yes, 2026-11-09)', () => {
+    expect(IDEA_ON_BY_DEFAULT).toBe(true)
+    expect(resolveIdeaFlag({ location: { search: '' }, storage: storage() })).toBe(true)
+    expect(resolveIdeaFlag({ location: { search: '' }, storage: storage({ 'fridge.idea': '0' }) })).toBe(false)
   })
 
   it('is turned on for a device by one visit, and remembered', () => {
@@ -361,5 +361,6 @@ describe('whether this device shows the idea', () => {
     const blocked = { getItem: () => { throw new Error('no') }, setItem: () => { throw new Error('no') } }
     expect(resolveIdeaFlag({ location: { search: '?idea=1' }, storage: blocked })).toBe(true)
     expect(resolveIdeaFlag({ location: { search: '' }, storage: blocked, fallback: true })).toBe(true)
+    expect(resolveIdeaFlag({ location: { search: '' }, storage: blocked, fallback: false })).toBe(false)
   })
 })

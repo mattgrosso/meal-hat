@@ -91,6 +91,8 @@ export default {
     timers: { type: Array, default: () => [] },
     now: { type: Number, default: () => Date.now() }
   },
+  // 'how': the recipe was opened (true) or put away (false).
+  emits: ['how'],
   data () {
     return { showHow: false }
   },
@@ -136,8 +138,15 @@ export default {
     day () {
       this.showHow = false
     },
+    // The wall gives the recipe the whole screen (IdeaWall puts the eat-soon
+    // line away), so it is fitted once now and again when that has happened.
     showHow (shown) {
-      if (shown) this.$nextTick(this.fitHow)
+      this.$emit('how', shown)
+      if (!shown) return
+      this.$nextTick(() => {
+        this.fitHow()
+        requestAnimationFrame(this.fitHow)
+      })
     }
   },
   mounted () {
@@ -434,5 +443,105 @@ export default {
 
 .idea-step-text {
   text-wrap: pretty;
+}
+
+/* --- Upright ---
+ * The kitchen tablet hangs in PORTRAIT (Matt, 2026-11-09), so this is the
+ * layout that is actually looked at; the wide one above is for a desk. Tall
+ * and narrow: the name takes as many lines as it likes, what it uses sits
+ * under the minutes instead of beside them, and the recipe is one column,
+ * ingredients two-up above the steps. Sized from the width, capped by the
+ * height so a squat window still fits. */
+@media (orientation: portrait) {
+  .idea-poster {
+    padding: min(6vw, 4vh) max(60px, 7vw) min(4vw, 2.6vh);
+  }
+
+  .idea-top {
+    font-size: clamp(0.85rem, min(2.5vw, 1.7vh), 1.5rem);
+  }
+
+  .idea-name {
+    max-width: none;
+
+    &.short {
+      font-size: clamp(3rem, min(17vw, 11vh), 12rem);
+    }
+
+    &.medium {
+      font-size: clamp(2.6rem, min(13.5vw, 8.6vh), 10rem);
+    }
+
+    &.long {
+      font-size: clamp(2.2rem, min(11.5vw, 7.2vh), 8.5rem);
+    }
+  }
+
+  .idea-line {
+    margin-top: min(5vw, 3.2vh);
+    font-size: clamp(1.2rem, min(3.9vw, 2.5vh), 2.4rem);
+  }
+
+  .idea-foot {
+    flex-wrap: wrap;
+    align-items: center;
+    gap: min(4vw, 2.6vh);
+  }
+
+  .idea-minutes {
+    font-size: clamp(1.2rem, min(4.2vw, 2.7vh), 2.6rem);
+  }
+
+  .idea-open {
+    align-self: center;
+    font-size: clamp(0.8rem, min(2.3vw, 1.5vh), 1.3rem);
+  }
+
+  .idea-uses {
+    order: 3;
+    flex-basis: 100%;
+    font-size: clamp(1.1rem, min(3.4vw, 2.2vh), 2.1rem);
+    line-height: 1.4;
+  }
+
+  .idea-how {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(0, 1fr);
+    gap: min(3.6vw, 2.3vh);
+    padding-top: min(5vw, 3.2vh);
+  }
+
+  .idea-how-name {
+    font-size: clamp(1.6rem, min(5.6vw, 3.6vh), 3.6rem);
+    text-wrap: balance;
+  }
+
+  .idea-how-side {
+    overflow: visible;
+  }
+
+  .idea-ingredients {
+    columns: 2;
+    column-gap: min(5vw, 3.2vh);
+    font-size: calc(clamp(1rem, min(2.9vw, 1.85vh), 1.8rem) * var(--how-scale));
+
+    /* The food, then how much of it underneath: two-up there is no room
+     * for them side by side. */
+    li {
+      display: flex;
+      flex-direction: column-reverse;
+      gap: 0.1em;
+      padding: 0.4em 0 0.45em;
+      break-inside: avoid;
+    }
+  }
+
+  .idea-rack {
+    font-size: calc(clamp(0.95rem, min(2.6vw, 1.65vh), 1.6rem) * var(--how-scale));
+  }
+
+  .idea-steps {
+    font-size: calc(clamp(1.1rem, min(3.3vw, 2.1vh), 2.1rem) * var(--how-scale));
+  }
 }
 </style>

@@ -47,13 +47,12 @@ export const requestIdea = async (request, options = {}) => {
 
 // WHETHER THIS DEVICE SHOWS (AND ASKS FOR) THE IDEA.
 //
-// Off unless asked for, while Matt looks at it: the wall's look is not to
-// change without his say-so (CLAUDE.md, "The wall"). `?idea=1` turns it on for
-// a device and is remembered, `?idea=0` turns it off again, exactly as
-// `?view=` works in viewMode.js and for the same reason: the wall tablet's
-// start URL is awkward to change, so one visit has to be enough.
+// On for everyone since Matt's yes (2026-11-09). `?idea=0` turns it off for a
+// device and is remembered, `?idea=1` turns it back on, exactly as `?view=`
+// works in viewMode.js and for the same reason: the wall tablet's start URL
+// is awkward to change, so one visit has to be enough.
 const STORAGE_KEY = 'fridge.idea'
-export const IDEA_ON_BY_DEFAULT = false
+export const IDEA_ON_BY_DEFAULT = true
 
 export const resolveIdeaFlag = ({
   location = window.location,

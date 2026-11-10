@@ -10,9 +10,12 @@
       :today="shown.today"
       :timers="timers"
       :now="now"
+      @how="recipeOpen = $event"
     />
 
-    <button type="button" class="soon-strip" @click="$emit('timers')">
+    <!-- Put away while the recipe is up: a cook needs the type as big as
+         it will go, not a reminder about the sourdough. -->
+    <button v-show="!recipeOpen" type="button" class="soon-strip" @click="$emit('timers')">
       <span class="soon-label">Eat soon</span>
       <span class="soon-items">
         <span v-for="item in soonItems" :key="item.id" class="soon-item" :class="{ past: item.past }">
@@ -42,6 +45,9 @@ export default {
     now: { type: Number, default: () => Date.now() }
   },
   emits: ['timers'],
+  data () {
+    return { recipeOpen: false }
+  },
   computed: {
     soonItems () {
       const now = new Date(this.now)
@@ -135,5 +141,26 @@ export default {
   letter-spacing: 0.04em;
   text-transform: uppercase;
   opacity: 0.6;
+}
+
+/* Upright (how the kitchen tablet hangs): the strip gets its label on a line
+ * of its own and two lines of food under it. */
+@media (orientation: portrait) {
+  .soon-strip {
+    flex-wrap: wrap;
+    gap: min(1.6vw, 1vh) min(4vw, 2.6vh);
+    padding: min(3vw, 2vh) max(60px, 7vw) min(2.4vw, 1.6vh);
+    font-size: clamp(1rem, min(3.1vw, 2vh), 1.9rem);
+  }
+
+  .soon-open {
+    margin-left: auto;
+  }
+
+  .soon-items {
+    order: 3;
+    flex-basis: 100%;
+    height: 2.8em;
+  }
 }
 </style>

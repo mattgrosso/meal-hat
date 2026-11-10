@@ -658,7 +658,7 @@ out. Now:
   (The scheduled meals, that is. Today's idea, below, is the one exception and
   he asked for it.)
 
-### Today's idea (2026-11-09, behind a flag)
+### Today's idea (2026-11-09, on since 1.38.0)
 
 Carrie's idea, Matt's rules: the wall shows **one** meal suggestion a day,
 quietly, made **only from food the tally says is in the house**. A comfortable
@@ -666,10 +666,15 @@ spice rack, salt, pepper and water are assumed; oil, butter, flour and the like
 are NOT (they have to be in the tally). **No photos, generated or otherwise**:
 Matt said no twice. It has to look good with type and colour alone.
 
-**It is off by default** (`IDEA_ON_BY_DEFAULT` in `utils/fridge/idea.js`).
-`?idea=1` turns it on for that device and sticks (localStorage `fridge.idea`);
-`?idea=0` turns it off. With it off the wall is exactly the eat-soon board.
-Do not flip the default until Matt has said yes to the look.
+**It is on by default** since Matt's yes on 2026-11-09 (`IDEA_ON_BY_DEFAULT`
+in `utils/fridge/idea.js`). `?idea=0` turns it off for that device and sticks
+(localStorage `fridge.idea`); `?idea=1` turns it back on. With it off the wall
+is exactly the eat-soon board.
+
+**The wall tablet hangs in PORTRAIT** (Matt, 2026-11-09), roughly 800 × 1280.
+Both `IdeaPoster` and `IdeaWall` carry an `@media (orientation: portrait)`
+block and that is the layout that matters; landscape is kept working for a
+laptop. Check any change to the wall at 800 × 1280 first.
 
 - **The day** turns over at 4am Eastern (`ideaDay`, written twice: the Lambda's
   `aws-lambda/idea.js` and the app's `store/fridge/idea.js`; a test checks they
@@ -694,7 +699,8 @@ Do not flip the default until Matt has said yes to the look.
 - **The wall** (`IdeaWall` > `IdeaPoster`): the dish name huge, one line about
   it, the minutes on the day's flat swatch (`swatchFor(day)`), and what it
   uses, with food about to go off underlined. Tap for the recipe (type shrinks
-  itself to fit, `fitHow`; nothing scrolls on the wall). The bottom strip is
+  itself to fit, `fitHow`; nothing scrolls on the wall). The open recipe takes
+  the whole screen: the poster emits `how` and the wall hides the strip. The bottom strip is
   "Eat soon"; tapping it opens the timers grid unchanged, with a way back, and
   it returns by itself after 3 minutes. No animation: it's a wall.
 - **The phone** gets `IdeaCard` under the buttons, closed until tapped.
