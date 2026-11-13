@@ -12,7 +12,8 @@ import { db, ensureSession } from '@/firebase'
 import { sortTimers, spanInDays, formatDaySpan } from './timers'
 import { foldObservation } from './shelfLife'
 import { sortHistory, HISTORY_LIMIT } from './history'
-import { timersPath, templatesPath, historyPath, ideasPath, templateKey } from './paths'
+import { timersPath, templatesPath, historyPath, ideasPath, spokenForPath, templateKey } from './paths'
+import { tallyLessSpokenFor } from './spokenFor'
 import { ideaDay, tallyForIdea, recentIdeaNames, shouldAskForIdea, ideaDaysToDrop } from './idea'
 import { requestIdea } from '@/utils/fridge/idea'
 import { reconcileShelfLives, fridgeFoodId } from './reconcile'
@@ -56,6 +57,11 @@ export default {
     // yet today" from "not heard from the database yet".
     ideas: {},
     ideasLoaded: false,
+    // Day -> foods the schedule holds back that day (spokenFor.js). Loaded
+    // before an idea is asked for, so the first ask of a day already leaves
+    // the week's meals alone.
+    spokenFor: {},
+    spokenForLoaded: false,
     loading: false,
     subscribedTo: null,
 
@@ -123,6 +129,10 @@ export default {
       state.ideas = ideas || {}
       state.ideasLoaded = true
     },
+    SET_SPOKEN_FOR (state, days) {
+      state.spokenFor = (days && days.days) || {}
+      state.spokenForLoaded = true
+    },
     SET_SUBSCRIBED_TO (state, key) { state.subscribedTo = key || null },
     CLEAR (state) {
       state.timers = {}
@@ -130,6 +140,8 @@ export default {
       state.history = {}
       state.ideas = {}
       state.ideasLoaded = false
+      state.spokenFor = {}
+      state.spokenForLoaded = false
       state.error = null
       state.subscribedTo = null
     }
@@ -213,6 +225,16 @@ export default {
       }, (error) => {
         console.error('Failed to load the ideas:', error)
       }))
+
+      // What the week's meals will use. Its failure only means the idea is
+      // made from the whole tally, as it was before this existed, so it
+      // still counts as loaded.
+      listeners.push(onValue(ref(db, spokenForPath(key)), (snapshot) => {
+        commit('SET_SPOKEN_FOR', snapshot.val())
+      }, (error) => {
+        console.warn('Could not load what the week\'s meals need:', error?.message || error)
+        commit('SET_SPOKEN_FOR', null)
+      }))
     },
 
     // Make sure today has an idea, asking for one if it does not.
@@ -229,9 +251,11 @@ export default {
     async ensureIdea ({ state, getters }) {
       const key = state.fridgeKey
       const day = ideaDay()
-      const tally = tallyForIdea(getters.allTimers)
+      // Food the coming week's meals will use is taken off first, so the idea
+      // cannot use up Thursday's chicken (spokenFor.js).
+      const tally = tallyLessSpokenFor(tallyForIdea(getters.allTimers), state.spokenFor, day)
       if (!key || !shouldAskForIdea({
-        loaded: state.ideasLoaded,
+        loaded: state.ideasLoaded && state.spokenForLoaded,
         ideas: state.ideas,
         day,
         tallyCount: tally.length,

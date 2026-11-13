@@ -16,6 +16,9 @@ export const historyPath = (key) => `${fridgeRoot(key)}/history`
 // Under the fridge and not the hat because the wall tablet writes it, and the
 // wall is a member of no hat.
 export const ideasPath = (key) => `${fridgeRoot(key)}/ideas`
+// Food the coming week's meals will use, published by the signed-in app so
+// Today's idea leaves it alone: see spokenFor.js.
+export const spokenForPath = (key) => `${fridgeRoot(key)}/spokenFor`
 
 // The pointer that lets a SIGNED-IN phone find its own fridge without being
 // handed the secret in a URL. Readable only by the hat's members, so the

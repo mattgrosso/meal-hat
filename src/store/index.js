@@ -11,6 +11,8 @@ import { planShoppingList } from './shoppingPlan';
 import { onHandUntilFrom } from './fridge/inHouse';
 import { buildMirrorFeed, feedSignature } from '../assets/javascript/mirrorFeed';
 import fridge from './fridge';
+import { buildSpokenFor, spokenForSignature } from './fridge/spokenFor';
+import { spokenForPath } from './fridge/paths';
 import { checkHatAccess, hatToFallBackTo } from './hatAccess';
 
 // How far back drawnMeals is loaded.
@@ -36,6 +38,9 @@ const hatChecks = new Map();
 // Detach for the hat's `fridgeKey` pointer listener. Sign-out closes it before
 // the session ends (the rules would revoke it), and switching hats replaces it.
 let fridgeKeyPointerOff = null;
+// The last "spoken for" answer checked against the fridge (publishSpokenFor),
+// so an unchanged week costs no read and no write.
+let spokenForChecked = null;
 const detachFridgeKeyPointer = () => {
   if (fridgeKeyPointerOff) fridgeKeyPointerOff();
   fridgeKeyPointerOff = null;
@@ -789,6 +794,7 @@ export default createStore({
           context.commit('setMeals', mealsArray);
           // A renamed meal reads differently on the mirror too.
           context.dispatch('mirrorScheduleChanged');
+          context.dispatch('publishSpokenFor');
         });
       }
 
@@ -834,6 +840,7 @@ export default createStore({
             context.commit('setDrawnMealsWithHistory', sortedByDate);
             context.commit('setDrawnMeals', futureDates);
             context.dispatch('mirrorScheduleChanged');
+            context.dispatch('publishSpokenFor');
           });
         };
         subscribeDrawnMeals();
@@ -889,6 +896,8 @@ export default createStore({
       if (Object.keys(context.state.groceryCatalog).length === 0) {
         listenToHat(ref(db, `${context.state.databaseTopKey}/grocery-catalog`), (snapshot) => {
           context.commit('setGroceryCatalog', snapshot.val());
+          // A packageSize changes how much of a food the week's meals use.
+          context.dispatch('publishSpokenFor');
         });
       }
 
@@ -922,6 +931,7 @@ export default createStore({
           // `subscribe` is guarded on its own subscribedTo, so dispatching it
           // on every guarded navigation costs nothing.
           if (key) context.dispatch('fridge/subscribe', key);
+          if (key) context.dispatch('publishSpokenFor');
         });
       }
 
@@ -983,6 +993,45 @@ export default createStore({
 
       context.commit('setMirrorFeedCheckedSignature', signature);
       await context.dispatch('publishMirrorFeed');
+    },
+    // Tell the fridge what the coming week's meals will use, so Today's idea
+    // (made by the wall, which cannot read the schedule) leaves that food
+    // alone. See store/fridge/spokenFor.js.
+    //
+    // Runs on every meals, drawnMeals and catalog snapshot, so it is cheap
+    // unless something changed: it works from this device's state (drawnMeals
+    // is a trailing window, so it holds every night ahead), skips the write
+    // when the answer matches the last one checked, and on the first check of
+    // a session compares with what the fridge already holds. A late echo of a
+    // draw lands as one more snapshot and simply runs it again.
+    async publishSpokenFor (context) {
+      const key = context.state.fridgeKeyForHat;
+      const { meals, drawnMeals, groceryCatalog } = context.state;
+      // A half-loaded hat would publish "nothing is planned" and free up the
+      // whole week, so wait for all three.
+      if (!key || !auth.currentUser || !meals || !drawnMeals || !Object.keys(groceryCatalog || {}).length) return;
+
+      const days = buildSpokenFor({
+        drawnMeals,
+        getMeal: (id) => context.getters.getMeal(id),
+        catalog: groceryCatalog
+      });
+      const signature = `${key}|${spokenForSignature(days)}`;
+      if (signature === spokenForChecked) return;
+      spokenForChecked = signature;
+
+      try {
+        // Spelled out rather than through spokenForPath: the whole-hat read
+        // guard (no-root-database-reads.spec.js) reads paths off the source.
+        const live = await get(ref(db, `fridge/${key}/spokenFor/days`));
+        if (`${key}|${spokenForSignature(live.val())}` === signature) return;
+        if (!auth.currentUser || context.state.fridgeKeyForHat !== key) return;
+        await set(ref(db, spokenForPath(key)), { days, publishedAt: new Date().toISOString() });
+      } catch (error) {
+        // Allowed to try again on the next snapshot.
+        spokenForChecked = null;
+        console.warn('Could not tell the fridge what the week\'s meals need:', error?.message || error);
+      }
     },
     async setDBValue (context, dbEntry) {
       const timestamp = Date.now();

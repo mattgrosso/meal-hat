@@ -47,7 +47,7 @@ describe('fridge/unsubscribe', () => {
   it('detaches every listener subscribe attached and forgets the fridge', async () => {
     const context = makeContext();
     await fridge.actions.subscribe(context, KEY);
-    expect(attached).toHaveLength(4);
+    expect(attached).toHaveLength(5);
 
     fridge.actions.unsubscribe(context);
     expect(detached.sort()).toEqual([...attached].sort());
@@ -63,7 +63,7 @@ describe('fridge/unsubscribe', () => {
     attached.length = 0;
 
     await fridge.actions.subscribe(context, KEY);
-    expect(attached).toHaveLength(4);
+    expect(attached).toHaveLength(5);
     expect(context.state.subscribedTo).toBe(KEY);
   });
 
@@ -72,6 +72,6 @@ describe('fridge/unsubscribe', () => {
     await fridge.actions.subscribe(context, KEY);
     fridge.actions.unsubscribe(context);
     fridge.actions.unsubscribe(context);
-    expect(detached).toHaveLength(4);
+    expect(detached).toHaveLength(5);
   });
 });

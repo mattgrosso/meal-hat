@@ -1,6 +1,6 @@
 {
   "name": "meal-hat",
-  "version": "1.36.3",
+  "version": "1.39.0",
   "private": true,
   "scripts": {
     "update-version": "node src/assets/javascript/version.js",

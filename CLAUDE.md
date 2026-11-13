@@ -704,8 +704,18 @@ laptop. Check any change to the wall at 800 × 1280 first.
   "Eat soon"; tapping it opens the timers grid unchanged, with a way back, and
   it returns by itself after 3 minutes. No animation: it's a wall.
 - **The phone** gets `IdeaCard` under the buttons, closed until tapped.
-- It does **not** know what's planned for the week (the wall can't read the
-  schedule), so it may use something bought for a scheduled meal.
+- **It leaves the week's meals alone** (2026-11-13). The wall can't read the
+  schedule, so the signed-in app publishes `fridge/<key>/spokenFor`: per
+  day, today and the next six (`SPOKEN_FOR_DAYS`), the foods and PACKAGES the
+  scheduled meals need (`aggregateMealIngredients`, then `packageSize`; none
+  set = one whole package). Foods only, no meal names. `ensureIdea` takes
+  them off the tally (`tallyLessSpokenFor`): wholly spoken for drops out,
+  partly goes with the spare. Days before today are ignored, so a stale
+  publish frees food on its own. Republished from every meals / drawnMeals /
+  catalog / fridge-pointer snapshot (`publishSpokenFor`, writes only on a
+  change). `store/fridge/spokenFor.js`, `tests/unit/fridge/spokenFor.spec.js`,
+  `tests/e2e/spoken-for.spec.js` (run that one with `--workers=1` beside the
+  other schedule specs: they share the tester's hat).
 - **Deploying the Lambda now means two files**: `perishable-vision.js` and
   `idea.js` both go in the zip.
 - Local look: emulators + `yarn serve`, seed a fridge and an idea, open
